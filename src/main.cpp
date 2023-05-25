@@ -10,6 +10,13 @@
 #include "args/args.hxx"
 #include "imgui.h"
 
+// #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+// #include <CGAL/Polyhedron_3.h>
+// #include <CGAL/Surface_mesh.h>
+// #include <CGAL/convex_hull_3.h>
+// #include <vector>
+// #include <fstream>
+
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
@@ -17,23 +24,12 @@ using namespace geometrycentral::surface;
 std::unique_ptr<ManifoldSurfaceMesh> mesh;
 std::unique_ptr<VertexPositionGeometry> geometry;
 
+std::unique_ptr<ManifoldSurfaceMesh> convexHullMesh;
+std::unique_ptr<VertexPositionGeometry> convexHullGeometry;
+
+
 // Polyscope visualization handle, to quickly add data to the surface
-polyscope::SurfaceMesh *psMesh;
-
-// Some algorithm parameters
-float param1 = 42.0;
-
-// Example computation function -- this one computes and registers a scalar
-// quantity
-void doWork() {
-  polyscope::warning("Computing Gaussian curvature.\nalso, parameter value = " +
-                     std::to_string(param1));
-
-  geometry->requireVertexGaussianCurvatures();
-  psMesh->addVertexScalarQuantity("curvature",
-                                  geometry->vertexGaussianCurvatures,
-                                  polyscope::DataType::SYMMETRIC);
-}
+polyscope::SurfaceMesh *psInputMesh;
 
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
@@ -41,10 +37,10 @@ void doWork() {
 void myCallback() {
 
   if (ImGui::Button("do work")) {
-    doWork();
+    
   }
 
-  ImGui::SliderFloat("param", &param1, 0., 100.);
+  // ImGui::SliderFloat("param", &param1, 0., 100.);
 }
 
 int main(int argc, char **argv) {
@@ -81,23 +77,13 @@ int main(int argc, char **argv) {
   std::tie(mesh, geometry) = readManifoldSurfaceMesh(args::get(inputFilename));
 
   // Register the mesh with polyscope
-  psMesh = polyscope::registerSurfaceMesh(
-      polyscope::guessNiceNameFromPath(args::get(inputFilename)),
+  psInputMesh = polyscope::registerSurfaceMesh(
+      "input mesh",
       geometry->inputVertexPositions, mesh->getFaceVertexList(),
       polyscopePermutations(*mesh));
 
   // Set vertex tangent spaces
-  geometry->requireVertexTangentBasis();
-  VertexData<Vector3> vBasisX(*mesh);
-  for (Vertex v : mesh->vertices()) {
-    vBasisX[v] = geometry->vertexTangentBasis[v][0];
-  }
-  psMesh->setVertexTangentBasisX(vBasisX);
-
-  auto vField =
-      geometrycentral::surface::computeSmoothestVertexDirectionField(*geometry);
-  psMesh->addVertexIntrinsicVectorQuantity("VF", vField);
-
+  
   // Give control to the polyscope gui
   polyscope::show();
 
