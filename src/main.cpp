@@ -110,13 +110,10 @@ int main(int argc, char **argv) {
   // }
 
   // build mesh
-  printf("here1\n");
   generate_polygon_example("cube");
-  printf("here2\n");
   // build the solver
   Vector3 G = {0,0,0};
   forwardSolver = ForwardSolver(mesh, geometry, G);
-  printf("here3\n");
   //assuming convex input here
   forwardSolver.hullGeometry = geometry;
   forwardSolver.hullMesh = mesh;
