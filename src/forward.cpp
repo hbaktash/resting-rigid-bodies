@@ -1,9 +1,11 @@
 #include "forward.h"
 
 
-ForwardSolver::ForwardSolver(ManifoldSurfaceMesh* inputMesh_, VertexPositionGeometry* inputGeo_){
+ForwardSolver::ForwardSolver(ManifoldSurfaceMesh* inputMesh_, VertexPositionGeometry* inputGeo_,
+                             Vector3 inputG_){
     mesh = inputMesh_;
-    geometry  = inputGeo_;
+    geometry = inputGeo_;
+    G = inputG_;
 }
 
 

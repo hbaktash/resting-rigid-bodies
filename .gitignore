@@ -1,6 +1,10 @@
 # Build directories
 build/
 build_debug/
+deps/deps/CGAL/* 
+deps/boost_1_82_0/* 
+deps/libigl/* 
+deps/PyMesh/*
 
 # Editor and OS things
 .DS_Store

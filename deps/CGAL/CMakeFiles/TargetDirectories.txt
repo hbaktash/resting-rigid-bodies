@@ -1,0 +1,10 @@
+/Users/hbaktash/Desktop/code/gc-polyscope-project-template/deps/CGAL/CMakeFiles/install_FindCGAL.dir
+/Users/hbaktash/Desktop/code/gc-polyscope-project-template/deps/CGAL/CMakeFiles/ALL_CGAL_TARGETS.dir
+/Users/hbaktash/Desktop/code/gc-polyscope-project-template/deps/CGAL/CMakeFiles/examples.dir
+/Users/hbaktash/Desktop/code/gc-polyscope-project-template/deps/CGAL/CMakeFiles/demos.dir
+/Users/hbaktash/Desktop/code/gc-polyscope-project-template/deps/CGAL/CMakeFiles/edit_cache.dir
+/Users/hbaktash/Desktop/code/gc-polyscope-project-template/deps/CGAL/CMakeFiles/rebuild_cache.dir
+/Users/hbaktash/Desktop/code/gc-polyscope-project-template/deps/CGAL/CMakeFiles/list_install_components.dir
+/Users/hbaktash/Desktop/code/gc-polyscope-project-template/deps/CGAL/CMakeFiles/install.dir
+/Users/hbaktash/Desktop/code/gc-polyscope-project-template/deps/CGAL/CMakeFiles/install/local.dir
+/Users/hbaktash/Desktop/code/gc-polyscope-project-template/deps/CGAL/CMakeFiles/install/strip.dir
