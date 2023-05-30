@@ -2,10 +2,10 @@
 #include "geometrycentral/surface/meshio.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
 
-#include "geometrycentral/surface/direction_fields.h"
-
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
+// #include "polyscope/curve_network.h"
+#include "polyscope/point_cloud.h"
 
 #include "args/args.hxx"
 #include "imgui.h"
@@ -34,6 +34,7 @@ ForwardSolver forwardSolver;
 // Polyscope visualization handle, to quickly add data to the surface
 polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1;
 
+float pt_cloud_radi_scale = 1.;
 
 void visualize_boundary_curves(){
   std::vector<std::vector<size_t>> dummy_face{{1,1,1}};
@@ -47,7 +48,20 @@ void visualize_boundary_curves(){
       edgeInds.push_back({e.firstVertex().getIndex(), e.secondVertex().getIndex()});
     }
   }
-  dummy_psMesh1->addSurfaceGraphQuantity2D("convex boundary", positions, edgeInds);
+  dummy_psMesh1->addSurfaceGraphQuantity("convex boundary", positions, edgeInds);
+}
+
+
+void visualize_vertex_probabilities(){
+  
+  for (Vertex v: forwardSolver.hullMesh->vertices()){
+    std::vector<Vector3> positions = {forwardSolver.hullGeometry->inputVertexPositions[v]};
+    polyscope::PointCloud* psCloud = polyscope::registerPointCloud("v" + std::to_string(v.getIndex()), positions);
+    // set some options
+    psCloud->setPointRadius(forwardSolver.vertex_probabilities[v] * pt_cloud_radi_scale);
+    psCloud->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  }
+
 }
 
 // A user-defined callback, for creating control panels (etc)
@@ -57,6 +71,10 @@ void myCallback() {
   if (ImGui::Button("build boundary curves")) {
     visualize_boundary_curves();
   }
+  if (ImGui::Button("visualize vertex probabilities")) {
+    visualize_vertex_probabilities();
+  }
+  if (ImGui::SliderFloat("radi scale", &pt_cloud_radi_scale, 0., 1.)) visualize_vertex_probabilities();
   // ImGui::SliderFloat("param", &param1, 0., 100.);
 }
 
@@ -115,9 +133,13 @@ int main(int argc, char **argv) {
   Vector3 G = {0,0,0};
   forwardSolver = ForwardSolver(mesh, geometry, G);
   //assuming convex input here
-  forwardSolver.hullGeometry = geometry;
-  forwardSolver.hullMesh = mesh;
-
+  forwardSolver.hullMesh = new ManifoldSurfaceMesh(mesh->getFaceVertexList()); //mesh->copy().release();
+  forwardSolver.hullGeometry = new VertexPositionGeometry(*forwardSolver.hullMesh); // geometry->copy().release();
+  for (Vertex v: forwardSolver.hullMesh->vertices()){
+    forwardSolver.hullGeometry->inputVertexPositions[v] = geometry->inputVertexPositions[v.getIndex()];
+  }
+  forwardSolver.compute_vertex_probabilities();
+  
   // Load mesh
   // std::tie(mesh, geometry) = readManifoldSurfaceMesh(args::get(inputFilename));
 

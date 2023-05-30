@@ -80,7 +80,9 @@ void ForwardSolver::build_next_edge_tracer(){
 }
 
 void ForwardSolver::compute_vertex_probabilities(){
+    printf("here1\n");
     vertex_probabilities = VertexData<double>(*hullMesh, 0.);
+    printf("here2\n");
     for (Vertex v: hullMesh->vertices()){
         Edge e1, e2;
         Vertex v1, v2;
@@ -97,8 +99,8 @@ void ForwardSolver::compute_vertex_probabilities(){
             }
 
         }
-        Vector3 vv1 = geometry->inputVertexPositions[v1] - geometry->inputVertexPositions[v],
-                vv2 = geometry->inputVertexPositions[v2] - geometry->inputVertexPositions[v];
+        Vector3 vv1 = hullGeometry->inputVertexPositions[v1] - hullGeometry->inputVertexPositions[v],
+                vv2 = hullGeometry->inputVertexPositions[v2] - hullGeometry->inputVertexPositions[v];
         double angle = acos(dot(vv1, vv2)/(norm(vv1)*norm(vv2)));
         vertex_probabilities[v] = 0.5 * (1. - angle/PI);
     }
