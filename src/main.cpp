@@ -64,6 +64,12 @@ void visualize_vertex_probabilities(){
 
 }
 
+void visualize_edge_probabilities(){
+  forwardSolver.build_next_edge_tracer();
+  forwardSolver.compute_initial_edge_probabilities();
+  forwardSolver.compute_final_edge_probabilities();
+}
+
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
 // https://github.com/ocornut/imgui/blob/master/imgui.h
@@ -75,7 +81,10 @@ void myCallback() {
     visualize_vertex_probabilities();
   }
   if (ImGui::SliderFloat("radi scale", &pt_cloud_radi_scale, 0., 1.)) visualize_vertex_probabilities();
-  // ImGui::SliderFloat("param", &param1, 0., 100.);
+
+  if (ImGui::Button("visualize edge probabilities")) {
+    visualize_edge_probabilities();
+  }
 }
 
 
@@ -130,7 +139,7 @@ int main(int argc, char **argv) {
   // build mesh
   generate_polygon_example("cube");
   // build the solver
-  Vector3 G = {0,0,0};
+  Vector3 G = {0.99,0,0};
   forwardSolver = ForwardSolver(mesh, geometry, G);
   //assuming convex input here
   forwardSolver.hullMesh = new ManifoldSurfaceMesh(mesh->getFaceVertexList()); //mesh->copy().release();

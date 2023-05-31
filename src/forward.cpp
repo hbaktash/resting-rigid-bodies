@@ -64,25 +64,30 @@ Edge ForwardSolver::other_edge(Edge curr_e, Vertex tip_v){
 void ForwardSolver::build_next_edge_tracer(){
     next_falling_edge = EdgeData<Edge>(*hullMesh, Edge()); // Valid for boundary edges.
     for (Edge e: hullMesh->edges()){
-        Vertex v1 = e.firstVertex(),
-               v2 = e.secondVertex();
-        Vector3 p1 = hullGeometry->inputVertexPositions[v1], 
-                p2 = hullGeometry->inputVertexPositions[v2];
-        Vector3 p1g = G - p1,
-                p2g = G - p2;
-        if (dot(p1g, p2-p1) < 0) // will roll to v1's side
-            next_falling_edge[e] = other_edge(e, v1);
-        else if(dot(p2g, p1-p2) < 0) // will roll to v2's side
-            next_falling_edge[e] = other_edge(e, v2);
-        else // stable edge
-            next_falling_edge[e] = e;
+        if (e.isBoundary()){
+            Vertex v1 = e.firstVertex(),
+                v2 = e.secondVertex();
+            Vector3 p1 = hullGeometry->inputVertexPositions[v1], 
+                    p2 = hullGeometry->inputVertexPositions[v2];
+            Vector3 p1g = G - p1,
+                    p2g = G - p2;
+            if (dot(p1g, p2-p1) < 0) // will roll to v1's side
+                next_falling_edge[e] = other_edge(e, v1);
+            else if(dot(p2g, p1-p2) < 0) // will roll to v2's side
+                next_falling_edge[e] = other_edge(e, v2);
+            else // stable edge
+                next_falling_edge[e] = e;
+        }
+    }
+
+    // test 
+    for (Edge e: hullMesh->edges()){
+        printf(" Edge %d next edge: %d \n", e.getIndex(), next_falling_edge[e].getIndex());
     }
 }
 
 void ForwardSolver::compute_vertex_probabilities(){
-    printf("here1\n");
     vertex_probabilities = VertexData<double>(*hullMesh, 0.);
-    printf("here2\n");
     for (Vertex v: hullMesh->vertices()){
         Edge e1, e2;
         Vertex v1, v2;
@@ -93,7 +98,7 @@ void ForwardSolver::compute_vertex_probabilities(){
                 first = false;
                 v1 = e1.otherVertex(v);
             }
-            else {
+            else if (e.isBoundary()){
                 e2 = e;
                 v2 = e2.otherVertex(v);
             }
@@ -102,16 +107,46 @@ void ForwardSolver::compute_vertex_probabilities(){
         Vector3 vv1 = hullGeometry->inputVertexPositions[v1] - hullGeometry->inputVertexPositions[v],
                 vv2 = hullGeometry->inputVertexPositions[v2] - hullGeometry->inputVertexPositions[v];
         double angle = acos(dot(vv1, vv2)/(norm(vv1)*norm(vv2)));
+        std::cout<< "angle at "<< v.getIndex() << " is "<< angle*180/PI << " \n";
         vertex_probabilities[v] = 0.5 * (1. - angle/PI);
     }
 }
 
 void ForwardSolver::compute_initial_edge_probabilities(){
     initial_edge_probabilities = EdgeData<double>(*hullMesh, 0.);
+    for (Edge e: hullMesh->edges()){
+        if (e.isBoundary()){
+            Vector3 p1 = hullGeometry->inputVertexPositions[e.firstVertex()],
+                    p2 = hullGeometry->inputVertexPositions[e.secondVertex()];
+            Vector3 gp1 = p1 - G,
+                    gp2 = p2 - G;
+            double angle = acos(dot(gp1, gp2)/(norm(gp1)*norm(gp2)));
+            initial_edge_probabilities[e] = angle/(2*PI);
+            // printf(" edge prob %f \n", angle/(2*PI));
+        }
+    }
 }
 
 void ForwardSolver::compute_final_edge_probabilities(){
-    final_edge_probabilities = EdgeData<double>(*hullMesh, 0.);
+    // initials already should be computed
+    final_edge_probabilities = EdgeData<double>(initial_edge_probabilities); // EdgeData<double>(*hullMesh, 0.);
+    for (Edge e: hullMesh->edges()){
+        if (e.isBoundary()){
+            Edge final_edge = e; // finding the root/sink of the DAG
+            while (next_falling_edge[final_edge] != final_edge) {
+                final_edge = next_falling_edge[final_edge];
+            }
+            // pour the probability from e to final_edge
+            double current_prob = final_edge_probabilities[e];
+            final_edge_probabilities[final_edge] += current_prob;
+            final_edge_probabilities[e] -= current_prob;
+        }
+    }
+    for (Edge e: hullMesh->edges()){
+        if (e.isBoundary()){
+            printf("Edge %d final prob: %f \n", e.getIndex(), final_edge_probabilities[e]);
+        }
+    }
 }
 
 void ForwardSolver::next_state(){
