@@ -41,7 +41,7 @@ float pt_cloud_radi_scale = 0.1,
 
 
 // example choice
-std::vector<std::string> all_polygon_items = {std::string("cube"), std::string("skewed 4-gon"), std::string("rndbs 6-gon 1")};
+std::vector<std::string> all_polygon_items = {std::string("cube"), std::string("skewed 4-gon"), std::string("rndbs 6-gon 1"), std::string("rndbs 9-gon 1")};
 std::string all_polygons_current_item = "cube";
 static const char* all_polygons_current_item_c_str = "cube";
 
@@ -147,10 +147,35 @@ void generate_polygon_example(std::string poly_str){
                               {0, 2, 3},
                               {0, 3, 4},
                               {0, 4, 5}};
-      for (int i = 0; i++ ; i < 6) {
+      for (int i = 0; i < n; i++) {
         double tmp_angle = (double)i*2*PI/6.;
         positions.push_back({cos(tmp_angle), sin(tmp_angle), 0.});
       }
+      positions[0] *= 1.5;
+      positions[1] *= 5;
+      positions[2] *= 10;
+      positions[3] *= 5;
+      positions[4] *= 1.5;
+      positions[5] *= 1;
+    }
+    else if (std::strcmp(poly_str.c_str(), "rndbs 9-gon 1") == 0){
+      n = 9;
+      for (size_t i = 0; i < n-2; i++){
+        greedy_triangulation.push_back({0, i+1, i+2});
+      }
+      for (int i = 0; i < n; i++) {
+        double tmp_angle = (double)i*2*PI/(double)n;
+        positions.push_back({cos(tmp_angle), sin(tmp_angle), 0.});
+      }
+      positions[0] *= 1;
+      positions[1] *= 1.5;
+      positions[2] *= 4;
+      positions[3] *= 8;
+      positions[4] *= 12;
+      positions[5] *= 8;
+      positions[6] *= 3;
+      positions[7] *= 1.5;
+      positions[8] *= 1;
     }
     else {
       throw std::runtime_error("no valid string provided\n");
@@ -161,9 +186,9 @@ void generate_polygon_example(std::string poly_str){
     geometry = new VertexPositionGeometry(*mesh);
     for (Vertex v : mesh->vertices()) {
         // Use the low-level indexers here since we're constructing
+        printf("v %d\n", v.getIndex());
         geometry->inputVertexPositions[v] = positions[v.getIndex()];
     }
-    printf("$$$$$$$$$$ here1 $$$$$$$$$$$$\n");
 }
 
 void update_solver(){
@@ -175,6 +200,8 @@ void update_solver(){
     forwardSolver.hullGeometry->inputVertexPositions[v] = geometry->inputVertexPositions[v.getIndex()];
   }
   forwardSolver.compute_vertex_probabilities();
+
+
   // Register the mesh with polyscope
   psInputMesh = polyscope::registerSurfaceMesh(
       "input mesh",
