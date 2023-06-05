@@ -33,24 +33,6 @@ void ForwardSolver::align_geometry(Vector3 dir){
     }
 }
 
-void ForwardSolver::find_contact(Vector3 initial_ori){
-    // just rotating the g_vec
-    Vertex contact_point = mesh->vertex(0);
-    double max_inner_product = 0.; // smth should be positive, if we choose a ref inside the convex hull
-    for (Vertex v: hullMesh->vertices()){
-        Vector3 pos = hullGeometry->inputVertexPositions[v],
-                Gv = pos - G; // could use any point inside convexHull for this (using G just cause we have it).
-        if (dot(Gv, initial_ori) >= max_inner_product){
-            contact_point = v;
-            max_inner_product = dot(Gv, initial_ori);
-        }
-    }
-    Vertex v = contact_point;
-    // update state & initialize tracing
-    curr_state.first = v;
-    curr_state.second = v;
-    current_g_vec = initial_ori;
-}
 
 Edge ForwardSolver::other_edge(Edge curr_e, Vertex tip_v){
     for (Edge adj_e: tip_v.adjacentEdges()){
@@ -149,13 +131,87 @@ void ForwardSolver::compute_final_edge_probabilities(){
     }
 }
 
+
+void ForwardSolver::find_contact(Vector3 initial_ori){ // 0-based vector, need to add G_offset
+    // just rotating the g_vec
+    Vertex contact_point = mesh->vertex(0);
+    double max_inner_product = 0.; // smth should be positive, if we choose a ref inside the convex hull
+    for (Vertex v: hullMesh->vertices()){
+        Vector3 pos = hullGeometry->inputVertexPositions[v];
+        Vector3 Gv = pos - G; // could use any point inside convexHull for this (using G just cause we have it).
+        if (dot(Gv, initial_ori) >= max_inner_product){
+            contact_point = v;
+            max_inner_product = dot(Gv, initial_ori);
+        }
+    }
+    Vertex v = contact_point;
+    // update state & initialize tracing
+    curr_state.first = v;
+    curr_state.second = v;
+    current_g_vec = initial_ori;
+}
+
+
 void ForwardSolver::next_state(){
+    std::pair<Vertex, Vertex> next_state;
+    Vector3 next_g_vec;
     if (curr_state.first == curr_state.second){
         // we are on a vertex
-        // mesh.
+        Vertex v = curr_state.first;
+        Edge e1, e2;
+        Vertex v1, v2;
+        bool first = true;
+        for (Edge e: v.adjacentEdges()){
+            if (e.isBoundary() && first){
+                e1 = e;
+                first = false;
+                v1 = e1.otherVertex(v);
+            }
+            else if (e.isBoundary()){
+                e2 = e;
+                v2 = e2.otherVertex(v);
+            }
+        }
+        Vector3 Gp  = hullGeometry->inputVertexPositions[v]  - G, 
+                Gp1 = hullGeometry->inputVertexPositions[v1] - G,
+                Gp2 = hullGeometry->inputVertexPositions[v2] - G; // these 3 vectors are sufficient to determine next falling element
+        Vector3 cross_p = cross(current_g_vec, Gp),
+                cross_p1 = cross(current_g_vec, Gp1),
+                cross_p2 = cross(current_g_vec, Gp2);
+        next_state.first = v; // dah
+        // v1, v2 on different sides
+        if (dot(cross_p, cross_p1) >= 0 && dot(cross_p, cross_p2) <= 0) // fall on to v-v2
+            next_state.second = v2;
+        else if (dot(cross_p, cross_p1) <= 0 && dot(cross_p, cross_p2) >= 0) // fall on to v-v1
+            next_state.second = v1;
+        else { // both v1,v2 in one side
+            Vector3 cross_p1p = cross(Gp1, Gp),
+                    cross_p2p = cross(Gp2, Gp);
+            if (dot(cross_p1p, cross_p) >= 0 && dot(cross_p2p, cross_p) <= 0)
+                next_state.second = v1;
+            else if (dot(cross_p2p, cross_p) >= 0 && dot(cross_p1p, cross_p) <= 0)
+                next_state.second = v2;
+            else 
+                printf("what the hell happend?\n");   
+        }
+        assert(next_state.first != next_state.second);
+        Vector3 edge_vec = hullGeometry->inputVertexPositions[next_state.second] - hullGeometry->inputVertexPositions[next_state.first],
+                z = {0., 0., 1.};
+        next_g_vec = cross(edge_vec, z);
+        if (dot(next_g_vec, Gp) >= 0) // wrong orientaion
+            next_g_vec = -next_g_vec;
+        
+        // update things
+        curr_state = next_state;
+        current_g_vec = next_g_vec;
     }
     else {
         // we are on an edge
+        Edge current_edge = hullMesh->connectingEdge(curr_state.first, curr_state.second);
+        Edge next_edge = next_falling_edge[current_edge];
 
+        // update things
+        curr_state.first = next_edge.firstVertex();
+        curr_state.second = next_edge.secondVertex();
     }
 }

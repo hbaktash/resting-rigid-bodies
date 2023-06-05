@@ -48,9 +48,10 @@ class ForwardSolver {
     // lazy polygon navigation
     Edge other_edge(Edge curr_e, Vertex tip_v);
 
-    // maybe later for fancier visualization
+    // possible fancy visualization
     void center_geometry();
     void align_geometry(Vector3 dir);
+    // rigid simulation
     void next_state();
     
 
