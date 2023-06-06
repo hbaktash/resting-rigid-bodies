@@ -149,6 +149,9 @@ void ForwardSolver::find_contact(Vector3 initial_ori){ // 0-based vector, need t
     curr_state.first = v;
     curr_state.second = v;
     current_g_vec = initial_ori;
+
+    // also build next edge tracer for next() calls
+    build_next_edge_tracer();
 }
 
 
@@ -172,9 +175,9 @@ void ForwardSolver::next_state(){
                 v2 = e2.otherVertex(v);
             }
         }
-        Vector3 Gp  = hullGeometry->inputVertexPositions[v]  - G, 
-                Gp1 = hullGeometry->inputVertexPositions[v1] - G,
-                Gp2 = hullGeometry->inputVertexPositions[v2] - G; // these 3 vectors are sufficient to determine next falling element
+        Vector3 Gp  = G - hullGeometry->inputVertexPositions[v]  , 
+                Gp1 = G - hullGeometry->inputVertexPositions[v1] ,
+                Gp2 = G - hullGeometry->inputVertexPositions[v2] ; // these 3 vectors are sufficient to determine next falling element
         Vector3 cross_p = cross(current_g_vec, Gp),
                 cross_p1 = cross(current_g_vec, Gp1),
                 cross_p2 = cross(current_g_vec, Gp2);
@@ -206,12 +209,26 @@ void ForwardSolver::next_state(){
         current_g_vec = next_g_vec;
     }
     else {
+        printf("here11\n");
         // we are on an edge
         Edge current_edge = hullMesh->connectingEdge(curr_state.first, curr_state.second);
+        printf("here12\n");
         Edge next_edge = next_falling_edge[current_edge];
-
         // update things
+        // update state (skipping rolling on vertices)
         curr_state.first = next_edge.firstVertex();
         curr_state.second = next_edge.secondVertex();
+        // update g-vec
+        printf("here13\n");
+        Vertex v = curr_state.first;
+        Vector3 Gp = G - hullGeometry->inputVertexPositions[v];
+        printf("here14 next_state vertices: %d, %d \n", curr_state.first.getIndex(), curr_state.second.getIndex());
+        Vector3 edge_vec = hullGeometry->inputVertexPositions[curr_state.second] - hullGeometry->inputVertexPositions[curr_state.first],
+                z = {0., 0., 1.};
+        printf("here15\n");
+        next_g_vec = cross(edge_vec, z);
+        if (dot(next_g_vec, Gp) >= 0) // wrong orientaion
+            next_g_vec = -next_g_vec;
+        current_g_vec = next_g_vec;
     }
 }

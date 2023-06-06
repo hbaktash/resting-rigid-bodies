@@ -27,17 +27,24 @@ std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
 std::unique_ptr<VertexPositionGeometry> geometry_ptr;
 ManifoldSurfaceMesh* mesh;
 VertexPositionGeometry* geometry;
-Vector3 G; // center of Mass
+Vector3 G, // center of Mass
+        initial_g_vec;
 
 ForwardSolver forwardSolver;
 
 // Polyscope visualization handle, to quickly add data to the surface
-polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, *dummy_psMesh2, *dummy_psMesh3;
+polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, *dummy_psMesh2, *dummy_psMesh3, 
+                       *dummy_forward_vis;
+
+polyscope::PointCloud *psG, *curr_state_pt; // point cloud with single G
+
+polyscope::SurfaceGraphQuantity* curr_state_segment;
 
 float pt_cloud_radi_scale = 0.1,
       curve_radi_scale = 0.1,
       G_scale = 1.,
-      G_angle = 0.;
+      G_angle = 0.,
+      g_vec_angle = 0.;
 
 
 // example choice
@@ -117,7 +124,11 @@ void visualize_edge_probabilities(){
 // visualize center of mass
 void draw_G() {
   std::vector<Vector3> G_position = {forwardSolver.G};
-  polyscope::PointCloud* psG = polyscope::registerPointCloud("Center of Mass", G_position);
+  if (polyscope::hasPointCloud("Center of Mass")){
+    psG->updatePointPositions(G_position);
+  }
+  else 
+    psG = polyscope::registerPointCloud("Center of Mass", G_position);
   // set some options
   psG->setPointColor({1., 1., 1.});
   psG->setPointRadius(pt_cloud_radi_scale/2.);
@@ -210,6 +221,51 @@ void update_solver(){
   draw_G();
 }
 
+void visualize_g_vec(){
+  std::vector<Vector3> the_g_vec = {forwardSolver.current_g_vec};
+  polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
+  psG_vec->setEnabled(true);
+  psG_vec->setVectorRadius(curve_radi_scale * 1.);
+  psG_vec->setVectorLengthScale(0.2);
+}
+
+void visualize_contact_point(){
+  // single point cloud for the single contact point
+  if (forwardSolver.curr_state.first == forwardSolver.curr_state.second){
+    std::vector<Vector3> curr_state_pos = {forwardSolver.hullGeometry->inputVertexPositions[forwardSolver.curr_state.first]}; // first and second should be the same since we just initialized.
+    curr_state_pt = polyscope::registerPointCloud("current state", curr_state_pos);
+    curr_state_pt->setEnabled(true);
+    curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
+  }
+  else {
+      printf("here31\n");
+      Vertex v1 = forwardSolver.curr_state.first, 
+             v2 = forwardSolver.curr_state.second;
+      std::vector<std::array<size_t, 2>> edgeInds;
+      std::vector<Vector3> positions;
+      edgeInds.push_back({0, 1});
+      Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[v1],
+              p2 = forwardSolver.hullGeometry->inputVertexPositions[v2];
+      positions.push_back(p1); positions.push_back(p2);
+      printf("here32\n");
+      curr_state_segment =  dummy_forward_vis->addSurfaceGraphQuantity("current contact edge", positions, edgeInds);
+      curr_state_segment->setRadius(curve_radi_scale/1.5);
+      curr_state_segment->setColor({0., 0., 1.});
+      curr_state_segment->setEnabled(true);
+  }
+}
+
+void initialize_state_vis(){
+  visualize_g_vec();
+  visualize_contact_point();
+  draw_G();
+  // for later single segment curve addition
+  std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
+  std::vector<Vector3> dummy_pos = {Vector3({0.,0.,0.})};
+  dummy_forward_vis = polyscope::registerSurfaceMesh("state check mesh", dummy_pos, dummy_face); // nothing matters in this line
+  // will add curves to this later
+}
+
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
 // https://github.com/ocornut/imgui/blob/master/imgui.h
@@ -236,7 +292,6 @@ void myCallback() {
   }
   if (ImGui::SliderFloat("vertex radi scale", &pt_cloud_radi_scale, 0., 1.)) {
     draw_G();
-    visualize_vertex_probabilities();
   }
   if (ImGui::SliderFloat("edge radi scale", &curve_radi_scale, 0., 1.)) visualize_edge_probabilities();
 
@@ -252,6 +307,24 @@ void myCallback() {
     visualize_edge_probabilities();
   }
 
+  if (ImGui::SliderFloat("g-vec angle", &g_vec_angle, 0., 2*PI)) {
+    initial_g_vec = {cos(g_vec_angle), sin(g_vec_angle), 0};
+    forwardSolver.find_contact(initial_g_vec);
+    initialize_state_vis();
+  }
+  if (ImGui::Button("reset state")) {
+    forwardSolver.find_contact(initial_g_vec);
+    initialize_state_vis();
+  }
+  if (ImGui::Button("next state")) {
+    printf("here\n");
+    forwardSolver.next_state();
+    printf("here2\n");
+    visualize_g_vec();
+    printf("here3\n");
+    visualize_contact_point();
+    printf("here4\n");
+  }
 }
 
 
