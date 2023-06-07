@@ -45,7 +45,7 @@ float pt_cloud_radi_scale = 0.1,
       G_scale = 1.,
       G_angle = 0.,
       g_vec_angle = 0.;
-
+int sample_count = 1e6;
 
 // example choice
 std::vector<std::string> all_polygon_items = {std::string("cube"), std::string("skewed 4-gon"), std::string("rndbs 6-gon 1"), std::string("rndbs 9-gon 1")};
@@ -238,7 +238,6 @@ void visualize_contact_point(){
     curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
   }
   else {
-      printf("here31\n");
       Vertex v1 = forwardSolver.curr_state.first, 
              v2 = forwardSolver.curr_state.second;
       std::vector<std::array<size_t, 2>> edgeInds;
@@ -247,7 +246,6 @@ void visualize_contact_point(){
       Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[v1],
               p2 = forwardSolver.hullGeometry->inputVertexPositions[v2];
       positions.push_back(p1); positions.push_back(p2);
-      printf("here32\n");
       curr_state_segment =  dummy_forward_vis->addSurfaceGraphQuantity("current contact edge", positions, edgeInds);
       curr_state_segment->setRadius(curve_radi_scale/1.5);
       curr_state_segment->setColor({0., 0., 1.});
@@ -307,23 +305,27 @@ void myCallback() {
     visualize_edge_probabilities();
   }
 
+  if (ImGui::InputInt("compute empirical edge probabilities", &sample_count, 100)) {
+    forwardSolver.build_next_edge_tracer();
+    printf("here\n");
+    forwardSolver.empirically_build_probabilities(sample_count);
+    printf("here1\n");
+  }
   if (ImGui::SliderFloat("g-vec angle", &g_vec_angle, 0., 2*PI)) {
     initial_g_vec = {cos(g_vec_angle), sin(g_vec_angle), 0};
     forwardSolver.find_contact(initial_g_vec);
+    forwardSolver.build_next_edge_tracer();
     initialize_state_vis();
   }
   if (ImGui::Button("reset state")) {
     forwardSolver.find_contact(initial_g_vec);
+    forwardSolver.build_next_edge_tracer();
     initialize_state_vis();
   }
   if (ImGui::Button("next state")) {
-    printf("here\n");
     forwardSolver.next_state();
-    printf("here2\n");
     visualize_g_vec();
-    printf("here3\n");
     visualize_contact_point();
-    printf("here4\n");
   }
 }
 
@@ -354,9 +356,9 @@ int main(int argc, char **argv) {
 
   // build mesh
   generate_polygon_example(all_polygons_current_item);
+  G = {0.,0,0};
   update_solver();
   // build the solver
-  G = {0.99,0,0};
   
   // Load mesh
   // std::tie(mesh, geometry) = readManifoldSurfaceMesh(args::get(inputFilename));

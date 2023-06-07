@@ -30,6 +30,9 @@ class ForwardSolver {
     EdgeData<double> initial_edge_probabilities;
     EdgeData<double> final_edge_probabilities;
 
+    // empirical stuff
+    EdgeData<double> empirical_final_probabilities;
+
 
     // constructors
     ForwardSolver() {}
@@ -54,5 +57,9 @@ class ForwardSolver {
     // rigid simulation
     void next_state();
     
+    // empirical sampling
+    Edge simulate_toss(Vector3 initial_ori);
+    void empirically_build_probabilities(int sample_count);
+
 
 };
