@@ -10,7 +10,7 @@
 #include "args/args.hxx"
 #include "imgui.h"
 
-#include "forward.h"
+#include "forward3D.h"
 
 // #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 // #include <CGAL/Polyhedron_3.h>
@@ -30,11 +30,11 @@ VertexPositionGeometry* geometry;
 Vector3 G, // center of Mass
         initial_g_vec;
 
-ForwardSolver forwardSolver;
+Forward3DSolver forwardSolver;
 
 // Polyscope visualization handle, to quickly add data to the surface
-polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, *dummy_psMesh2, *dummy_psMesh3, 
-                       *dummy_forward_vis;
+polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, 
+                       *dummy_psMesh2, *dummy_psMesh3, *dummy_forward_vis;
 
 polyscope::PointCloud *psG, *curr_state_pt; // point cloud with single G
 
@@ -42,168 +42,22 @@ polyscope::SurfaceGraphQuantity* curr_state_segment;
 
 float pt_cloud_radi_scale = 0.1,
       curve_radi_scale = 0.1,
-      G_scale = 1.,
-      G_angle = 0.,
-      g_vec_angle = 0.;
-int sample_count = 1e3;
+      G_r = 0.,
+      G_theta = 0.,
+      G_phi = 0.;
 
 // example choice
-std::vector<std::string> all_polygon_items = {std::string("cube"), std::string("skewed 4-gon"), std::string("rndbs 6-gon 1"), std::string("rndbs 9-gon 1")};
-std::string all_polygons_current_item = "cube";
-static const char* all_polygons_current_item_c_str = "cube";
+std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet")};
+std::string all_polygons_current_item = "tet";
+static const char* all_polygons_current_item_c_str = "tet";
 
 
-void visualize_boundary_curves(){
-  std::vector<std::vector<size_t>> dummy_face{{1,1,1}};
-  dummy_psMesh1 = polyscope::registerSurfaceMesh(
-      "dummy mesh1",
-      geometry->inputVertexPositions, dummy_face);
-  auto positions = forwardSolver.hullGeometry->inputVertexPositions.toVector();
-  std::vector<std::array<size_t, 2>> edgeInds;
-  for (Edge e: forwardSolver.hullMesh->edges()){
-    if (e.isBoundary()){
-      edgeInds.push_back({e.firstVertex().getIndex(), e.secondVertex().getIndex()});
-    }
-  }
-  dummy_psMesh1->addSurfaceGraphQuantity("convex boundary", positions, edgeInds);
-}
-
-
-void visualize_vertex_probabilities(){
-  
-  for (Vertex v: forwardSolver.hullMesh->vertices()){
-    std::vector<Vector3> positions = {forwardSolver.hullGeometry->inputVertexPositions[v]};
-    polyscope::PointCloud* psCloud = polyscope::registerPointCloud("v" + std::to_string(v.getIndex()), positions);
-    // set some options
-    psCloud->setPointColor({forwardSolver.vertex_probabilities[v], 1., 1.});
-    psCloud->setPointRadius(forwardSolver.vertex_probabilities[v] * pt_cloud_radi_scale);
-    psCloud->setPointRenderMode(polyscope::PointRenderMode::Sphere);
-  }
-
-}
-
-void visualize_edge_probabilities(){
-  forwardSolver.build_next_edge_tracer();
-  forwardSolver.compute_initial_edge_probabilities();
-  forwardSolver.compute_final_edge_probabilities();
-
-  // initial probs
-  std::vector<std::vector<size_t>> dummy_face{{1,1,1}};
-  dummy_psMesh2 = polyscope::registerSurfaceMesh(
-      "initial prob",
-      geometry->inputVertexPositions, dummy_face);
-  
-  dummy_psMesh3 = polyscope::registerSurfaceMesh(
-      "final prob",
-      geometry->inputVertexPositions, dummy_face);
-  // auto positions = forwardSolver.hullGeometry->inputVertexPositions.toVector();
-  // std::vector<std::array<size_t, 2>> edgeInds;
-  for (Edge e: forwardSolver.hullMesh->edges()){
-    if (e.isBoundary()){
-      std::vector<std::array<size_t, 2>> edgeInds;
-      std::vector<Vector3> positions;
-      edgeInds.push_back({0, 1});
-      Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[e.firstVertex()],
-              p2 = forwardSolver.hullGeometry->inputVertexPositions[e.secondVertex()];
-      positions.push_back(p1); positions.push_back(p2);
-      // initial prob visualize
-      polyscope::SurfaceGraphQuantity* psSegment =  dummy_psMesh2->addSurfaceGraphQuantity("initial prob e" + std::to_string(e.getIndex()), positions, edgeInds);
-      psSegment->setRadius(forwardSolver.initial_edge_probabilities[e]*curve_radi_scale);
-      psSegment->setColor({1., forwardSolver.initial_edge_probabilities[e], 1.});
-      psSegment->setEnabled(true);
-      // final prob visualize
-      polyscope::SurfaceGraphQuantity* psSegment2 =  dummy_psMesh3->addSurfaceGraphQuantity("final prob e" + std::to_string(e.getIndex()), positions, edgeInds);
-      psSegment2->setRadius(forwardSolver.final_edge_probabilities[e]*curve_radi_scale);
-      psSegment2->setColor({1., 1., forwardSolver.final_edge_probabilities[e]});
-      psSegment2->setEnabled(true);
-    }
-  }
-  
-}
-
-// visualize center of mass
-void draw_G() {
-  std::vector<Vector3> G_position = {forwardSolver.G};
-  if (polyscope::hasPointCloud("Center of Mass")){
-    psG->updatePointPositions(G_position);
-  }
-  else 
-    psG = polyscope::registerPointCloud("Center of Mass", G_position);
-  // set some options
-  psG->setPointColor({1., 1., 1.});
-  psG->setPointRadius(pt_cloud_radi_scale/2.);
-  psG->setPointRenderMode(polyscope::PointRenderMode::Sphere);
-}
-
-// generate simple examples
-void generate_polygon_example(std::string poly_str){
-    std::vector<std::vector<size_t>> greedy_triangulation;
-    std::vector<Vector3> positions;
-    int n;
-    if (std::strcmp(poly_str.c_str(), "cube") == 0){
-      n = 4;
-      greedy_triangulation = {{0, 1, 2},
-                              {0, 2, 3}};
-      positions = {{-1, -1, 0}, {1, -1, 0}, {1, 1, 0}, {-1, 1, 0}};
-    }
-    else if (std::strcmp(poly_str.c_str(), "skewed 4-gon") == 0){
-      n = 4;
-      greedy_triangulation = {{0, 1, 2},
-                              {0, 2, 3}};
-      positions = {{-1*3., -1*3., 0}, {1*1.5, -1*1.5, 0}, {1*2, 1*2, 0}, {-1, 1, 0}};
-    }
-    else if (std::strcmp(poly_str.c_str(), "rndbs 6-gon 1") == 0){
-      n = 6;
-      greedy_triangulation = {{0, 1, 2},
-                              {0, 2, 3},
-                              {0, 3, 4},
-                              {0, 4, 5}};
-      for (int i = 0; i < n; i++) {
-        double tmp_angle = (double)i*2*PI/6.;
-        positions.push_back({cos(tmp_angle), sin(tmp_angle), 0.});
-      }
-      positions[0] *= 1.5;
-      positions[1] *= 5;
-      positions[2] *= 10;
-      positions[3] *= 5;
-      positions[4] *= 1.5;
-      positions[5] *= 1;
-    }
-    else if (std::strcmp(poly_str.c_str(), "rndbs 9-gon 1") == 0){
-      n = 9;
-      for (size_t i = 0; i < n-2; i++){
-        greedy_triangulation.push_back({0, i+1, i+2});
-      }
-      for (int i = 0; i < n; i++) {
-        double tmp_angle = (double)i*2*PI/(double)n;
-        positions.push_back({cos(tmp_angle), sin(tmp_angle), 0.});
-      }
-      positions[0] *= 1;
-      positions[1] *= 1.5;
-      positions[2] *= 4;
-      positions[3] *= 8;
-      positions[4] *= 12;
-      positions[5] *= 8;
-      positions[6] *= 3;
-      positions[7] *= 1.5;
-      positions[8] *= 1;
-    }
-    else {
-      throw std::runtime_error("no valid string provided\n");
-    }
-    // std::unique_ptr<ManifoldSurfaceMesh> poly_triangulated;
-    // poly_triangulated.reset(new ManifoldSurfaceMesh(greedy_triangulation));
-    mesh = new ManifoldSurfaceMesh(greedy_triangulation);
-    geometry = new VertexPositionGeometry(*mesh);
-    for (Vertex v : mesh->vertices()) {
-        // Use the low-level indexers here since we're constructing
-        printf("v %d\n", v.getIndex());
-        geometry->inputVertexPositions[v] = positions[v.getIndex()];
-    }
+Vector3 spherical_to_xyz(double r, double phi, double theta){
+  return Vector3({r*cos(phi)*sin(theta), r*cos(phi)*cos(theta), r*sin(phi)});
 }
 
 void update_solver(){
-  forwardSolver = ForwardSolver(mesh, geometry, G);
+  forwardSolver = Forward3DSolver(mesh, geometry, G);
   //assuming convex input here
   forwardSolver.hullMesh = new ManifoldSurfaceMesh(mesh->getFaceVertexList()); //mesh->copy().release();
   forwardSolver.hullGeometry = new VertexPositionGeometry(*forwardSolver.hullMesh); // geometry->copy().release();
@@ -221,6 +75,75 @@ void update_solver(){
   draw_G();
 }
 
+
+void visualize_vertex_probabilities(){
+  for (Vertex v: forwardSolver.hullMesh->vertices()){
+    std::vector<Vector3> positions = {forwardSolver.hullGeometry->inputVertexPositions[v]};
+    polyscope::PointCloud* psCloud = polyscope::registerPointCloud("v" + std::to_string(v.getIndex()), positions);
+    // set some options
+    psCloud->setPointColor({forwardSolver.vertex_probabilities[v], 1., 1.});
+    psCloud->setPointRadius(forwardSolver.vertex_probabilities[v] * pt_cloud_radi_scale);
+    psCloud->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  }
+}
+
+void visualize_edge_probabilities(){}
+
+// visualize center of mass
+void draw_G() {
+  std::vector<Vector3> G_position = {forwardSolver.G};
+  if (polyscope::hasPointCloud("Center of Mass")){
+    psG->updatePointPositions(G_position);
+  }
+  else 
+    psG = polyscope::registerPointCloud("Center of Mass", G_position);
+  // set some options
+  psG->setPointColor({1., 1., 1.});
+  psG->setPointRadius(pt_cloud_radi_scale/2.);
+  psG->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+}
+
+// generate simple examples
+void generate_polyhedron_example(std::string poly_str){
+    std::vector<std::vector<size_t>> greedy_triangulation;
+    std::vector<Vector3> positions;
+    int n;
+    if (std::strcmp(poly_str.c_str(), "tet") == 0){
+      n = 4;
+      greedy_triangulation = {{0, 1, 2},
+                              {0, 3, 1},
+                              {0, 2, 3},
+                              {2, 1, 3}};
+      double theta0 = 0., theta1 = 2.*PI/3., theta2 = 4.*PI/3.,
+             phi0 = PI/6.,
+             theta3 = 0., 
+             phi1 = -PI/2.;
+      
+      positions = { spherical_to_xyz(1., phi0, theta0),
+                    spherical_to_xyz(1., phi0, theta1),
+                    spherical_to_xyz(1., phi0, theta2),
+                    spherical_to_xyz(1., phi1, theta3)};
+    }
+    else if (std::strcmp(poly_str.c_str(), "cube") == 0){
+    }
+    else if (std::strcmp(poly_str.c_str(), "rndbs 6-gon 1") == 0){
+    }
+    else if (std::strcmp(poly_str.c_str(), "rndbs 9-gon 1") == 0){
+    }
+    else {
+      throw std::runtime_error("no valid string provided\n");
+    }
+    // std::unique_ptr<ManifoldSurfaceMesh> poly_triangulated;
+    // poly_triangulated.reset(new ManifoldSurfaceMesh(greedy_triangulation));
+    mesh = new ManifoldSurfaceMesh(greedy_triangulation);
+    geometry = new VertexPositionGeometry(*mesh);
+    for (Vertex v : mesh->vertices()) {
+        // Use the low-level indexers here since we're constructing
+        printf("v %d\n", v.getIndex());
+        geometry->inputVertexPositions[v] = positions[v.getIndex()];
+    }
+}
+
 void visualize_g_vec(){
   std::vector<Vector3> the_g_vec = {forwardSolver.current_g_vec};
   polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
@@ -236,20 +159,6 @@ void visualize_contact_point(){
     curr_state_pt = polyscope::registerPointCloud("current state", curr_state_pos);
     curr_state_pt->setEnabled(true);
     curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
-  }
-  else {
-      Vertex v1 = forwardSolver.curr_state.first, 
-             v2 = forwardSolver.curr_state.second;
-      std::vector<std::array<size_t, 2>> edgeInds;
-      std::vector<Vector3> positions;
-      edgeInds.push_back({0, 1});
-      Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[v1],
-              p2 = forwardSolver.hullGeometry->inputVertexPositions[v2];
-      positions.push_back(p1); positions.push_back(p2);
-      curr_state_segment =  dummy_forward_vis->addSurfaceGraphQuantity("current contact edge", positions, edgeInds);
-      curr_state_segment->setRadius(curve_radi_scale/1.5);
-      curr_state_segment->setColor({0., 0., 1.});
-      curr_state_segment->setEnabled(true);
   }
 }
 
@@ -269,11 +178,11 @@ void initialize_state_vis(){
 // https://github.com/ocornut/imgui/blob/master/imgui.h
 void myCallback() {
   if (ImGui::BeginCombo("##combo1", all_polygons_current_item.c_str())){ // The second parameter is the label previewed before opening the combo.
-        for (std::string tmp_str: all_polygon_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
+        for (std::string tmp_str: all_polyhedra_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
             bool is_selected = (all_polygons_current_item == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
             if (ImGui::Selectable(tmp_str.c_str(), is_selected)){ // selected smth
                 all_polygons_current_item = tmp_str;
-                generate_polygon_example(all_polygons_current_item);
+                generate_polyhedron_example(all_polygons_current_item);
                 update_solver();
             }
             if (is_selected)
@@ -281,10 +190,6 @@ void myCallback() {
         }
         ImGui::EndCombo();
     }
-
-  if (ImGui::Button("build boundary curves")) {
-    visualize_boundary_curves();
-  }
   if (ImGui::Button("visualize vertex probabilities")) {
     visualize_vertex_probabilities();
   }
@@ -297,9 +202,10 @@ void myCallback() {
     visualize_edge_probabilities();
   }
 
-  if (ImGui::SliderFloat("G radi scale", &G_scale, -3., 3.)||
-      ImGui::SliderFloat("G angle", &G_angle, 0., 2*PI)) {
-    G = {cos(G_angle)*G_scale, sin(G_angle) * G_scale, 0};
+  if (ImGui::SliderFloat("G radi scale", &G_r, -3., 3.)||
+      ImGui::SliderFloat("G theta", &G_theta, 0., 2*PI)||
+      ImGui::SliderFloat("G phi", &G_phi, 0., 2*PI)) {
+    G = {cos(G_phi)*sin(G_theta)*G_r, cos(G_phi)*cos(G_theta)*G_r, sin(G_phi)*G_r};
     forwardSolver.G = G;
     draw_G();
     visualize_edge_probabilities();
@@ -307,7 +213,9 @@ void myCallback() {
 
   if (ImGui::InputInt("compute empirical edge probabilities", &sample_count, 100)) {
     forwardSolver.build_next_edge_tracer();
+    printf("here\n");
     forwardSolver.empirically_build_probabilities(sample_count);
+    printf("here1\n");
   }
   if (ImGui::SliderFloat("g-vec angle", &g_vec_angle, 0., 2*PI)) {
     initial_g_vec = {cos(g_vec_angle), sin(g_vec_angle), 0};

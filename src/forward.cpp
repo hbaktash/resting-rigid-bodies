@@ -126,7 +126,7 @@ void ForwardSolver::compute_final_edge_probabilities(){
     }
     printf("---- Final edge probs ---- \n");
     for (Edge e: hullMesh->edges()){
-        if (e.isBoundary()){
+        if (e.isBoundary() && final_edge_probabilities[e] != 0){
             printf("Edge %d final prob: %f \n", e.getIndex(), final_edge_probabilities[e]);
         }
     }
@@ -256,6 +256,7 @@ void ForwardSolver::empirically_build_probabilities(int sample_count){
             empirical_final_probabilities[final_edge] += 1;
         }
     }
+    printf("--- sample count %d\n", succ_sample_count);
     for (Edge e: hullMesh->edges()){
 
         empirical_final_probabilities[e] /= (double)succ_sample_count;
