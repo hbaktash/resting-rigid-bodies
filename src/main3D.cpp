@@ -46,6 +46,8 @@ float pt_cloud_radi_scale = 0.1,
       G_theta = 0.,
       G_phi = 0.;
 
+int sample_count = 1000;
+
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet")};
 std::string all_polygons_current_item = "tet";
@@ -56,6 +58,21 @@ Vector3 spherical_to_xyz(double r, double phi, double theta){
   return Vector3({r*cos(phi)*sin(theta), r*cos(phi)*cos(theta), r*sin(phi)});
 }
 
+
+// visualize center of mass
+void draw_G() {
+  std::vector<Vector3> G_position = {forwardSolver.G};
+  if (polyscope::hasPointCloud("Center of Mass")){
+    psG->updatePointPositions(G_position);
+  }
+  else 
+    psG = polyscope::registerPointCloud("Center of Mass", G_position);
+  // set some options
+  psG->setPointColor({1., 1., 1.});
+  psG->setPointRadius(pt_cloud_radi_scale/2.);
+  psG->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+}
+
 void update_solver(){
   forwardSolver = Forward3DSolver(mesh, geometry, G);
   //assuming convex input here
@@ -64,7 +81,7 @@ void update_solver(){
   for (Vertex v: forwardSolver.hullMesh->vertices()){
     forwardSolver.hullGeometry->inputVertexPositions[v] = geometry->inputVertexPositions[v.getIndex()];
   }
-  forwardSolver.compute_vertex_probabilities();
+  // forwardSolver.compute_vertex_probabilities();
 
 
   // Register the mesh with polyscope
@@ -72,6 +89,7 @@ void update_solver(){
       "input mesh",
       geometry->inputVertexPositions, mesh->getFaceVertexList(),
       polyscopePermutations(*mesh));
+  psInputMesh->setTransparency(0.3);
   draw_G();
 }
 
@@ -89,19 +107,7 @@ void visualize_vertex_probabilities(){
 
 void visualize_edge_probabilities(){}
 
-// visualize center of mass
-void draw_G() {
-  std::vector<Vector3> G_position = {forwardSolver.G};
-  if (polyscope::hasPointCloud("Center of Mass")){
-    psG->updatePointPositions(G_position);
-  }
-  else 
-    psG = polyscope::registerPointCloud("Center of Mass", G_position);
-  // set some options
-  psG->setPointColor({1., 1., 1.});
-  psG->setPointRadius(pt_cloud_radi_scale/2.);
-  psG->setPointRenderMode(polyscope::PointRenderMode::Sphere);
-}
+
 
 // generate simple examples
 void generate_polyhedron_example(std::string poly_str){
@@ -190,17 +196,17 @@ void myCallback() {
         }
         ImGui::EndCombo();
     }
-  if (ImGui::Button("visualize vertex probabilities")) {
+  if (ImGui::Button("visualize vertex probabilities"))
     visualize_vertex_probabilities();
-  }
-  if (ImGui::SliderFloat("vertex radi scale", &pt_cloud_radi_scale, 0., 1.)) {
+  
+  if (ImGui::SliderFloat("vertex radi scale", &pt_cloud_radi_scale, 0., 1.))
     draw_G();
-  }
-  if (ImGui::SliderFloat("edge radi scale", &curve_radi_scale, 0., 1.)) visualize_edge_probabilities();
 
-  if (ImGui::Button("visualize edge probabilities")) {
+  if (ImGui::SliderFloat("edge radi scale", &curve_radi_scale, 0., 1.)) 
     visualize_edge_probabilities();
-  }
+  
+  if (ImGui::Button("visualize edge probabilities"))
+    visualize_edge_probabilities();
 
   if (ImGui::SliderFloat("G radi scale", &G_r, -3., 3.)||
       ImGui::SliderFloat("G theta", &G_theta, 0., 2*PI)||
@@ -212,26 +218,24 @@ void myCallback() {
   }
 
   if (ImGui::InputInt("compute empirical edge probabilities", &sample_count, 100)) {
-    forwardSolver.build_next_edge_tracer();
-    printf("here\n");
-    forwardSolver.empirically_build_probabilities(sample_count);
-    printf("here1\n");
+    // forwardSolver.build_next_edge_tracer();
+    // forwardSolver.empirically_build_probabilities(sample_count);
   }
-  if (ImGui::SliderFloat("g-vec angle", &g_vec_angle, 0., 2*PI)) {
-    initial_g_vec = {cos(g_vec_angle), sin(g_vec_angle), 0};
-    forwardSolver.find_contact(initial_g_vec);
-    forwardSolver.build_next_edge_tracer();
-    initialize_state_vis();
-  }
+  // if (ImGui::SliderFloat("g-vec angle", &g_vec_angle, 0., 2*PI)) {
+    // initial_g_vec = {cos(g_vec_angle), sin(g_vec_angle), 0};
+    // forwardSolver.find_contact(initial_g_vec);
+    // forwardSolver.build_next_edge_tracer();
+    // initialize_state_vis();
+  // }
   if (ImGui::Button("reset state")) {
-    forwardSolver.find_contact(initial_g_vec);
-    forwardSolver.build_next_edge_tracer();
-    initialize_state_vis();
+    // forwardSolver.find_contact(initial_g_vec);
+    // forwardSolver.build_next_edge_tracer();
+    // initialize_state_vis();
   }
   if (ImGui::Button("next state")) {
-    forwardSolver.next_state();
-    visualize_g_vec();
-    visualize_contact_point();
+    // forwardSolver.next_state();
+    // visualize_g_vec();
+    // visualize_contact_point();
   }
 }
 
@@ -261,7 +265,7 @@ int main(int argc, char **argv) {
   // }
 
   // build mesh
-  generate_polygon_example(all_polygons_current_item);
+  generate_polyhedron_example(all_polygons_current_item);
   G = {0.,0,0};
   update_solver();
   // build the solver
@@ -274,7 +278,9 @@ int main(int argc, char **argv) {
   
   // Set the callback function
   polyscope::state::userCallback = myCallback;
-  polyscope::view::style = polyscope::view::NavigateStyle::Planar;
+  polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
+  polyscope::view::upDir = polyscope::view::UpDir::NegZUp;
+
   // Set vertex tangent spaces
   
   // Give control to the polyscope gui
