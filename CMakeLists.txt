@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14.0)
 
-project(gc_polyscope_example)
+project(rolling_dragons)
 
 ### Configure output locations
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -65,20 +65,38 @@ add_subdirectory(deps/polyscope)
 
 # == Build our project stuff
 
-set(SRCS 
+set(polygons_SRCS 
   src/main.cpp
   src/forward.cpp
 	# add any other source files here
 )
 
 
+set(polhedra_SRCS 
+  src/main3D.cpp
+  src/forward3D.cpp
+	# add any other source files here
+)
+
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
-add_executable(gc_project "${SRCS}")
-target_include_directories(gc_project PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+add_executable(polygons "${polygons_SRCS}")
+target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 # add the args.hxx project which we use for command line args
-target_include_directories(gc_project PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-# target_include_directories(gc_project PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
-# target_include_directories(gc_project PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/CGAL/include")
-# target_include_directories(gc_project PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/boost_1_82_0")
+target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/CGAL/include")
+# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/boost_1_82_0")
 # target_compile_features(LIBRARY_NAME PUBLIC cxx_std_14)
-target_link_libraries(gc_project geometry-central polyscope)
+target_link_libraries(polygons geometry-central polyscope)
+
+
+# To change the name of your executable, change "gc_project" in the lines below to whatever you want
+add_executable(polyhedra "${polhedra_SRCS}")
+target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# add the args.hxx project which we use for command line args
+target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/CGAL/include")
+# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/boost_1_82_0")
+# target_compile_features(LIBRARY_NAME PUBLIC cxx_std_14)
+target_link_libraries(polyhedra geometry-central polyscope)

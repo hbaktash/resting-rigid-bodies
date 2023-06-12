@@ -46,6 +46,10 @@ float pt_cloud_radi_scale = 0.1,
       G_theta = 0.,
       G_phi = 0.;
 
+float stable_edge_radi = 0.05,
+      stablizable_edge_radi = 0.07;
+
+
 int sample_count = 1000;
 
 // example choice
@@ -83,7 +87,6 @@ void update_solver(){
   }
   // forwardSolver.compute_vertex_probabilities();
 
-
   // Register the mesh with polyscope
   psInputMesh = polyscope::registerSurfaceMesh(
       "input mesh",
@@ -105,18 +108,63 @@ void visualize_vertex_probabilities(){
   }
 }
 
-void visualize_edge_probabilities(){}
+// void visualize_edge_probabilities(){}
 
+void visualize_edge_stability(){
+  std::vector<std::vector<size_t>> dummy_face{{1,1,1}};
+  dummy_psMesh1 = polyscope::registerSurfaceMesh(
+      "dummy mesh for edges",
+      geometry->inputVertexPositions, dummy_face);
+
+  std::vector<std::array<size_t, 2>> stable_edgeInds, stablilizable_edgeInds;
+  std::vector<Vector3> stable_positions, stablilizable_positions;
+  size_t stable_counter = 0, stablizable_counter = 0;
+  for (Edge e: forwardSolver.hullMesh->edges()){
+    Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[e.firstVertex()],
+            p2 = forwardSolver.hullGeometry->inputVertexPositions[e.secondVertex()];
+    if (forwardSolver.edge_is_stable(e)){
+      stable_positions.push_back(p1); stable_positions.push_back(p2);
+      stable_edgeInds.push_back({stable_counter, stable_counter + 1});
+      stable_counter += 2;
+    }
+    if (forwardSolver.edge_is_stablizable(e)){
+      stablilizable_positions.push_back(p1); stablilizable_positions.push_back(p2);
+      stablilizable_edgeInds.push_back({stablizable_counter, stablizable_counter + 1});
+      stablizable_counter += 2;
+    }
+  }
+  polyscope::SurfaceGraphQuantity* psStableEdges =  dummy_psMesh1->addSurfaceGraphQuantity("stable Edges", stable_positions, stable_edgeInds);
+  psStableEdges->setRadius(stable_edge_radi);
+  psStableEdges->setColor({0., 1., 1.});
+  psStableEdges->setEnabled(true);
+  polyscope::SurfaceGraphQuantity* psStablilizableEdges =  dummy_psMesh1->addSurfaceGraphQuantity("stablizable Edges", stable_positions, stable_edgeInds);
+  psStablilizableEdges->setRadius(stablizable_edge_radi);
+  psStablilizableEdges->setColor({1., 0.4, 0.4});
+  psStablilizableEdges->setEnabled(true);
+}
+
+
+void visualize_face_stability(){
+  std::vector<std::array<double, 3>> fColor(forwardSolver.hullMesh->nFaces());
+  for (Face f: forwardSolver.hullMesh->faces()){
+    if (forwardSolver.face_is_stable(f))
+      fColor[f.getIndex()] = {1., 0.1, 0.1};
+    else
+      fColor[f.getIndex()] = {0.9, 0.9, 1.};
+  }
+  psInputMesh->addFaceColorQuantity("face stability", fColor);
+
+}
 
 
 // generate simple examples
 void generate_polyhedron_example(std::string poly_str){
-    std::vector<std::vector<size_t>> greedy_triangulation;
+    std::vector<std::vector<size_t>> faces;
     std::vector<Vector3> positions;
     int n;
     if (std::strcmp(poly_str.c_str(), "tet") == 0){
       n = 4;
-      greedy_triangulation = {{0, 1, 2},
+      faces = {{0, 1, 2},
                               {0, 3, 1},
                               {0, 2, 3},
                               {2, 1, 3}};
@@ -130,7 +178,36 @@ void generate_polyhedron_example(std::string poly_str){
                     spherical_to_xyz(1., phi0, theta2),
                     spherical_to_xyz(1., phi1, theta3)};
     }
-    else if (std::strcmp(poly_str.c_str(), "cube") == 0){
+    else if (std::strcmp(poly_str.c_str(), "sliced tet") == 0){
+      double theta0 = 0., theta1 = 2.*PI/3., theta2 = 4.*PI/3.,
+              phi0 = PI/6.,
+              theta3 = 0., 
+              phi1 = -PI/2.;
+      Vector3 p1 = spherical_to_xyz(1., phi0, theta0), //0
+              p2 = spherical_to_xyz(1., phi0, theta1), // gone
+              p3 = spherical_to_xyz(1., phi0, theta2), // gone
+              p = spherical_to_xyz(1., phi1, theta3); // 1
+      Vector3 p2p  = 0.8*p2 + 0.2*p, // 2
+              p2p3 = 0.7*p2 + 0.3*p3, // 3
+              p2p1 = 0.8*p2 + 0.2*p1; // 4
+      Vector3 p3p  = 0.8*p3 + 0.2*p, // 5
+              p3p2 = 0.7*p3 + 0.3*p2, // 6
+              p3p1 = 0.8*p3 + 0.2*p1; // 7
+      positions.push_back(p); positions.push_back(p1);
+      positions.push_back(p2p); positions.push_back(p2p3); positions.push_back(p2p1); 
+      positions.push_back(p3p); positions.push_back(p3p2); positions.push_back(p3p1);
+      faces = {{0, 3, 6},
+               {0, 2, 3},
+               {0, 6, 5},
+               {0, 1, 2},
+               {0, 5, 1},
+               {1, 3, 4},
+               {1, 7, 6},   
+               {1, 6, 3},
+               {5, 6, 7},
+               {2, 4, 3},
+               {1, 4, 2},
+               {1, 5, 7}};
     }
     else if (std::strcmp(poly_str.c_str(), "rndbs 6-gon 1") == 0){
     }
@@ -141,7 +218,7 @@ void generate_polyhedron_example(std::string poly_str){
     }
     // std::unique_ptr<ManifoldSurfaceMesh> poly_triangulated;
     // poly_triangulated.reset(new ManifoldSurfaceMesh(greedy_triangulation));
-    mesh = new ManifoldSurfaceMesh(greedy_triangulation);
+    mesh = new ManifoldSurfaceMesh(faces);
     geometry = new VertexPositionGeometry(*mesh);
     for (Vertex v : mesh->vertices()) {
         // Use the low-level indexers here since we're constructing
@@ -202,11 +279,20 @@ void myCallback() {
   if (ImGui::SliderFloat("vertex radi scale", &pt_cloud_radi_scale, 0., 1.))
     draw_G();
 
-  if (ImGui::SliderFloat("edge radi scale", &curve_radi_scale, 0., 1.)) 
-    visualize_edge_probabilities();
+  if (ImGui::Button("show edge stability status")  ||
+      ImGui::SliderFloat("stable curve radi", &stable_edge_radi, 0., 0.1)||
+      ImGui::SliderFloat("stablizable curve radi", &stablizable_edge_radi, 0., 0.1)){
+      visualize_edge_stability();
+  }
+  if (ImGui::Button("show face stability status")){
+      visualize_face_stability();
+  }
   
-  if (ImGui::Button("visualize edge probabilities"))
-    visualize_edge_probabilities();
+  // if (ImGui::SliderFloat("edge radi scale", &curve_radi_scale, 0., 1.)) 
+  //   visualize_edge_probabilities();
+  
+  // if (ImGui::Button("visualize edge probabilities"))
+  //   visualize_edge_probabilities();
 
   if (ImGui::SliderFloat("G radi scale", &G_r, -3., 3.)||
       ImGui::SliderFloat("G theta", &G_theta, 0., 2*PI)||
@@ -214,29 +300,29 @@ void myCallback() {
     G = {cos(G_phi)*sin(G_theta)*G_r, cos(G_phi)*cos(G_theta)*G_r, sin(G_phi)*G_r};
     forwardSolver.G = G;
     draw_G();
-    visualize_edge_probabilities();
+    visualize_edge_stability();
   }
 
-  if (ImGui::InputInt("compute empirical edge probabilities", &sample_count, 100)) {
-    // forwardSolver.build_next_edge_tracer();
-    // forwardSolver.empirically_build_probabilities(sample_count);
-  }
+  // if (ImGui::InputInt("compute empirical edge probabilities", &sample_count, 100)) {
+  //   forwardSolver.build_next_edge_tracer();
+  //   forwardSolver.empirically_build_probabilities(sample_count);
+  // }
   // if (ImGui::SliderFloat("g-vec angle", &g_vec_angle, 0., 2*PI)) {
     // initial_g_vec = {cos(g_vec_angle), sin(g_vec_angle), 0};
     // forwardSolver.find_contact(initial_g_vec);
     // forwardSolver.build_next_edge_tracer();
     // initialize_state_vis();
   // }
-  if (ImGui::Button("reset state")) {
+  // if (ImGui::Button("reset state")) {
     // forwardSolver.find_contact(initial_g_vec);
     // forwardSolver.build_next_edge_tracer();
     // initialize_state_vis();
-  }
-  if (ImGui::Button("next state")) {
+  // }
+  // if (ImGui::Button("next state")) {
     // forwardSolver.next_state();
     // visualize_g_vec();
     // visualize_contact_point();
-  }
+  // }
 }
 
 
