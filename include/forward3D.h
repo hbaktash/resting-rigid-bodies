@@ -28,7 +28,9 @@ class Forward3DSolver {
     FaceData<Face> next_falling_face;
     VertexData<double> vertex_probabilities;
     
-    
+    // for debugging purposes
+    Vector3 tmp_test_vec;
+
     // constructors
     Forward3DSolver() {}
     Forward3DSolver(ManifoldSurfaceMesh* inputMesh, VertexPositionGeometry* inputGeo, Vector3 G);

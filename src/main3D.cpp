@@ -36,7 +36,7 @@ Forward3DSolver forwardSolver;
 polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, 
                        *dummy_psMesh2, *dummy_psMesh3, *dummy_forward_vis;
 
-polyscope::PointCloud *psG, *curr_state_pt; // point cloud with single G
+polyscope::PointCloud *psG, *curr_state_pt, *gauss_map_pc; // point cloud with single G
 
 polyscope::SurfaceGraphQuantity* curr_state_segment;
 
@@ -46,9 +46,13 @@ float pt_cloud_radi_scale = 0.1,
       G_theta = 0.,
       G_phi = 0.;
 
-float stable_edge_radi = 0.05,
-      stablizable_edge_radi = 0.07;
+float stable_edge_radi = 0.01,
+      stablizable_edge_radi = 0.03,
+      both_edge_radi = 0.02,
+      pt_cloud_stablizable_radi = 0.03;
 
+double gm_distance = 2.1,
+       gm_radi = 1.;
 
 int sample_count = 1000;
 
@@ -60,6 +64,18 @@ static const char* all_polygons_current_item_c_str = "tet";
 
 Vector3 spherical_to_xyz(double r, double phi, double theta){
   return Vector3({r*cos(phi)*sin(theta), r*cos(phi)*cos(theta), r*sin(phi)});
+}
+
+
+void visualize_gauss_map(){
+  // just draw the sphere next to the main surface
+  gauss_map_pc = polyscope::registerPointCloud("Gauss Map", Vector3({0., gm_distance, 0.}));
+  gauss_map_pc->setPointColor({0.74,0.7,0.9});
+  gauss_map_pc->setPointRadius(gm_radi);
+  gauss_map_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  // point cloud for face normals
+
+  // arcs for edge normals set
 }
 
 
@@ -92,12 +108,13 @@ void update_solver(){
       "input mesh",
       geometry->inputVertexPositions, mesh->getFaceVertexList(),
       polyscopePermutations(*mesh));
-  psInputMesh->setTransparency(0.3);
+  psInputMesh->setTransparency(0.95);
   draw_G();
 }
 
 
 void visualize_vertex_probabilities(){
+  forwardSolver.compute_vertex_probabilities();
   for (Vertex v: forwardSolver.hullMesh->vertices()){
     std::vector<Vector3> positions = {forwardSolver.hullGeometry->inputVertexPositions[v]};
     polyscope::PointCloud* psCloud = polyscope::registerPointCloud("v" + std::to_string(v.getIndex()), positions);
@@ -108,7 +125,30 @@ void visualize_vertex_probabilities(){
   }
 }
 
+
+void visualize_vec_from_G(Vector3 vec){
+  std::vector<Vector3> the_g_vec = {vec};
+  polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
+  psG_vec->setEnabled(true);
+  psG_vec->setVectorRadius(curve_radi_scale * 1.);
+  psG_vec->setVectorLengthScale((dot(vec, vec)));
+}
+
 // void visualize_edge_probabilities(){}
+
+void visualize_stable_vertices(){
+  std::vector<Vector3> positions;// = {forwardSolver.hullGeometry->inputVertexPositions[v]};
+  for (Vertex v: forwardSolver.hullMesh->vertices()){
+    if (forwardSolver.vertex_is_stablizable(v)){
+      positions.push_back(forwardSolver.hullGeometry->inputVertexPositions[v]);
+    }
+  }
+  polyscope::PointCloud* psCloud = polyscope::registerPointCloud("stabilizable vertices", positions);
+  // set some options
+  psCloud->setPointColor({0.1, .9, .1});
+  psCloud->setPointRadius(pt_cloud_stablizable_radi);
+  psCloud->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+}
 
 void visualize_edge_stability(){
   std::vector<std::vector<size_t>> dummy_face{{1,1,1}};
@@ -116,31 +156,43 @@ void visualize_edge_stability(){
       "dummy mesh for edges",
       geometry->inputVertexPositions, dummy_face);
 
-  std::vector<std::array<size_t, 2>> stable_edgeInds, stablilizable_edgeInds;
-  std::vector<Vector3> stable_positions, stablilizable_positions;
-  size_t stable_counter = 0, stablizable_counter = 0;
+  std::vector<std::array<size_t, 2>> stable_edgeInds, stablilizable_edgeInds, both_edgeInds;
+  std::vector<Vector3> stable_positions, stablilizable_positions, both_positions;
+  size_t stable_counter = 0, stablizable_counter = 0, both_counter = 0;
   for (Edge e: forwardSolver.hullMesh->edges()){
     Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[e.firstVertex()],
             p2 = forwardSolver.hullGeometry->inputVertexPositions[e.secondVertex()];
+    size_t flag = 0;
     if (forwardSolver.edge_is_stable(e)){
       stable_positions.push_back(p1); stable_positions.push_back(p2);
       stable_edgeInds.push_back({stable_counter, stable_counter + 1});
       stable_counter += 2;
+      flag++;
     }
     if (forwardSolver.edge_is_stablizable(e)){
       stablilizable_positions.push_back(p1); stablilizable_positions.push_back(p2);
       stablilizable_edgeInds.push_back({stablizable_counter, stablizable_counter + 1});
       stablizable_counter += 2;
+      flag++;
+    }
+    if (flag == 2){
+      both_positions.push_back(p1); both_positions.push_back(p2);
+      both_edgeInds.push_back({both_counter, both_counter + 1});
+      both_counter += 2;
     }
   }
   polyscope::SurfaceGraphQuantity* psStableEdges =  dummy_psMesh1->addSurfaceGraphQuantity("stable Edges", stable_positions, stable_edgeInds);
   psStableEdges->setRadius(stable_edge_radi);
   psStableEdges->setColor({0., 1., 1.});
   psStableEdges->setEnabled(true);
-  polyscope::SurfaceGraphQuantity* psStablilizableEdges =  dummy_psMesh1->addSurfaceGraphQuantity("stablizable Edges", stable_positions, stable_edgeInds);
+  polyscope::SurfaceGraphQuantity* psStablilizableEdges =  dummy_psMesh1->addSurfaceGraphQuantity("stablizable Edges", stablilizable_positions, stablilizable_edgeInds);
   psStablilizableEdges->setRadius(stablizable_edge_radi);
-  psStablilizableEdges->setColor({1., 0.4, 0.4});
+  psStablilizableEdges->setColor({0.1, 0.9, 0.2});
   psStablilizableEdges->setEnabled(true);
+  polyscope::SurfaceGraphQuantity* psBothEdges =  dummy_psMesh1->addSurfaceGraphQuantity("stable && stablizable Edges", both_positions, both_edgeInds);
+  psBothEdges->setRadius(both_edge_radi);
+  psBothEdges->setColor({0.8, 0.3, 0.3});
+  psBothEdges->setEnabled(true);
 }
 
 
@@ -193,6 +245,12 @@ void generate_polyhedron_example(std::string poly_str){
       Vector3 p3p  = 0.8*p3 + 0.2*p, // 5
               p3p2 = 0.7*p3 + 0.3*p2, // 6
               p3p1 = 0.8*p3 + 0.2*p1; // 7
+      // making the quad faces non-planar
+      double shrinkage = 0.7;
+      p2p *= 0.8; 
+      p2p1 *= shrinkage;
+      p3p *= 0.8; 
+      p3p1 *= shrinkage;
       positions.push_back(p); positions.push_back(p1);
       positions.push_back(p2p); positions.push_back(p2p3); positions.push_back(p2p1); 
       positions.push_back(p3p); positions.push_back(p3p2); positions.push_back(p3p1);
@@ -222,18 +280,11 @@ void generate_polyhedron_example(std::string poly_str){
     geometry = new VertexPositionGeometry(*mesh);
     for (Vertex v : mesh->vertices()) {
         // Use the low-level indexers here since we're constructing
-        printf("v %d\n", v.getIndex());
+        // printf("v %d\n", v.getIndex());
         geometry->inputVertexPositions[v] = positions[v.getIndex()];
     }
 }
 
-void visualize_g_vec(){
-  std::vector<Vector3> the_g_vec = {forwardSolver.current_g_vec};
-  polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
-  psG_vec->setEnabled(true);
-  psG_vec->setVectorRadius(curve_radi_scale * 1.);
-  psG_vec->setVectorLengthScale(0.2);
-}
 
 void visualize_contact_point(){
   // single point cloud for the single contact point
@@ -246,7 +297,7 @@ void visualize_contact_point(){
 }
 
 void initialize_state_vis(){
-  visualize_g_vec();
+  visualize_vec_from_G(forwardSolver.current_g_vec);
   visualize_contact_point();
   draw_G();
   // for later single segment curve addition
@@ -276,16 +327,22 @@ void myCallback() {
   if (ImGui::Button("visualize vertex probabilities"))
     visualize_vertex_probabilities();
   
-  if (ImGui::SliderFloat("vertex radi scale", &pt_cloud_radi_scale, 0., 1.))
+  if (ImGui::SliderFloat("vertex radi scale", &pt_cloud_radi_scale, 0., 1.)){
     draw_G();
+  }
 
   if (ImGui::Button("show edge stability status")  ||
-      ImGui::SliderFloat("stable curve radi", &stable_edge_radi, 0., 0.1)||
-      ImGui::SliderFloat("stablizable curve radi", &stablizable_edge_radi, 0., 0.1)){
+      ImGui::SliderFloat("stable curve radi", &stable_edge_radi, 0., 0.05)||
+      ImGui::SliderFloat("stablizable curve radi", &stablizable_edge_radi, 0., 0.05) ||
+      ImGui::SliderFloat("both curve radi", &both_edge_radi, 0., 0.05)){
       visualize_edge_stability();
+      visualize_face_stability();
   }
   if (ImGui::Button("show face stability status")){
       visualize_face_stability();
+  }
+  if (ImGui::Button("show vertex stability status")){
+      visualize_stable_vertices();
   }
   
   // if (ImGui::SliderFloat("edge radi scale", &curve_radi_scale, 0., 1.)) 
@@ -301,6 +358,8 @@ void myCallback() {
     forwardSolver.G = G;
     draw_G();
     visualize_edge_stability();
+    visualize_face_stability();
+    visualize_stable_vertices();
   }
 
   // if (ImGui::InputInt("compute empirical edge probabilities", &sample_count, 100)) {

@@ -44,24 +44,24 @@ bool Forward3DSolver::edge_is_stable(Edge e){
 
 
 bool Forward3DSolver::edge_is_stablizable(Edge e){
-    if (!edge_is_stable(e))
-        return false;
-    else{
-        // finding the orthogonal vector from G onto AB 
-        Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
-        Vector3 A = hullGeometry->inputVertexPositions[v1], B = hullGeometry->inputVertexPositions[v2];
-        Vector3 GB = B - G,
-                AB = B - A;
-        Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
-        // checking if other vertices are more aligned with orhto_G
-        double ortho_g_norm = dot(ortho_g, ortho_g);
-        for (Vertex other_v: hullMesh->vertices()){
+    // finding the orthogonal vector from G onto AB 
+    Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
+    Vector3 A = hullGeometry->inputVertexPositions[v1], B = hullGeometry->inputVertexPositions[v2];
+    Vector3 GB = B - G,
+            AB = B - A;
+    Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
+    tmp_test_vec = ortho_g;
+    // checking if other vertices are more aligned with orhto_G
+    double ortho_g_norm = dot(ortho_g, ortho_g);
+    for (Vertex other_v: hullMesh->vertices()){
+        if (other_v != e.firstVertex() && other_v != e.secondVertex()){
             Vector3 GP = hullGeometry->inputVertexPositions[other_v] - G;
-            if (dot(GP,ortho_g) > ortho_g_norm)
+            if (dot(GP,ortho_g) > ortho_g_norm){
                 return false;
+            }
         }
-        return true;
     }
+    return true;
 }
 
 
