@@ -37,7 +37,9 @@ polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1,
                        *dummy_psMesh2, *dummy_psMesh3, *dummy_forward_vis;
 
 polyscope::PointCloud *psG, *curr_state_pt, 
-                      *gauss_map_pc, *face_normals_pc; // point cloud with single G
+                      *gauss_map_pc, *face_normals_pc,
+                      *stable_face_normals_pc, *edge_equilibria_pc,
+                      *stable_vertices_gm_pc; // point cloud with single G
 
 polyscope::SurfaceGraphQuantity* curr_state_segment;
 
@@ -48,8 +50,8 @@ float pt_cloud_radi_scale = 0.1,
       G_phi = 0.;
 
 float stable_edge_radi = 0.0,
-      stablizable_edge_radi = 0.03,
-      both_edge_radi = 0.02,
+      stablizable_edge_radi = 0.009,
+      both_edge_radi = 0.013,
       pt_cloud_stablizable_radi = 0.03,
       arc_curve_radi = 0.01,
       face_normal_vertex_gm_radi = 0.03;
@@ -104,6 +106,36 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, s
   psArcCurve->setEnabled(true);
 }
 
+void draw_stable_vertices_on_gauss_map(){
+  Vector3 shift = {0., gm_distance, 0.};
+  std::vector<Vector3> stable_vertices;
+  for (Vertex v: forwardSolver.hullMesh->vertices()){
+    if (forwardSolver.vertex_is_stablizable(v)){
+      stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G)+shift);
+    }
+  }
+  stable_vertices_gm_pc = polyscope::registerPointCloud("stable Vertices Normals", stable_vertices);
+  stable_vertices_gm_pc->setPointRadius(pt_cloud_stablizable_radi, false);
+  stable_vertices_gm_pc->setPointColor({0.1,0.9,0.1});
+  stable_vertices_gm_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+}
+
+
+void draw_stable_face_normals_on_gauss_map(){
+  Vector3 shift = {0., gm_distance, 0.};
+  std::vector<Vector3> stable_face_normals;
+  for (Face f: forwardSolver.hullMesh->faces()){
+    Vector3 normal_pos_on_gm = forwardSolver.hullGeometry->faceNormal(f) + shift;
+    if (forwardSolver.face_is_stable(f)){
+      stable_face_normals.push_back(normal_pos_on_gm);
+    }
+  }
+  stable_face_normals_pc = polyscope::registerPointCloud("stable Face Normals", stable_face_normals);
+  stable_face_normals_pc->setPointRadius(face_normal_vertex_gm_radi*1.1, false);
+  stable_face_normals_pc->setPointColor({0.9,0.1,0.1});
+  stable_face_normals_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere); 
+}
+
 
 void visualize_gauss_map(){
   // just draw the sphere next to the main surface
@@ -115,16 +147,26 @@ void visualize_gauss_map(){
   gauss_map_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 
   // point cloud for face normals
-  std::vector<Vector3> face_normal_points;
+  std::vector<Vector3> face_normal_points, stable_face_normals;
   for (Face f: forwardSolver.hullMesh->faces()){
-    face_normal_points.push_back(forwardSolver.hullGeometry->faceNormal(f) + shift);
+    Vector3 normal_pos_on_gm = forwardSolver.hullGeometry->faceNormal(f) + shift;
+    face_normal_points.push_back(normal_pos_on_gm);
+    if (forwardSolver.face_is_stable(f)){
+      stable_face_normals.push_back(normal_pos_on_gm);
+    }
   }
   face_normals_pc = polyscope::registerPointCloud("Face Normals", face_normal_points);
   face_normals_pc->setPointRadius(face_normal_vertex_gm_radi, false);
-  face_normals_pc->setPointColor({0.,0.2,0.99});
+  face_normals_pc->setPointColor({0.9,0.9,0.9});
   face_normals_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
   
-  // arcs for edge normals set
+  // stable (red) face normals
+  draw_stable_face_normals_on_gauss_map();
+
+  // point cloud for stable vertices
+  draw_stable_vertices_on_gauss_map();
+
+  // arcs for edge-normals set
   std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
   //    dummy mesh to add curves to
   dummy_psMesh2 = polyscope::registerSurfaceMesh(
@@ -142,6 +184,26 @@ void visualize_gauss_map(){
 }
 
 
+void show_edge_equilibria_on_gauss_map(){
+  std::vector<Vector3> edge_equilibria_points;
+  Vector3 shift = {0., gm_distance, 0.};
+  for (Edge e: forwardSolver.hullMesh->edges()){
+    if (forwardSolver.edge_is_stablizable(e) && forwardSolver.edge_is_stable(e)){
+      Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
+      Vector3 A = forwardSolver.hullGeometry->inputVertexPositions[v1], B = forwardSolver.hullGeometry->inputVertexPositions[v2];
+      Vector3 GB = B - G,
+              AB = B - A;
+      Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
+      edge_equilibria_points.push_back(normalize(ortho_g) + shift);
+    }
+  }
+  edge_equilibria_pc = polyscope::registerPointCloud("Edge equilibria", edge_equilibria_points);
+  edge_equilibria_pc->setPointRadius(face_normal_vertex_gm_radi, false);
+  edge_equilibria_pc->setPointColor({0.2, 0.2, 0.9});
+  edge_equilibria_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+}
+
+
 // visualize center of mass
 void draw_G() {
   std::vector<Vector3> G_position = {forwardSolver.G};
@@ -151,7 +213,7 @@ void draw_G() {
   else 
     psG = polyscope::registerPointCloud("Center of Mass", G_position);
   // set some options
-  psG->setPointColor({1., 1., 1.});
+  psG->setPointColor({0., 0., 0.});
   psG->setPointRadius(pt_cloud_radi_scale/2.);
   psG->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 }
@@ -171,7 +233,7 @@ void update_solver(){
       "input mesh",
       geometry->inputVertexPositions, mesh->getFaceVertexList(),
       polyscopePermutations(*mesh));
-  psInputMesh->setTransparency(0.95);
+  psInputMesh->setTransparency(0.85);
   draw_G();
 }
 
@@ -256,6 +318,9 @@ void visualize_edge_stability(){
   psBothEdges->setRadius(both_edge_radi, true);
   psBothEdges->setColor({0.2, 0.2, 0.9});
   psBothEdges->setEnabled(true);
+
+
+  show_edge_equilibria_on_gauss_map();
 }
 
 
@@ -269,7 +334,6 @@ void visualize_face_stability(){
   }
   polyscope::SurfaceFaceColorQuantity *faceQnty = psInputMesh->addFaceColorQuantity("face stability", fColor);
   faceQnty->setEnabled(true);
-
 }
 
 
@@ -425,6 +489,8 @@ void myCallback() {
     visualize_edge_stability();
     visualize_face_stability();
     visualize_stable_vertices();
+    draw_stable_vertices_on_gauss_map();
+    draw_stable_face_normals_on_gauss_map();
   }
 
   if (ImGui::Button("Show Gauss Map") || 
