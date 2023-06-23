@@ -6,7 +6,7 @@
 #include "polyscope/surface_mesh.h"
 // #include "polyscope/curve_network.h"
 #include "polyscope/point_cloud.h"
-
+// #include "bullet3/examples/BasicExample.h"
 #include "args/args.hxx"
 #include "imgui.h"
 
@@ -62,6 +62,10 @@ double gm_distance = 2.1,
 int sample_count = 1000,
     arcs_seg_count = 13;
 
+
+size_t dummy_counter = 0;
+
+
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet")};
 std::string all_polygons_current_item = "tet";
@@ -102,8 +106,33 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, s
   }
   polyscope::SurfaceGraphQuantity* psArcCurve = dummy_psMesh2->addSurfaceGraphQuantity("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
   psArcCurve->setRadius(arc_curve_radi, false);
-  psArcCurve->setColor({0.03, 0.03, 0.03});
+  if (edge_ind < 100)
+    psArcCurve->setColor({0.03, 0.03, 0.03});
+  else
+    psArcCurve->setColor({0.05, 0.5, 0.5});
   psArcCurve->setEnabled(true);
+
+}
+
+void draw_stable_patches_on_gauss_map(){
+  dummy_counter = 0;
+  Vector3 shift = {0., gm_distance, 0.};
+  for (Edge e: forwardSolver.hullMesh->edges()){
+    for (Vertex v: e.adjacentVertices()){
+      if (forwardSolver.edge_is_stable(e) && forwardSolver.edge_is_stablizable(e) &&
+          forwardSolver.vertex_is_stablizable(v)){
+        Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
+        Vector3 A = forwardSolver.hullGeometry->inputVertexPositions[v1], B = forwardSolver.hullGeometry->inputVertexPositions[v2];
+        Vector3 GB = B - G,
+                AB = B - A;
+        Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
+        Vector3 v_stable_vec = forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G;
+        draw_arc_on_sphere(normalize(ortho_g), normalize(v_stable_vec), 
+                           shift, gm_radi, arcs_seg_count, 100 + dummy_counter);
+        dummy_counter++;
+      }
+    }
+  }
 }
 
 void draw_stable_vertices_on_gauss_map(){
@@ -160,7 +189,7 @@ void visualize_gauss_map(){
   face_normals_pc->setPointColor({0.9,0.9,0.9});
   face_normals_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
   
-  // stable (red) face normals
+  // stable (red) face normals on Gauss map
   draw_stable_face_normals_on_gauss_map();
 
   // point cloud for stable vertices
@@ -491,6 +520,7 @@ void myCallback() {
     visualize_stable_vertices();
     draw_stable_vertices_on_gauss_map();
     draw_stable_face_normals_on_gauss_map();
+    draw_stable_patches_on_gauss_map();
   }
 
   if (ImGui::Button("Show Gauss Map") || 
@@ -498,6 +528,9 @@ void myCallback() {
       ImGui::SliderFloat("arc curve radi", &arc_curve_radi, 0., 0.04)||
       ImGui::SliderFloat("face normal vertex radi", &face_normal_vertex_gm_radi, 0., 0.04)){///face_normal_vertex_gm_radi
     visualize_gauss_map();
+  }
+  if (ImGui::Button("Draw patches")){
+    draw_stable_patches_on_gauss_map();
   }
     
   // if (ImGui::InputInt("compute empirical edge probabilities", &sample_count, 100)) {

@@ -62,7 +62,7 @@ endif()
 add_subdirectory(deps/geometry-central)
 add_subdirectory(deps/polyscope)
 # add_subdirectory(deps/pymesh)
-
+# add_subdirectory(deps/bullet3)
 # == Build our project stuff
 
 set(polygons_SRCS 
@@ -77,7 +77,6 @@ set(polhedra_SRCS
   src/forward3D.cpp
 	# add any other source files here
 )
-
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 add_executable(polygons "${polygons_SRCS}")
 target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
@@ -90,9 +89,17 @@ target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/pol
 target_link_libraries(polygons geometry-central polyscope)
 
 
+# find_package( Bullet REQUIRED )
+# LINK_LIBRARIES(
+#  BulletDynamics BulletCollision
+# )
+
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 add_executable(polyhedra "${polhedra_SRCS}")
 target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/bullet3")
+
+
 # add the args.hxx project which we use for command line args
 target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 # target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")

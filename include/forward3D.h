@@ -46,9 +46,9 @@ class Forward3DSolver {
     bool edge_is_stable(Edge e);
     bool edge_is_stablizable(Edge e);
     bool face_is_stable(Face f);
-    // void compute_initial_edge_probabilities();
     
-    // void compute_final_edge_probabilities();
+    // 
+
 
     // // lazy polygon navigation
     // Edge other_edge(Edge curr_e, Vertex tip_v);

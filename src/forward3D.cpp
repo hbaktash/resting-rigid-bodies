@@ -43,6 +43,9 @@ bool Forward3DSolver::edge_is_stable(Edge e){
 }
 
 
+// Vector3 
+
+
 bool Forward3DSolver::edge_is_stablizable(Edge e){
     // finding the orthogonal vector from G onto AB 
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
