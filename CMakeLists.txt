@@ -71,12 +71,18 @@ set(polygons_SRCS
 	# add any other source files here
 )
 
-
-set(polhedra_SRCS 
+set(polyhedra_SRCS 
   src/main3D.cpp
   src/forward3D.cpp
 	# add any other source files here
 )
+
+set(bullet_SRCS 
+  src/main_bullet.cpp
+  src/forward3D.cpp
+	# add any other source files here
+)
+
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 add_executable(polygons "${polygons_SRCS}")
 target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
@@ -89,21 +95,28 @@ target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/pol
 target_link_libraries(polygons geometry-central polyscope)
 
 
-# find_package( Bullet REQUIRED )
-# LINK_LIBRARIES(
-#  BulletDynamics BulletCollision
-# )
-
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
-add_executable(polyhedra "${polhedra_SRCS}")
+add_executable(polyhedra "${polyhedra_SRCS}")
 target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-# target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/bullet3")
-
-
 # add the args.hxx project which we use for command line args
 target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
-# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/CGAL/include")
-# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/boost_1_82_0")
-# target_compile_features(LIBRARY_NAME PUBLIC cxx_std_14)
 target_link_libraries(polyhedra geometry-central polyscope)
+
+
+# Bullet stuff
+
+SET(Bullet_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/bullet3/build_cmake")
+Find_Package(Bullet CONFIG)
+SET(BULLET_INCLUDE_DIR ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_INCLUDE_DIR})
+SET(BLA ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+add_executable(bullet_sim "${bullet_SRCS}")
+
+target_include_directories(bullet_sim PUBLIC ${BULLET_INCLUDE_DIR})
+target_compile_definitions(bullet_sim PUBLIC ${BULLET_DEFINITIONS})
+target_link_directories(bullet_sim PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# add the args.hxx project which we use for command line args
+target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+
+target_link_libraries(bullet_sim PUBLIC BulletDynamics BulletCollision LinearMath geometry-central polyscope)
+# target_link_libraries(bullet_sim )

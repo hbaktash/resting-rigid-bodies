@@ -532,53 +532,10 @@ void myCallback() {
   if (ImGui::Button("Draw patches")){
     draw_stable_patches_on_gauss_map();
   }
-    
-  // if (ImGui::InputInt("compute empirical edge probabilities", &sample_count, 100)) {
-  //   forwardSolver.build_next_edge_tracer();
-  //   forwardSolver.empirically_build_probabilities(sample_count);
-  // }
-  // if (ImGui::SliderFloat("g-vec angle", &g_vec_angle, 0., 2*PI)) {
-    // initial_g_vec = {cos(g_vec_angle), sin(g_vec_angle), 0};
-    // forwardSolver.find_contact(initial_g_vec);
-    // forwardSolver.build_next_edge_tracer();
-    // initialize_state_vis();
-  // }
-  // if (ImGui::Button("reset state")) {
-    // forwardSolver.find_contact(initial_g_vec);
-    // forwardSolver.build_next_edge_tracer();
-    // initialize_state_vis();
-  // }
-  // if (ImGui::Button("next state")) {
-    // forwardSolver.next_state();
-    // visualize_g_vec();
-    // visualize_contact_point();
-  // }
 }
 
 
 int main(int argc, char **argv) {
-
-  // Configure the argument parser
-  // args::ArgumentParser parser("geometry-central & Polyscope example project");
-  // args::Positional<std::string> inputFilename(parser, "mesh", "A mesh file.");
-
-  // // Parse args
-  // try {
-  //   parser.ParseCLI(argc, argv);
-  // } catch (args::Help &h) {
-  //   std::cout << parser;
-  //   return 0;
-  // } catch (args::ParseError &e) {
-  //   std::cerr << e.what() << std::endl;
-  //   std::cerr << parser;
-  //   return 1;
-  // }
-
-  // // Make sure a mesh name was given
-  // if (!inputFilename) {
-  //   std::cerr << "Please specify a mesh file as argument" << std::endl;
-  //   return EXIT_FAILURE;
-  // }
 
   // build mesh
   generate_polyhedron_example(all_polygons_current_item);
@@ -586,8 +543,6 @@ int main(int argc, char **argv) {
   update_solver();
   // build the solver
   
-  // Load mesh
-  // std::tie(mesh, geometry) = readManifoldSurfaceMesh(args::get(inputFilename));
 
   // Initialize polyscope
   polyscope::init();
