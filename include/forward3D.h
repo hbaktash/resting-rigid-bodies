@@ -21,7 +21,9 @@ class Forward3DSolver {
     VertexPositionGeometry* hullGeometry;
 
     // current state; if actually trying to simulate
-    std::pair<Vertex, Vertex> curr_state;
+    Face curr_face;
+    Edge curr_edge;
+    Vertex curr_vertex;
     Vector3 current_g_vec;
 
     // DP stuff; implicitly using a DAG
@@ -48,7 +50,8 @@ class Forward3DSolver {
     bool face_is_stable(Face f);
     
     // 
-
+    Edge vertex_to_edge(Vertex v, Vector3 curr_g_vec);
+    
 
     // // lazy polygon navigation
     // Edge other_edge(Edge curr_e, Vertex tip_v);
