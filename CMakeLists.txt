@@ -74,12 +74,20 @@ set(polygons_SRCS
 set(polyhedra_SRCS 
   src/main3D.cpp
   src/forward3D.cpp
+  src/mesh_factory.cpp
+	# add any other source files here
+)
+
+set(pstest_SRCS 
+  src/main_pstest.cpp
+  src/mesh_factory.cpp
 	# add any other source files here
 )
 
 set(bullet_SRCS 
   src/main_bullet.cpp
   src/forward3D.cpp
+  src/mesh_factory.cpp
 	# add any other source files here
 )
 
@@ -101,6 +109,13 @@ target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include
 # add the args.hxx project which we use for command line args
 target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 target_link_libraries(polyhedra geometry-central polyscope)
+
+# To change the name of your executable, change "gc_project" in the lines below to whatever you want
+add_executable(pstest "${pstest_SRCS}")
+target_include_directories(pstest PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# add the args.hxx project which we use for command line args
+target_include_directories(pstest PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+target_link_libraries(pstest geometry-central polyscope)
 
 
 # Bullet stuff
