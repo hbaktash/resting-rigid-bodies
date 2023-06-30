@@ -18,7 +18,7 @@
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
-size_t MAX_ITERS = 200, PER_STEP_ITERS = 10, iter = 0;
+size_t MAX_ITERS = 200, PER_STEP_ITERS = 1, iter = 0;
 Vector3 init_position({0.,0.,0.});
 Vector3 ground_box_shape({1,1,1}), 
         ground_origin({0,-4,0});
@@ -57,7 +57,7 @@ geometrycentral::DenseMatrix<double> openGL_mat_to_GC_mat(btScalar* m){
         trans_mat.coeffRef(j, i) = tmp_var;
     }
     std::cout<< trans_mat <<"\n";
-    return trans_mat;
+    return trans_mat.inverse();
 }
 
 

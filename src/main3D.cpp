@@ -374,16 +374,16 @@ void generate_polyhedron_example(std::string poly_str){
 
 void visualize_contact_point(){
   // single point cloud for the single contact point
-  if (forwardSolver.curr_state.first == forwardSolver.curr_state.second){
-    std::vector<Vector3> curr_state_pos = {forwardSolver.hullGeometry->inputVertexPositions[forwardSolver.curr_state.first]}; // first and second should be the same since we just initialized.
-    curr_state_pt = polyscope::registerPointCloud("current state", curr_state_pos);
-    curr_state_pt->setEnabled(true);
-    curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
-  }
+  // if (forwardSolver.curr_state.first == forwardSolver.curr_state.second){
+  //   std::vector<Vector3> curr_state_pos = {forwardSolver.hullGeometry->inputVertexPositions[forwardSolver.curr_state.first]}; // first and second should be the same since we just initialized.
+  //   curr_state_pt = polyscope::registerPointCloud("current state", curr_state_pos);
+  //   curr_state_pt->setEnabled(true);
+  //   curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
+  // }
 }
 
 void initialize_state_vis(){
-  visualize_vec_from_G(forwardSolver.current_g_vec);
+  visualize_vec_from_G(forwardSolver.curr_g_vec);
   visualize_contact_point();
   draw_G();
   // for later single segment curve addition

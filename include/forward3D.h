@@ -21,10 +21,10 @@ class Forward3DSolver {
     VertexPositionGeometry* hullGeometry;
 
     // current state; if actually trying to simulate
-    Face curr_face;
-    Edge curr_edge;
-    Vertex curr_vertex;
-    Vector3 current_g_vec;
+    Face curr_face, next_face;
+    Edge curr_edge, next_edge;
+    Vertex curr_vertex, next_vertex;
+    Vector3 curr_g_vec, next_g_vec;
 
     // DP stuff; implicitly using a DAG
     FaceData<Face> next_falling_face;
@@ -52,7 +52,8 @@ class Forward3DSolver {
     // 
     Edge vertex_to_edge(Vertex v, Vector3 curr_g_vec);
     
-
+    void vertex_to_next(Vertex curr_v, Vector3 curr_g_vec);
+    void edge_to_next(Edge curr_e, Vector3 curr_g_vec);
     // // lazy polygon navigation
     // Edge other_edge(Edge curr_e, Vertex tip_v);
 
