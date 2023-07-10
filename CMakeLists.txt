@@ -75,6 +75,7 @@ set(polyhedra_SRCS
   src/main3D.cpp
   src/forward3D.cpp
   src/mesh_factory.cpp
+  src/geometry_utils.cpp
 	# add any other source files here
 )
 
@@ -88,6 +89,8 @@ set(bullet_SRCS
   src/main_bullet.cpp
   src/forward3D.cpp
   src/mesh_factory.cpp
+  src/geometry_utils.cpp
+  src/bullet_sim.cpp
 	# add any other source files here
 )
 
