@@ -36,7 +36,8 @@ class PhysicsEnv {
     btAlignedObjectArray<btCollisionShape*> collisionShapes;
 
     int MAX_ITERS = 200;
-    double tol = 1e-8;
+    double tol = 1e-8,
+           default_step_size = 0.017; // 1/60
 
 
     // Constructor
