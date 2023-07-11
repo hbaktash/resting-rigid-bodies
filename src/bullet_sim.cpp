@@ -12,6 +12,13 @@ geometrycentral::DenseMatrix<double> openGL_mat_to_GC_mat(btScalar* m){
     return trans_mat.transpose();
 }
 
+btQuaternion quaternion_from_g_vec(Vector3 default_g_vec, Vector3 g_vec){
+    Vector3 plane_normal = cross(g_vec, default_g_vec).normalize();
+    double angle = acos(dot(g_vec, default_g_vec)/(norm(g_vec)*norm(default_g_vec)));
+    return btQuaternion(btVector3(plane_normal.x, plane_normal.y, plane_normal.z), btScalar(angle));
+}
+
+
 std::vector<Vector3> PhysicsEnv::get_new_positions(){
     btScalar m[16];
     current_btTrans.getOpenGLMatrix(m);
@@ -28,26 +35,25 @@ std::vector<Vector3> PhysicsEnv::get_new_positions(){
     return new_positions;
 }
 
-void PhysicsEnv::take_step(double step_size){
+void PhysicsEnv::take_step(int step_count, double step_size){
     //print positions of all objects
-    dynamicsWorld->stepSimulation(step_size, 10);
+    for (int i = 0; i < step_count; i++){
+        dynamicsWorld->stepSimulation(step_size, 10);
+    }
     for (int j = dynamicsWorld->getNumCollisionObjects() - 1; j >= 0; j--) {
-        btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[j];
-        btRigidBody* body = btRigidBody::upcast(obj);
-        btTransform trans;
-        if (body && body->getMotionState()) {
-            body->getMotionState()->getWorldTransform(trans);
-        }
-        else {
-            trans = obj->getWorldTransform();
-        }
         if (j == 1){ // object of interest; i.e. not ground
-            btVector3 center_of_mass = body->getCenterOfMassPosition();
+            btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[j];
+            btRigidBody* body = btRigidBody::upcast(obj);
+            btTransform trans;
+            if (body && body->getMotionState()) {
+                body->getMotionState()->getWorldTransform(trans);
+            }
+            else {
+                trans = obj->getWorldTransform();
+            }
+            // btVector3 center_of_mass = body->getCenterOfMassPosition();
             // std::cout<< "center of mass "<<center_of_mass.getX()<<","<< center_of_mass.getY()<< "," << center_of_mass.getZ() << "\n";
             current_btTrans = trans;
-            
-            
-            // printf("world pos object %d = %f,%f,%f\n", j, float(trans.getOrigin().getX()), float(trans.getOrigin().getY()), float(trans.getOrigin().getZ()));
         }
     }
 }
@@ -69,12 +75,17 @@ void PhysicsEnv::init_physics(){
 }
 
 
-void PhysicsEnv::add_ground(){
-    btCollisionShape* groundShape = new btBoxShape(btVector3(btScalar(10.), btScalar(1.), btScalar(10.)));
+void PhysicsEnv::init_geometry(ManifoldSurfaceMesh* convex_mesh, VertexPositionGeometry* convex_geometry){
+    this->mesh = convex_mesh;
+    this->geometry = convex_geometry;
+}
+
+void PhysicsEnv::add_ground(double ground_box_y, Vector3 ground_box_shape){
+    btCollisionShape* groundShape = new btBoxShape(btVector3(ground_box_shape.x, ground_box_shape.y, ground_box_shape.z));
     collisionShapes.push_back(groundShape);
     btTransform groundTransform;
     groundTransform.setIdentity();
-    groundTransform.setOrigin(btVector3(0, -3., 0));
+    groundTransform.setOrigin(btVector3(0, ground_box_y, 0));
     btScalar mass(0.);
     //rigidbody is dynamic if and only if mass is non zero, otherwise static
     bool isDynamic = (mass != 0.f);
@@ -91,10 +102,9 @@ void PhysicsEnv::add_ground(){
 }
 
 
-void PhysicsEnv::add_object(ManifoldSurfaceMesh* convex_mesh, VertexPositionGeometry* convex_geometr, Vector3 G){
+void PhysicsEnv::add_object(Vector3 G, Vector3 g_vec){
     //create a dynamic rigidbody
     //btCollisionShape* colShape = new btBoxShape(btVector3(1,1,1));
-    
     bt_my_polyhedra = new btConvexHullShape();
     for (Vertex v: mesh->vertices()) {
         Vector3 p = geometry->inputVertexPositions[v];
@@ -107,6 +117,9 @@ void PhysicsEnv::add_object(ManifoldSurfaceMesh* convex_mesh, VertexPositionGeom
     /// Create Dynamic Objects
     btTransform startTransform;
     startTransform.setIdentity();
+    // rotate to face the g_vec down
+    startTransform.setRotation(quaternion_from_g_vec(Vector3({0., -1., 0.}), g_vec));
+    // any non-zero mass works
     btScalar mass(1.f);
 
     //rigidbody is dynamic if and only if mass is non zero, otherwise static
@@ -123,6 +136,13 @@ void PhysicsEnv::add_object(ManifoldSurfaceMesh* convex_mesh, VertexPositionGeom
     btRigidBody* body = new btRigidBody(rbInfo);
 
     dynamicsWorld->addRigidBody(body);
+}
+
+
+// take many steps till stable
+Face PhysicsEnv::final_stable_face(Vector3 initial_g_vec){
+    Vector3 old_G, current_G;
+    
 }
 
 
