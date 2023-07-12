@@ -108,7 +108,6 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, s
   else
     psArcCurve->setColor({0.05, 0.5, 0.5});
   psArcCurve->setEnabled(true);
-
 }
 
 void draw_stable_patches_on_gauss_map(){

@@ -124,7 +124,6 @@ void PhysicsEnv::add_object(Vector3 G, Vector3 g_vec){
         collisionShapes.push_back(colShape);
     else 
         collisionShapes[1] = colShape;
-
     /// Create Dynamic Objects
     btTransform startTransform;
     startTransform.setIdentity();
