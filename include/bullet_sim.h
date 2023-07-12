@@ -56,17 +56,24 @@ class PhysicsEnv {
 
     // add convex object; TODO double check center of mass issue
     void add_object(Vector3 center_of_mass, Vector3 g_vec);
+    // just delete the polyhedra
+    void delete_object();
 
     // take a time step in the simulation
     void take_step(int step_count, double step_size);
 
+    // find the bottom face
+    Face get_touching_face(VertexData<Vector3> new_positions);
     // simulate until reaching the stable orientation
     Face final_stable_face(Vector3 g_vec);
 
+
+    //restart with the same polyhedra
+    void refresh(Vector3 G, Vector3 g_vec);
     // delete stuff; for cache reasons?
     void delete_bullet_objects();
 
-
+    // 
     // get btTransform object as GC matrix
-    std::vector<Vector3> get_new_positions();
+    VertexData<Vector3> get_new_positions();
 };

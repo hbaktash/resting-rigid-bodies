@@ -40,8 +40,8 @@ polyscope::SurfaceMesh *psMesh;
 
 
 void update_positions(){
-    std::vector<Vector3> new_positions = my_env->get_new_positions();
-    psMesh->updateVertexPositions(new_positions);
+    VertexData<Vector3> new_positions = my_env->get_new_positions();
+    psMesh->updateVertexPositions(new_positions.raw());
 }
 
 
@@ -52,7 +52,7 @@ void initialize_vis(){
     // ground plane on Polyscope has a weird height setting (scaled factor..)
     psPlane = polyscope::addSceneSlicePlane();
     psPlane->setDrawPlane(true);  // render the semi-transparent gridded plane
-    psPlane->setDrawWidget(true);
+    psPlane->setDrawWidget(false);
     psPlane->setPose(glm::vec3{0., ground_box_y + 1, 0.}, glm::vec3{0., 1., 0.});
 }
 
@@ -72,6 +72,10 @@ void myCallback() {
     if (ImGui::Button("update positions")){
         update_positions();
     }
+
+    if (ImGui::Button("refresh")){
+        my_env->refresh(find_center_of_mass(*mesh, *geometry), Vector3({0,0,1}));
+    }
 }
 
 
@@ -80,9 +84,9 @@ int main(int argc, char* argv[])
 #ifdef BT_USE_DOUBLE_PRECISION
 	printf("BT_USE_DOUBLE_PRECISION\n");
 #else
-        printf("Single precision\n");
+    printf("Single precision\n");
 #endif
-    std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra("tet");
+    std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra("tet2");
     mesh = mesh_ptr.release(); 
     geometry = geometry_ptr.release();
     center_and_normalize(mesh, geometry);
@@ -93,7 +97,11 @@ int main(int argc, char* argv[])
 
 	///-----initialization_end-----
     my_env->add_ground(ground_box_y, ground_box_shape);
-    my_env->add_object(find_center_of_mass(*mesh, *geometry));
+    my_env->add_object(find_center_of_mass(*mesh, *geometry), Vector3({1,0,0}));
+
+    Face touching_face = my_env->final_stable_face(Vector3({0,-1,0}));
+    printf("final touching face is %d\n", touching_face.getIndex());
+    std::cout << "face normal is "<< geometry->faceNormal(touching_face)<< "\n";
 
     polyscope::init();
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
