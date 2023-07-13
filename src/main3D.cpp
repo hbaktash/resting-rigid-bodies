@@ -12,6 +12,7 @@
 
 #include "forward3D.h"
 #include "mesh_factory.h"
+#include "geometry_utils.h"
 
 // #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 // #include <CGAL/Polyhedron_3.h>
@@ -392,23 +393,36 @@ void initialize_state_vis(){
   // will add curves to this later
 }
 
+
+void update_visuals_with_G(){
+  forwardSolver.G = G;
+  draw_G();
+  visualize_edge_stability();
+  visualize_face_stability();
+  visualize_stable_vertices();
+  draw_stable_vertices_on_gauss_map();
+  draw_stable_face_normals_on_gauss_map();
+  draw_stable_patches_on_gauss_map();
+}
+
+
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
 // https://github.com/ocornut/imgui/blob/master/imgui.h
 void myCallback() {
   if (ImGui::BeginCombo("##combo1", all_polygons_current_item.c_str())){ // The second parameter is the label previewed before opening the combo.
-        for (std::string tmp_str: all_polyhedra_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
-            bool is_selected = (all_polygons_current_item == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
-            if (ImGui::Selectable(tmp_str.c_str(), is_selected)){ // selected smth
-                all_polygons_current_item = tmp_str;
-                generate_polyhedron_example(all_polygons_current_item);
-                update_solver();
-            }
-            if (is_selected)
-                ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
-        }
-        ImGui::EndCombo();
-    }
+      for (std::string tmp_str: all_polyhedra_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
+          bool is_selected = (all_polygons_current_item == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
+          if (ImGui::Selectable(tmp_str.c_str(), is_selected)){ // selected smth
+              all_polygons_current_item = tmp_str;
+              generate_polyhedron_example(all_polygons_current_item);
+              update_solver();
+          }
+          if (is_selected)
+              ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
+      }
+      ImGui::EndCombo();
+  }
   if (ImGui::Button("visualize vertex probabilities"))
     visualize_vertex_probabilities();
   
@@ -441,16 +455,12 @@ void myCallback() {
       ImGui::SliderFloat("G theta", &G_theta, 0., 2*PI)||
       ImGui::SliderFloat("G phi", &G_phi, 0., 2*PI)) {
     G = {cos(G_phi)*sin(G_theta)*G_r, cos(G_phi)*cos(G_theta)*G_r, sin(G_phi)*G_r};
-    forwardSolver.G = G;
-    draw_G();
-    visualize_edge_stability();
-    visualize_face_stability();
-    visualize_stable_vertices();
-    draw_stable_vertices_on_gauss_map();
-    draw_stable_face_normals_on_gauss_map();
-    draw_stable_patches_on_gauss_map();
+    update_visuals_with_G();
   }
-
+  if (ImGui::Button("uniform mass G")){
+    G = find_center_of_mass(*mesh, *geometry);
+    update_visuals_with_G();
+  }
   if (ImGui::Button("Show Gauss Map") || 
       ImGui::SliderInt("seg count for arcs", &arcs_seg_count, 1, 100)||
       ImGui::SliderFloat("arc curve radi", &arc_curve_radi, 0., 0.04)||

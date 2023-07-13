@@ -35,7 +35,7 @@ class PhysicsEnv {
     //make sure to re-use collision shapes among rigid bodies whenever possible!
     btAlignedObjectArray<btCollisionShape*> collisionShapes;
 
-    int MAX_ITERS = 200;
+    int MAX_ITERS = 1000;
     double tol = 1e-8,
            default_step_size = 0.017; // 1/60
 

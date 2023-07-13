@@ -119,7 +119,7 @@ void PhysicsEnv::add_object(Vector3 G, Vector3 g_vec){
         bt_my_polyhedra->addPoint(btP);
     }
     btCollisionShape* colShape = new btConvexHullShape(*bt_my_polyhedra);
-    printf("col shapes size: %d \n", collisionShapes.size());
+    // printf("col shapes size: %d \n", collisionShapes.size());
     if (collisionShapes.size() == 1)
         collisionShapes.push_back(colShape);
     else 
@@ -176,19 +176,19 @@ Face PhysicsEnv::get_touching_face(VertexData<Vector3> positions){
         Vector3 p = positions[v];
         double curr_dot = dot(p - roof, g_vec);
 
-        std::cout << "  --  p pos: "<< p << "\n";
+        // std::cout << "  --  p pos: "<< p << "\n";
         if (curr_dot >= max_dot){
             max_dot = curr_dot;
             lowest_v = v;
         }
     }
-    printf(" --- the lowest vertex was: %d \n", lowest_v.getIndex());
+    // printf(" \n--- the lowest vertex was: %d \n", lowest_v.getIndex());
     bool found_first = false;
     for (Vertex v: mesh->vertices()){
         if (v != lowest_v){
             Vector3 p = positions[v];
             double curr_dot = dot(p - roof, g_vec);
-            printf(" ### max dot: %f, curr dot: %f \n", max_dot, curr_dot);
+            // printf(" ### max dot: %f, curr dot: %f \n", max_dot, curr_dot);
             if (abs(curr_dot - max_dot) <= 0.0001){
                 if (!found_first){
                     v1 = v;
@@ -201,19 +201,23 @@ Face PhysicsEnv::get_touching_face(VertexData<Vector3> positions){
             }
         }
     }
-    printf(" --- other low v's were: %d, %d \n", v1.getIndex(), v2.getIndex());
+    // printf(" --- other low v's were: %d, %d \n", v1.getIndex(), v2.getIndex());
     Face ans;
-    int inclusion_count = 0;
     for (Face f: lowest_v.adjacentFaces()){
+        int inclusion_count = 0;
+        // printf("adj f: %d\n", f.getIndex());
         for (Vertex v: f.adjacentVertices()){
+            // printf("adj f's adj v: %d\n", v.getIndex());
             if (v == v1 || v == v2)
                 inclusion_count++;
-            if (inclusion_count == 2)
+            if (inclusion_count == 2){
+                // printf(" *** touching face is %d\n", f.getIndex());
                 return f;
+            }
         }
     }
     printf(" #### didn't find a face! #### \n");
-
+    return ans;
 }
 
 
@@ -237,7 +241,7 @@ Face PhysicsEnv::final_stable_face(Vector3 g_vec){
         }
         else {
             if (norm(old_G - curr_G) < tol){
-                printf("---- at a stable state; step %d\n", i);
+                // printf("---- at a stable state; step %d\n", i);
                 break;
             }
             old_G = curr_G;
@@ -251,7 +255,8 @@ Face PhysicsEnv::final_stable_face(Vector3 g_vec){
     }
     current_btTrans = trans;
     VertexData<Vector3> new_positions = get_new_positions();
-    return get_touching_face(new_positions);
+    Face final_stable_face = get_touching_face(new_positions);
+    return final_stable_face;
 }
 
 
