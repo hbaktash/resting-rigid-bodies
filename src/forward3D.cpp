@@ -94,17 +94,20 @@ void Forward3DSolver::vertex_to_next(Vertex curr_v, Vector3 current_g_vec){
     Vector3 p = hullGeometry->inputVertexPositions[curr_v],
             unit_g_vec = current_g_vec.normalize();
     Vector3 Gp = p - G;
-    Vector3 G_proj = G + unit_g_vec * dot(Gp, unit_g_vec);
+    Vector3 G_proj = G + unit_g_vec * dot(Gp, unit_g_vec); // project G onto the ground plane going through P
     Vector3 rotation_plane_normal = cross(-Gp, G_proj - p).normalize(); // this plane doesn't change until smth hits the ground
     
-    Vector3 pG_proj = G_proj - p;
+    Vector3 pG_proj = G_proj - p; // the projected PG vector
+
+    // find the vertex with the least angle made with projected PG
     double min_angle = PI; // since convex, max angle will be PI
     Vertex best_v = Vertex(); // next vertex that hits the ground
+    // NOTE: from here projections refer to projection on the rotation axis plane
     Vector3 best_p2_proj; // to help with finding next g_vec after the loop
     for (Vertex v2: curr_v.adjacentVertices()){
         Vector3 p2 = hullGeometry->inputVertexPositions[v2];
         Vector3 p2p = p - p2;
-        Vector3 p2_proj = p2 + rotation_plane_normal * dot(p2p, rotation_plane_normal);
+        Vector3 p2_proj = p2 + rotation_plane_normal * dot(p2p, rotation_plane_normal); // project neigh vertices onto the rotation axis plane
         Vector3 pp2_proj = p2_proj - p;
         double tmp_angle = acos(dot(pG_proj, pp2_proj)/(norm(pG_proj)*norm(pp2_proj)));
         if (tmp_angle <= min_angle){
