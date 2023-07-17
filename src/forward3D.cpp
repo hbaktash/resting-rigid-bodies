@@ -195,5 +195,21 @@ void Forward3DSolver::face_to_next(Face f){
         Vector3 p1 = hullGeometry->inputVertexPositions[v1],
                 p0 = hullGeometry->inputVertexPositions[v0],
                 p2 = hullGeometry->inputVertexPositions[v2];
+        double angle_Gv0v1 = acos(dot(G_proj - p0, p1 - p0)/(norm(G_proj - p0)*norm(p1 - p0))),
+               angle_Gv1v0 = acos(dot(G_proj - p1, p0 - p1)/(norm(G_proj - p1)*norm(p0 - p1))),
+               angle_Gv1v2 = acos(dot(G_proj - p1, p2 - p1)/(norm(G_proj - p1)*norm(p2 - p1)));
+        if (angle_Gv0v1 <= PI/2. && angle_Gv1v0 <= PI/2.){
+            Face next_face = curr_he.twin().face();
+            curr_v1 = curr_he.twin().tailVertex();
+            curr_v2 = curr_he.twin().tipVertex();
+            curr_v3 = curr_he.twin().next().tipVertex();
+            curr_g_vec = hullGeometry->faceNormal(next_face);
+            break; 
+        }
+        else if (angle_Gv1v0 >= PI/2. && angle_Gv1v2 >= PI/2.){
+            vertex_to_next(v1);
+            break; 
+        }
     }
+    // if here, then the face was stable and do nothing.
 }
