@@ -31,10 +31,10 @@ generate_polyhedra(std::string poly_str){
     }
     else if (std::strcmp(poly_str.c_str(), "tet2") == 0){
       n = 4;
-      faces = {{0, 2, 1},
-                              {0, 1, 3},
-                              {0, 3, 2},
-                              {2, 3, 1}};
+      faces = {{0, 1, 2},
+                              {0, 3, 1},
+                              {0, 2, 3},
+                              {2, 1, 3}};
       double theta0 = 0., theta1 = 2.*PI/3., theta2 = 4.*PI/3.,
              phi0 = PI/6.,
              theta3 = 0., 

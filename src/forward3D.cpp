@@ -1,6 +1,13 @@
 #include "forward3D.h"
 
 
+
+Vector3 project_on_plane(Vector3 point, Vector3 offset, Vector3 normal){
+    Vector3 unit_normal = normal.normalize();
+    return point + unit_normal * dot(offset - point, unit_normal);
+}
+
+
 Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPositionGeometry* inputGeo_,
                              Vector3 inputG_){
     mesh = inputMesh_;
@@ -90,11 +97,11 @@ bool Forward3DSolver::face_is_stable(Face f){
 }
 
 
-void Forward3DSolver::vertex_to_next(Vertex curr_v, Vector3 current_g_vec){
-    Vector3 p = hullGeometry->inputVertexPositions[curr_v],
-            unit_g_vec = current_g_vec.normalize();
+void Forward3DSolver::vertex_to_next(Vertex v){
+    Vector3 p = hullGeometry->inputVertexPositions[v],
+            unit_g_vec = curr_g_vec.normalize();
     Vector3 Gp = p - G;
-    Vector3 G_proj = G + unit_g_vec * dot(Gp, unit_g_vec); // project G onto the ground plane going through P
+    Vector3 G_proj = project_on_plane(G, p, unit_g_vec); // project G onto the ground plane going through P
     Vector3 rotation_plane_normal = cross(-Gp, G_proj - p).normalize(); // this plane doesn't change until smth hits the ground
     
     Vector3 pG_proj = G_proj - p; // the projected PG vector
@@ -104,10 +111,9 @@ void Forward3DSolver::vertex_to_next(Vertex curr_v, Vector3 current_g_vec){
     Vertex best_v = Vertex(); // next vertex that hits the ground
     // NOTE: from here projections refer to projection on the rotation axis plane
     Vector3 best_p2_proj; // to help with finding next g_vec after the loop
-    for (Vertex v2: curr_v.adjacentVertices()){
+    for (Vertex v2: v.adjacentVertices()){
         Vector3 p2 = hullGeometry->inputVertexPositions[v2];
-        Vector3 p2p = p - p2;
-        Vector3 p2_proj = p2 + rotation_plane_normal * dot(p2p, rotation_plane_normal); // project neigh vertices onto the rotation axis plane
+        Vector3 p2_proj = project_on_plane(p2, p, rotation_plane_normal); // project neigh vertices onto the rotation axis plane
         Vector3 pp2_proj = p2_proj - p;
         double tmp_angle = acos(dot(pG_proj, pp2_proj)/(norm(pG_proj)*norm(pp2_proj)));
         if (tmp_angle <= min_angle){
@@ -121,22 +127,73 @@ void Forward3DSolver::vertex_to_next(Vertex curr_v, Vector3 current_g_vec){
     Vector3 next_g_vec = Gp - unit_next_pp * dot(unit_next_pp, Gp); 
     // updating class members
     curr_g_vec = next_g_vec;
-    curr_edge = hullMesh->connectingEdge(best_v, curr_v);
+    curr_v1 = v;
+    curr_v2 = best_v;
 }
 
 
-void Forward3DSolver::edge_to_next(Edge curr_e, Vector3 curr_g_vec){
-    Vertex v1 = curr_e.firstVertex(), v2 = curr_e.secondVertex();
+void Forward3DSolver::edge_to_next(Edge e){
+    Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 p1 = hullGeometry->inputVertexPositions[v1], p2 = hullGeometry->inputVertexPositions[v2];
-    if (dot(G - p1, p2-p1) <= 0){
-        vertex_to_next(v1, curr_g_vec); // rolls to the v1 vertex
+    if (dot(G - p1, p2-p1) <= 0){ // if the Gp1p2 angle is wide
+        vertex_to_next(v1); // rolls to the v1 vertex
     }
-    else if (dot(G - p2, p1-p2) <= 0){
-        vertex_to_next(v2, curr_g_vec); // rolls to the v2 vertex
+    else if (dot(G - p2, p1-p2) <= 0){ // if the Gp2p1 angle is wide
+        vertex_to_next(v2); // rolls to the v2 vertex
     }
     else { // rolls to a neighboring face
         Vector3 Gp1 = p1 - G,
                 unit_g_vec = curr_g_vec.normalize();
-        Vector3 G_proj = G + unit_g_vec * dot(Gp1, unit_g_vec);
+        Vector3 G_proj = G + unit_g_vec * dot(Gp1, unit_g_vec), // project G on the ground
+                rotation_plane_normal = (p2 - p1).normalize();
+        // future projections will be onto the rotation plane
+
+        // find immediate neighbors of v1 on the two neigh faces; would be simpler with triangle assumption
+        Halfedge he = e.halfedge();
+        Vertex va = he.prevOrbitFace().tailVertex(), // va is on the he.face()  
+               vb = he.twin().next().tipVertex();    // vb is on the twin.face()
+        
+        // project va, vb, projected_G onto the rotation plane
+        // the plane passes through "p1" with the "rotation axis" as the normal
+        Vector3 pa = hullGeometry->inputVertexPositions[va],
+                pb = hullGeometry->inputVertexPositions[vb];
+        Vector3 G_proj_proj = project_on_plane(G_proj, p1, rotation_plane_normal),
+                pa_proj = project_on_plane(pa, p1, rotation_plane_normal),
+                pb_proj = project_on_plane(pb, p1, rotation_plane_normal);
+        double pa_angle = acos(dot(pa_proj - p1, G_proj_proj - p1)/(norm(pa_proj - p1)*norm(G_proj_proj - p1))),
+               pb_angle = acos(dot(pb_proj - p1, G_proj_proj - p1)/(norm(pb_proj - p1)*norm(G_proj_proj - p1)));
+        Face next_face;
+        if (pa_angle <= pb_angle){ // face containing va is next
+            next_face = he.face();
+            curr_v1 = va;
+            curr_v2 = v1;
+            curr_v3 = v2;
+        }
+        else { // face containing vb is next
+            next_face = he.twin().face();
+            curr_v1 = v2;
+            curr_v2 = v1;
+            curr_v3 = vb;
+        }
+        // always assuming outward normals
+        curr_g_vec = hullGeometry->faceNormal(next_face);
+    }
+}
+
+// assuming face is not stable
+void Forward3DSolver::face_to_next(Face f){
+    Vector3 unit_g_vec = curr_g_vec.normalize();
+    // project G_proj on the same plane as the face plane
+    assert(hullGeometry->faceNormal(f) == curr_g_vec);
+    Vector3 G_proj = project_on_plane(G, hullGeometry->inputVertexPositions[f.halfedge().tailVertex()], unit_g_vec);
+    Halfedge curr_he = f.halfedge(),
+             first_he = f.halfedge();
+    while (curr_he != first_he) {
+        Vertex v1 = curr_he.tipVertex(),
+               v0 = curr_he.tailVertex(),
+               v2 = curr_he.next().tipVertex();
+        Vector3 p1 = hullGeometry->inputVertexPositions[v1],
+                p0 = hullGeometry->inputVertexPositions[v0],
+                p2 = hullGeometry->inputVertexPositions[v2];
     }
 }
