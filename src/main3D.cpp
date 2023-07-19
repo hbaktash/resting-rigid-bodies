@@ -10,6 +10,7 @@
 #include "args/args.hxx"
 #include "imgui.h"
 
+#include "coloring.h"
 #include "forward3D.h"
 #include "mesh_factory.h"
 #include "geometry_utils.h"
@@ -30,18 +31,23 @@ std::unique_ptr<VertexPositionGeometry> geometry_ptr;
 ManifoldSurfaceMesh* mesh;
 VertexPositionGeometry* geometry;
 Vector3 G, // center of Mass
-        initial_g_vec({0,-1,0});
+        initial_g_vec({0,-1,0}),
+        default_face_color({0.1,0.1,0.8}),
+        curr_face_color({0.1,0.87,0.1});
 
 Forward3DSolver forwardSolver;
 
 // Polyscope visualization handle, to quickly add data to the surface
 polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, 
-                       *dummy_psMesh2, *dummy_psMesh3, *dummy_forward_vis;
+                       *dummy_psMesh2, *dummy_psMesh3, *dummy_forward_vis,
+                       *coloredPsMesh;
 
-polyscope::PointCloud *psG, *curr_state_pt, 
+polyscope::PointCloud *psG, // point cloud with single G
+                      *curr_state_pt, 
                       *gauss_map_pc, *face_normals_pc,
                       *stable_face_normals_pc, *edge_equilibria_pc,
-                      *stable_vertices_gm_pc; // point cloud with single G
+                      *stable_vertices_gm_pc, 
+                      *raster_pc;
 
 polyscope::SurfaceGraphQuantity* curr_state_segment;
 
@@ -60,18 +66,23 @@ float stable_edge_radi = 0.0,
       arc_curve_radi = 0.01,
       face_normal_vertex_gm_radi = 0.03;
 
+// Gauss map stuff
 double gm_distance = 2.1,
        gm_radi = 1.0;
+Vector3 shift({0., gm_distance, 0.}),
+        colored_shift({0., gm_distance, gm_distance});
 
 int arcs_seg_count = 13,
     arc_counter = 0;
 
+// raster image stuff
+int sample_count = 8000; 
+FaceData<Vector3> face_colors;
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
-
 
 // draw an arc connecting two points on the sphere; for Gauss map purposes
 void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind){
@@ -110,9 +121,9 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, s
   psArcCurve->setEnabled(true);
 }
 
+
 void draw_stable_patches_on_gauss_map(){
   arc_counter = 0;
-  Vector3 shift = {0., gm_distance, 0.};
   for (Edge e: forwardSolver.hullMesh->edges()){
     for (Vertex v: e.adjacentVertices()){
       if (forwardSolver.edge_is_stable(e) && forwardSolver.edge_is_stablizable(e) &&
@@ -362,6 +373,13 @@ void generate_polyhedron_example(std::string poly_str){
 }
 
 
+void color_faces_with_default(){
+  FaceData<Vector3> face_colors(*forwardSolver.hullMesh, default_face_color);
+  polyscope::SurfaceFaceColorQuantity *fColor = psInputMesh->addFaceColorQuantity("state vis color", face_colors);
+  fColor->setEnabled(true);
+}
+
+
 void visualize_g_vec(){
   std::vector<Vector3> the_g_vec = {forwardSolver.curr_g_vec};
   polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
@@ -372,17 +390,19 @@ void visualize_g_vec(){
 
 
 void visualize_contact(){
-  if (polyscope::hasPointCloud("current vertex")) polyscope::removePointCloud("current Vertex");
+  if (polyscope::hasPointCloud("current Vertex")) polyscope::removePointCloud("current Vertex");
   dummy_forward_vis->removeQuantity("current contact edge"); // has a built-in existance checker
+  if (forwardSolver.curr_f.getIndex() == INVALID_IND) color_faces_with_default();
   // add the other two
-
   if (forwardSolver.curr_v.getIndex() != INVALID_IND) {
+    printf("at Vertex\n");
     std::vector<Vector3> curr_state_pos = {forwardSolver.hullGeometry->inputVertexPositions[forwardSolver.curr_v]}; // first and second should be the same since we just initialized.
     curr_state_pt = polyscope::registerPointCloud("current Vertex", curr_state_pos);
     curr_state_pt->setEnabled(true);
     curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
   }
   else if (forwardSolver.curr_e.getIndex() != INVALID_IND){
+    printf("at Edge\n");
     Vertex v1 = forwardSolver.curr_e.firstVertex(),
            v2 = forwardSolver.curr_e.secondVertex();
     Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[v1],
@@ -397,24 +417,28 @@ void visualize_contact(){
     curr_state_segment->setEnabled(true);
   }
   else if (forwardSolver.curr_f.getIndex() != INVALID_IND){
-      // TODO highlight the face
+    face_colors = FaceData<Vector3>(*forwardSolver.hullMesh, default_face_color);
+    face_colors[forwardSolver.curr_f] = curr_face_color;
+    polyscope::SurfaceFaceColorQuantity *fColor = psInputMesh->addFaceColorQuantity("state vis color", face_colors);
+    fColor->setEnabled(true);
   }
   else {
-    //.??
+    polyscope::warning("all elements are Invalid??\n");
   }
-
   // TODO: maybe add Snail trail?
 }
 
+
 void initialize_state_vis(){
-  draw_G();
-  visualize_contact();
-  visualize_g_vec();
-  // for later single segment curve addition
+  // for later single segment curve addition (for stable edges)
   std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
   std::vector<Vector3> dummy_pos = {Vector3({0.,0.,0.})};
   dummy_forward_vis = polyscope::registerSurfaceMesh("state check mesh", dummy_pos, dummy_face); // nothing matters in this line
   // will add curves to this later
+  draw_G();
+  visualize_contact();
+  visualize_g_vec();
+  color_faces_with_default();
 }
 
 
@@ -426,7 +450,56 @@ void update_visuals_with_G(){
   visualize_stable_vertices();
   draw_stable_vertices_on_gauss_map();
   draw_stable_face_normals_on_gauss_map();
-  draw_stable_patches_on_gauss_map();
+  if (polyscope::hasSurfaceMesh("dummy mesh for gauss map arcs"))
+    draw_stable_patches_on_gauss_map();
+}
+
+void visualize_colored_polyhedra(){
+  VertexData<Vector3> shifted_positions(*forwardSolver.hullMesh);
+  for (Vertex v: forwardSolver.hullMesh->vertices()){
+    shifted_positions[v] = forwardSolver.hullGeometry->inputVertexPositions[v] + colored_shift;
+  }
+  coloredPsMesh = polyscope::registerSurfaceMesh("colored polyhedra", shifted_positions, forwardSolver.hullMesh->getFaceVertexList());
+  // generate random colors and color the faces
+  polyscope::SurfaceFaceColorQuantity *faceQnty = coloredPsMesh->addFaceColorQuantity("random face colors", face_colors);
+  faceQnty->setEnabled(true);
+  // // add colors to the original polyhedra as well?
+  // polyscope::SurfaceFaceColorQuantity *faceQnty2 = psMesh->addFaceColorQuantity("random face colors2", face_colors);
+  // faceQnty2->setEnabled(true);
+}
+
+// maybe move to another file, to merge with bullet sim; this and some other functions
+// sample and raster; colors should be generated beforehand
+void build_raster_image(){
+  FaceData<std::vector<Vector3>> face_samples(*forwardSolver.hullMesh);
+  int total_invalids = 0;
+  for (int i = 0; i < sample_count; i++){
+    Vector3 random_g_vec = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
+    if (random_g_vec.norm() <= 1){
+      if (i % 2000 == 0)
+        printf("$$$ at sample %d\n", i);
+      random_g_vec /= norm(random_g_vec);
+      Face touching_face = forwardSolver.final_touching_face(random_g_vec);
+      if (touching_face.getIndex() == INVALID_IND){
+        total_invalids++;
+        continue;
+      }
+      face_samples[touching_face].push_back(random_g_vec);
+    }
+  }
+  printf(" ###### total invalid faces: %d  ######\n", total_invalids);
+  std::vector<Vector3> raster_positions,
+                       raster_colors;
+  for (Face f: forwardSolver.hullMesh->faces()){
+    std::vector<Vector3> tmp_points = face_samples[f];
+    for (Vector3 tmp_p: tmp_points){
+      raster_positions.push_back(tmp_p + shift);
+      raster_colors.push_back(face_colors[f]);
+    }
+  }
+  raster_pc = polyscope::registerPointCloud("raster point cloud", raster_positions);
+  polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("random color", raster_colors);
+  pc_col_quant->setEnabled(true);
 }
 
 
@@ -494,27 +567,32 @@ void myCallback() {
   if (ImGui::Button("Draw patches")){
     draw_stable_patches_on_gauss_map();
   }
-
-  if (ImGui::Button("Draw patches")){
-    draw_stable_patches_on_gauss_map();
-  }
-
   if (ImGui::Button("initialize g_vec") ||
-      ImGui::SliderFloat("initial g_vec theta", &g_vec_theta, 0., 2*PI)||
-      ImGui::SliderFloat("initial g_vec phi", &g_vec_phi, 0., 2*PI)) {
-      initial_g_vec = {cos(g_vec_phi)*sin(g_vec_theta), cos(g_vec_phi)*cos(g_vec_theta), sin(g_vec_phi)};
-      forwardSolver.find_contact(initial_g_vec);
-      initialize_state_vis();
+    ImGui::SliderFloat("initial g_vec theta", &g_vec_theta, 0., 2*PI)||
+    ImGui::SliderFloat("initial g_vec phi", &g_vec_phi, 0., 2*PI)) {
+    initial_g_vec = {cos(g_vec_phi)*sin(g_vec_theta), cos(g_vec_phi)*cos(g_vec_theta), sin(g_vec_phi)};
+    forwardSolver.find_contact(initial_g_vec);
+    initialize_state_vis();
   }
   if (ImGui::Button("next state")){
     forwardSolver.next_state();
     visualize_g_vec();
+    visualize_contact();
+  }
+  if (ImGui::SliderInt("sample count", &sample_count, 1000, 100000));
+  if (ImGui::Button("build raster image")){
+    face_colors = generate_random_colors(forwardSolver.hullMesh);
+    for (Face f: forwardSolver.hullMesh->faces()){
+      if (!forwardSolver.face_is_stable(f))
+        face_colors[f] = default_face_color;
+    }
+    visualize_colored_polyhedra();
+    build_raster_image();
   }
 }
 
 
 int main(int argc, char **argv) {
-
   // build mesh
   generate_polyhedron_example(all_polygons_current_item);
   G = {0.,0,0};

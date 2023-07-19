@@ -76,12 +76,7 @@ set(polyhedra_SRCS
   src/forward3D.cpp
   src/mesh_factory.cpp
   src/geometry_utils.cpp
-	# add any other source files here
-)
-
-set(pstest_SRCS 
-  src/main_pstest.cpp
-  src/mesh_factory.cpp
+  src/coloring.cpp
 	# add any other source files here
 )
 
@@ -91,6 +86,13 @@ set(bullet_SRCS
   src/mesh_factory.cpp
   src/geometry_utils.cpp
   src/bullet_sim.cpp
+  src/coloring.cpp
+  # add any other source files here
+)
+
+set(pstest_SRCS 
+  src/main_pstest.cpp
+  src/mesh_factory.cpp
 	# add any other source files here
 )
 

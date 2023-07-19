@@ -36,6 +36,8 @@ void Forward3DSolver::find_contact(Vector3 initial_ori){
     curr_f = Face();
 
     curr_g_vec = initial_ori;
+
+    stable_state = false;
 }
 
 
@@ -167,6 +169,7 @@ void Forward3DSolver::edge_to_next(Edge e){
         vertex_to_next(v2); // rolls to the v2 vertex
     }
     else { // rolls to a neighboring face
+        // printf("rolling to face from edge\n");
         Vector3 Gp1 = p1 - G,
                 unit_g_vec = curr_g_vec.normalize();
         Vector3 G_proj = G + unit_g_vec * dot(Gp1, unit_g_vec), // project G on the ground
@@ -188,6 +191,7 @@ void Forward3DSolver::edge_to_next(Edge e){
         double pa_angle = acos(dot(pa_proj - p1, G_proj_proj - p1)/(norm(pa_proj - p1)*norm(G_proj_proj - p1))),
                pb_angle = acos(dot(pb_proj - p1, G_proj_proj - p1)/(norm(pb_proj - p1)*norm(G_proj_proj - p1)));
         Face next_face;
+        // printf("found angles\n");
         if (pa_angle <= pb_angle){ // face containing va is next
             curr_f = he.face();
             curr_v = Vertex();
@@ -199,40 +203,58 @@ void Forward3DSolver::edge_to_next(Edge e){
             curr_e = Edge();
         }
         // always assuming outward normals
-        curr_g_vec = hullGeometry->faceNormal(next_face);
+        curr_g_vec = hullGeometry->faceNormal(curr_f);
     }
 }
 
 // assuming face is not stable
 void Forward3DSolver::face_to_next(Face f){
+    if (face_is_stable(f)){
+        // printf("   -/-/-/-  at a stable face %d: %d, %d, %d  -\\-\\-\\- \n",f.getIndex(), f.halfedge().tailVertex().getIndex(), f.halfedge().tipVertex().getIndex(), f.halfedge().next().tipVertex().getIndex());
+        stable_state = true;
+        return;
+    }
     Vector3 unit_g_vec = curr_g_vec.normalize();
     // project G_proj on the same plane as the face plane
     assert(hullGeometry->faceNormal(f) == curr_g_vec);
     Vector3 G_proj = project_on_plane(G, hullGeometry->inputVertexPositions[f.halfedge().tailVertex()], unit_g_vec);
     Halfedge curr_he = f.halfedge(),
              first_he = f.halfedge();
-    while (curr_he != first_he) {
+    while (true) {
+        printf("at he %d\n", curr_he.getIndex());
+        // will only check rolling to v0v1 at this iteration; v2 is only used for checking rolling onto v1
         Vertex v1 = curr_he.tipVertex(),
                v0 = curr_he.tailVertex(),
                v2 = curr_he.next().tipVertex();
         Vector3 p1 = hullGeometry->inputVertexPositions[v1],
                 p0 = hullGeometry->inputVertexPositions[v0],
                 p2 = hullGeometry->inputVertexPositions[v2];
-        double angle_Gv0v1 = acos(dot(G_proj - p0, p1 - p0)/(norm(G_proj - p0)*norm(p1 - p0))),
-               angle_Gv1v0 = acos(dot(G_proj - p1, p0 - p1)/(norm(G_proj - p1)*norm(p0 - p1))),
-               angle_Gv1v2 = acos(dot(G_proj - p1, p2 - p1)/(norm(G_proj - p1)*norm(p2 - p1)));
-        if (angle_Gv0v1 <= PI/2. && angle_Gv1v0 <= PI/2.){
-            Face next_face = curr_he.twin().face();
-            curr_f = next_face;
-            curr_v = Vertex();
-            curr_e = Edge();
-            curr_g_vec = hullGeometry->faceNormal(next_face);
-            break; 
+        // first check if we are on the "exterior" side of v0v1
+        Vector3 on_plane_edge_normal = cross(curr_g_vec, p0 - p1);
+        // use p2 as a point on the interior side
+        double p2_dot = dot(p2-p0, on_plane_edge_normal),
+               G_proj_dot = dot(G_proj - p0, on_plane_edge_normal);
+        if (p2_dot * G_proj_dot <= 0){ // G' is on the exterior side; so its possible to roll onto v0v1's
+            double angle_Gv0v1 = acos(dot(G_proj - p0, p1 - p0)/(norm(G_proj - p0)*norm(p1 - p0))),
+                angle_Gv1v0 = acos(dot(G_proj - p1, p0 - p1)/(norm(G_proj - p1)*norm(p0 - p1))),
+                angle_Gv1v2 = acos(dot(G_proj - p1, p2 - p1)/(norm(G_proj - p1)*norm(p2 - p1)));
+            if (angle_Gv0v1 <= PI/2. && angle_Gv1v0 <= PI/2.){
+                Face next_face = curr_he.twin().face();
+                curr_f = next_face;
+                curr_v = Vertex();
+                curr_e = Edge();
+                curr_g_vec = hullGeometry->faceNormal(next_face);
+                break;
+            }
+            else if (angle_Gv1v0 >= PI/2. && angle_Gv1v2 >= PI/2.){
+                vertex_to_next(v1);
+                break;
+            }   
         }
-        else if (angle_Gv1v0 >= PI/2. && angle_Gv1v2 >= PI/2.){
-            vertex_to_next(v1);
+        // go to next he
+        curr_he = curr_he.next();
+        if (curr_he == first_he)
             break;
-        }
     }
     // if here, then the face was stable and do nothing.
 }
@@ -245,10 +267,10 @@ void Forward3DSolver::next_state(){
     }
     
     int status_check = (curr_v.getIndex() != INVALID_IND) + (curr_e.getIndex() != INVALID_IND) + (curr_f.getIndex() != INVALID_IND);
-    printf("test for bool addition %d\n", status_check);
+    // printf("test for bool addition %d\n", status_check);
     assert(status_check <= 1); // either not initiated (0) or only one valid (1)
     if (curr_v.getIndex() != INVALID_IND){
-        printf(" STATUS: at vertex %d\n", curr_v.getIndex());
+        // printf(" STATUS: at vertex %d\n", curr_v.getIndex());
         Vertex old_v = curr_v;
         vertex_to_next(curr_v);
         if (curr_v == old_v){
@@ -257,7 +279,7 @@ void Forward3DSolver::next_state(){
         }
     }
     else if (curr_e.getIndex() != INVALID_IND){
-        printf(" STATUS: at edge %d: %d, %d\n", curr_e.getIndex(), curr_e.firstVertex().getIndex(), curr_e.secondVertex().getIndex());
+        // printf(" STATUS: at edge %d: %d, %d\n", curr_e.getIndex(), curr_e.firstVertex().getIndex(), curr_e.secondVertex().getIndex());
         Edge old_e = curr_e;
         edge_to_next(curr_e);
         if (curr_e == old_e){
@@ -268,7 +290,7 @@ void Forward3DSolver::next_state(){
     else if (curr_f.getIndex() != INVALID_IND){
         Face old_f = Face(curr_f); // TODO: do I have to do this?
         Halfedge he = curr_f.halfedge();
-        printf(" STATUS: at face %d: %d, %d, %d, ..\n", he.tailVertex().getIndex(), he.tipVertex().getIndex(), he.next().tipVertex().getIndex());
+        // printf(" STATUS: at face %d: %d, %d, %d, ..\n", old_f.getIndex(), he.tailVertex().getIndex(), he.tipVertex().getIndex(), he.next().tipVertex().getIndex());
         face_to_next(curr_f);
         if (curr_f == old_f){
             stable_state = true;
@@ -277,4 +299,16 @@ void Forward3DSolver::next_state(){
     else {
         printf(" $$$ initialize the contact first! $$$\n");
     }
+}
+
+
+Face Forward3DSolver::final_touching_face(Vector3 initial_ori){
+    find_contact(initial_ori);
+    while(true){
+        next_state();
+        if (stable_state)
+            break;
+    }
+    assert(curr_f.getIndex() != INVALID_IND);
+    return curr_f;
 }

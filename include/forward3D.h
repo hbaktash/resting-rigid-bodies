@@ -23,7 +23,7 @@ class Forward3DSolver {
     ManifoldSurfaceMesh* hullMesh;
     VertexPositionGeometry* hullGeometry;
 
-    // current state; if actually trying to simulate
+    // current state; simulation 
     Vertex curr_v;
     Edge curr_e;
     Face curr_f;
@@ -63,7 +63,7 @@ class Forward3DSolver {
     void next_state();
     
     // // empirical sampling
-    // Edge simulate_toss(Vector3 initial_ori);
+    Face final_touching_face(Vector3 initial_ori);
     // void empirically_build_probabilities(int sample_count);
 
 

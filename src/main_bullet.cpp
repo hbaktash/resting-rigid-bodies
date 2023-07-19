@@ -13,6 +13,7 @@
 #include "args/args.hxx"
 #include "imgui.h"
 
+#include "coloring.h"
 #include "mesh_factory.h"
 #include "geometry_utils.h"
 #include "bullet_sim.h"
@@ -104,24 +105,7 @@ void initalize_mesh_and_env(std::string poly_str){
 }
 
 
-void generate_random_colors(){
-  face_colors = FaceData<Vector3>(*mesh);
-
-  // fingers crossed for a prime enough vector
-  Vector3 holy_vec({exp(1.), PI, 1});
-  holy_vec = holy_vec.normalize();
-  
-  // init point
-  Vector3 curr_color = {randomReal(0,1), randomReal(0,1), randomReal(0,1)};
-  for (Face f: mesh->faces()){
-    face_colors[f] = curr_color;
-    curr_color += holy_vec;
-    curr_color.x = curr_color.x - floor(curr_color.x);
-    curr_color.y = curr_color.y - floor(curr_color.y);
-    curr_color.z = curr_color.z - floor(curr_color.z);
-  }
-}
-
+// another polyhedra for the sake of a good colored raster image
 void visualize_colored_polyhedra(){
   VertexData<Vector3> shifted_positions(*mesh);
   for (Vertex v: mesh->vertices()){
@@ -130,7 +114,7 @@ void visualize_colored_polyhedra(){
   coloredPsMesh = polyscope::registerSurfaceMesh("colored polyhedra", shifted_positions, mesh->getFaceVertexList());
 
   // generate random colors and color the faces
-  generate_random_colors();
+  face_colors = generate_random_colors(mesh);
   polyscope::SurfaceFaceColorQuantity *faceQnty = coloredPsMesh->addFaceColorQuantity("random face colors", face_colors);
   faceQnty->setEnabled(true);
 
@@ -256,7 +240,6 @@ void build_raster_image(){
   raster_pc = polyscope::registerPointCloud("raster point cloud", raster_positions);
   polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("random color", raster_colors);
   pc_col_quant->setEnabled(true);
-
 }
 
 
