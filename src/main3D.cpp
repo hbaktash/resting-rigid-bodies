@@ -30,7 +30,7 @@ std::unique_ptr<VertexPositionGeometry> geometry_ptr;
 ManifoldSurfaceMesh* mesh;
 VertexPositionGeometry* geometry;
 Vector3 G, // center of Mass
-        initial_g_vec;
+        initial_g_vec({0,-1,0});
 
 Forward3DSolver forwardSolver;
 
@@ -49,7 +49,9 @@ float pt_cloud_radi_scale = 0.1,
       curve_radi_scale = 0.1,
       G_r = 0.,
       G_theta = 0.,
-      G_phi = 0.;
+      G_phi = 0.,
+      g_vec_theta = 0.,
+      g_vec_phi = 0.;
 
 float stable_edge_radi = 0.0,
       stablizable_edge_radi = 0.009,
@@ -61,11 +63,8 @@ float stable_edge_radi = 0.0,
 double gm_distance = 2.1,
        gm_radi = 1.0;
 
-int sample_count = 1000,
-    arcs_seg_count = 13;
-
-
-size_t dummy_counter = 0;
+int arcs_seg_count = 13,
+    arc_counter = 0;
 
 
 // example choice
@@ -112,7 +111,7 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, s
 }
 
 void draw_stable_patches_on_gauss_map(){
-  dummy_counter = 0;
+  arc_counter = 0;
   Vector3 shift = {0., gm_distance, 0.};
   for (Edge e: forwardSolver.hullMesh->edges()){
     for (Vertex v: e.adjacentVertices()){
@@ -125,8 +124,8 @@ void draw_stable_patches_on_gauss_map(){
         Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
         Vector3 v_stable_vec = forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G;
         draw_arc_on_sphere(normalize(ortho_g), normalize(v_stable_vec), 
-                           shift, gm_radi, arcs_seg_count, 100 + dummy_counter);
-        dummy_counter++;
+                           shift, gm_radi, arcs_seg_count, 100 + arc_counter);
+        arc_counter++;
       }
     }
   }
@@ -277,16 +276,7 @@ void visualize_vertex_probabilities(){
 }
 
 
-void visualize_vec_from_G(Vector3 vec){
-  std::vector<Vector3> the_g_vec = {vec};
-  polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
-  psG_vec->setEnabled(true);
-  psG_vec->setVectorRadius(curve_radi_scale * 1.);
-  psG_vec->setVectorLengthScale((dot(vec, vec)));
-}
-
 // void visualize_edge_probabilities(){}
-
 void visualize_stable_vertices(){
   std::vector<Vector3> positions;// = {forwardSolver.hullGeometry->inputVertexPositions[v]};
   for (Vertex v: forwardSolver.hullMesh->vertices()){
@@ -372,20 +362,54 @@ void generate_polyhedron_example(std::string poly_str){
 }
 
 
-void visualize_contact_point(){
-  // single point cloud for the single contact point
-  // if (forwardSolver.curr_state.first == forwardSolver.curr_state.second){
-  //   std::vector<Vector3> curr_state_pos = {forwardSolver.hullGeometry->inputVertexPositions[forwardSolver.curr_state.first]}; // first and second should be the same since we just initialized.
-  //   curr_state_pt = polyscope::registerPointCloud("current state", curr_state_pos);
-  //   curr_state_pt->setEnabled(true);
-  //   curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
-  // }
+void visualize_g_vec(){
+  std::vector<Vector3> the_g_vec = {forwardSolver.curr_g_vec};
+  polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
+  psG_vec->setEnabled(true);
+  psG_vec->setVectorRadius(curve_radi_scale * 1.);
+  psG_vec->setVectorLengthScale(0.2);
+}
+
+
+void visualize_contact(){
+  if (polyscope::hasPointCloud("current vertex")) polyscope::removePointCloud("current Vertex");
+  dummy_forward_vis->removeQuantity("current contact edge"); // has a built-in existance checker
+  // add the other two
+
+  if (forwardSolver.curr_v.getIndex() != INVALID_IND) {
+    std::vector<Vector3> curr_state_pos = {forwardSolver.hullGeometry->inputVertexPositions[forwardSolver.curr_v]}; // first and second should be the same since we just initialized.
+    curr_state_pt = polyscope::registerPointCloud("current Vertex", curr_state_pos);
+    curr_state_pt->setEnabled(true);
+    curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
+  }
+  else if (forwardSolver.curr_e.getIndex() != INVALID_IND){
+    Vertex v1 = forwardSolver.curr_e.firstVertex(),
+           v2 = forwardSolver.curr_e.secondVertex();
+    Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[v1],
+            p2 = forwardSolver.hullGeometry->inputVertexPositions[v2];
+    std::vector<std::array<size_t, 2>> edgeInds;
+    std::vector<Vector3> positions;
+    edgeInds.push_back({0, 1});
+    positions.push_back(p1); positions.push_back(p2);
+    curr_state_segment =  dummy_forward_vis->addSurfaceGraphQuantity("current contact edge", positions, edgeInds);
+    curr_state_segment->setRadius(curve_radi_scale/1.5);
+    curr_state_segment->setColor({0., 0., 1.});
+    curr_state_segment->setEnabled(true);
+  }
+  else if (forwardSolver.curr_f.getIndex() != INVALID_IND){
+      // TODO highlight the face
+  }
+  else {
+    //.??
+  }
+
+  // TODO: maybe add Snail trail?
 }
 
 void initialize_state_vis(){
-  visualize_vec_from_G(forwardSolver.curr_g_vec);
-  visualize_contact_point();
   draw_G();
+  visualize_contact();
+  visualize_g_vec();
   // for later single segment curve addition
   std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
   std::vector<Vector3> dummy_pos = {Vector3({0.,0.,0.})};
@@ -470,6 +494,22 @@ void myCallback() {
   if (ImGui::Button("Draw patches")){
     draw_stable_patches_on_gauss_map();
   }
+
+  if (ImGui::Button("Draw patches")){
+    draw_stable_patches_on_gauss_map();
+  }
+
+  if (ImGui::Button("initialize g_vec") ||
+      ImGui::SliderFloat("initial g_vec theta", &g_vec_theta, 0., 2*PI)||
+      ImGui::SliderFloat("initial g_vec phi", &g_vec_phi, 0., 2*PI)) {
+      initial_g_vec = {cos(g_vec_phi)*sin(g_vec_theta), cos(g_vec_phi)*cos(g_vec_theta), sin(g_vec_phi)};
+      forwardSolver.find_contact(initial_g_vec);
+      initialize_state_vis();
+  }
+  if (ImGui::Button("next state")){
+    forwardSolver.next_state();
+    visualize_g_vec();
+  }
 }
 
 
@@ -489,8 +529,6 @@ int main(int argc, char **argv) {
   polyscope::state::userCallback = myCallback;
   polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
   polyscope::view::upDir = polyscope::view::UpDir::NegZUp;
-
-  // Set vertex tangent spaces
   
   // Give control to the polyscope gui
   polyscope::show();

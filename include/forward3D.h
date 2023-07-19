@@ -24,8 +24,11 @@ class Forward3DSolver {
     VertexPositionGeometry* hullGeometry;
 
     // current state; if actually trying to simulate
-    Vertex curr_v1, curr_v2, curr_v3;
+    Vertex curr_v;
+    Edge curr_e;
+    Face curr_f;
     Vector3 curr_g_vec;
+    bool stable_state = false;
 
     // DP stuff; implicitly using a DAG
     FaceData<Face> next_falling_face;
@@ -39,7 +42,7 @@ class Forward3DSolver {
     Forward3DSolver(ManifoldSurfaceMesh* inputMesh, VertexPositionGeometry* inputGeo, Vector3 G);
 
     // find initial contact vertex
-    // void find_contact(Vector3 initial_ori);
+    void find_contact(Vector3 initial_ori);
 
     // build next element DP stuff
     void compute_vertex_probabilities();
@@ -50,19 +53,14 @@ class Forward3DSolver {
     bool edge_is_stablizable(Edge e);
     bool face_is_stable(Face f);
   
-    // 
+    // Rigid Simulation stuff
     Edge vertex_to_edge(Vertex v);
+    void vertex_to_next(Vertex v);
+    void edge_to_next(Edge e);
+    void face_to_next(Face f);
     
-    void vertex_to_next(Vertex curr_v);
-    void edge_to_next(Edge curr_e);
-    // // lazy polygon navigation
-    // Edge other_edge(Edge curr_e, Vertex tip_v);
-
-    // // possible fancy visualization
-    // void center_geometry();
-    // void align_geometry(Vector3 dir);
-    // // rigid simulation
-    // void next_state();
+    // rigid simulation
+    void next_state();
     
     // // empirical sampling
     // Edge simulate_toss(Vector3 initial_ori);

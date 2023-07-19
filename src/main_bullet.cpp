@@ -67,6 +67,8 @@ int sample_count = 5e4;
 void update_positions(){
     VertexData<Vector3> new_positions = my_env->get_new_positions();
     psMesh->updateVertexPositions(new_positions.raw());
+    // TODO: do this maybe instead of updating in the env _/_
+    // psMesh->setTransform()
 }
 
 
@@ -186,13 +188,10 @@ void visualize_gauss_map(){
   gauss_map_pc->setPointRadius(gm_radi, false);
   gauss_map_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 
-  // point cloud for face normals
-  double flip_factor = -1;
-  if (std::strcmp(all_polygons_current_item.c_str(), "sliced tet")==0)
-    flip_factor = 1.;
+  // point cloud for face normals; normals should be outwards
   std::vector<Vector3> face_normal_points, face_normal_colors;
   for (Face f: mesh->faces()){
-    Vector3 normal_pos_on_gm = flip_factor * geometry->faceNormal(f) + shift;
+    Vector3 normal_pos_on_gm = geometry->faceNormal(f) + shift;
     face_normal_points.push_back(normal_pos_on_gm);
     face_normal_colors.push_back(face_colors[f]);
   }
@@ -213,8 +212,8 @@ void visualize_gauss_map(){
   for (Edge e: mesh->edges()){
     Face f1 = e.halfedge().face(),
          f2 = e.halfedge().twin().face();
-    Vector3 n1 = flip_factor * geometry->faceNormal(f1),
-            n2 = flip_factor * geometry->faceNormal(f2);
+    Vector3 n1 = geometry->faceNormal(f1),
+            n2 = geometry->faceNormal(f2);
     // draw with polyscope
     draw_arc_on_sphere(n1, n2, shift, gm_radi, arcs_seg_count, e.getIndex());
   }
@@ -324,7 +323,7 @@ int main(int argc, char* argv[])
 #else
   printf("Single precision\n");
 #endif
-  std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra("tet2");
+  std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra("tet");
   mesh = mesh_ptr.release(); 
   geometry = geometry_ptr.release();
   center_and_normalize(mesh, geometry);

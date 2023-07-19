@@ -16,6 +16,29 @@ Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPosition
 }
 
 
+// find initial contact and basically refresh the current state
+void Forward3DSolver::find_contact(Vector3 initial_ori){
+    // just find the max inner product with the g_vec 
+    Vertex contact_point = mesh->vertex(0);
+    double max_inner_product = 0.; // smth should be positive, if we choose a ref inside the convex hull
+    for (Vertex v: hullMesh->vertices()){
+        Vector3 pos = hullGeometry->inputVertexPositions[v];
+        Vector3 Gv = pos - G; // could use any point inside the convexHull (using G just just cause we have it).
+        if (dot(Gv, initial_ori) >= max_inner_product){
+            contact_point = v;
+            max_inner_product = dot(Gv, initial_ori);
+        }
+    }
+    
+    // update state & initialize tracing
+    curr_v = contact_point;
+    curr_e = Edge();
+    curr_f = Face();
+
+    curr_g_vec = initial_ori;
+}
+
+
 // just the Gaussian curvature
 void Forward3DSolver::compute_vertex_probabilities(){
     vertex_probabilities = VertexData<double>(*hullMesh, 0.);
@@ -122,13 +145,15 @@ void Forward3DSolver::vertex_to_next(Vertex v){
             best_p2_proj = p2_proj;
         }
     }
+    
+    // update current state
+    curr_e = hullMesh->connectingEdge(v, best_v);
+    curr_v = Vertex();
+    curr_f = Face();
     // computing next g_vec
     Vector3 unit_next_pp = (p - best_p2_proj).normalize();
     Vector3 next_g_vec = Gp - unit_next_pp * dot(unit_next_pp, Gp); 
-    // updating class members
     curr_g_vec = next_g_vec;
-    curr_v1 = v;
-    curr_v2 = best_v;
 }
 
 
@@ -164,16 +189,14 @@ void Forward3DSolver::edge_to_next(Edge e){
                pb_angle = acos(dot(pb_proj - p1, G_proj_proj - p1)/(norm(pb_proj - p1)*norm(G_proj_proj - p1)));
         Face next_face;
         if (pa_angle <= pb_angle){ // face containing va is next
-            next_face = he.face();
-            curr_v1 = va;
-            curr_v2 = v1;
-            curr_v3 = v2;
+            curr_f = he.face();
+            curr_v = Vertex();
+            curr_e = Edge();
         }
         else { // face containing vb is next
-            next_face = he.twin().face();
-            curr_v1 = v2;
-            curr_v2 = v1;
-            curr_v3 = vb;
+            curr_f = he.twin().face();
+            curr_v = Vertex();
+            curr_e = Edge();
         }
         // always assuming outward normals
         curr_g_vec = hullGeometry->faceNormal(next_face);
@@ -200,16 +223,58 @@ void Forward3DSolver::face_to_next(Face f){
                angle_Gv1v2 = acos(dot(G_proj - p1, p2 - p1)/(norm(G_proj - p1)*norm(p2 - p1)));
         if (angle_Gv0v1 <= PI/2. && angle_Gv1v0 <= PI/2.){
             Face next_face = curr_he.twin().face();
-            curr_v1 = curr_he.twin().tailVertex();
-            curr_v2 = curr_he.twin().tipVertex();
-            curr_v3 = curr_he.twin().next().tipVertex();
+            curr_f = next_face;
+            curr_v = Vertex();
+            curr_e = Edge();
             curr_g_vec = hullGeometry->faceNormal(next_face);
             break; 
         }
         else if (angle_Gv1v0 >= PI/2. && angle_Gv1v2 >= PI/2.){
             vertex_to_next(v1);
-            break; 
+            break;
         }
     }
     // if here, then the face was stable and do nothing.
+}
+
+
+void Forward3DSolver::next_state(){
+    if (stable_state){
+        printf(" &&&& already at a stable state! &&&&\n");
+        return;
+    }
+    
+    int status_check = (curr_v.getIndex() != INVALID_IND) + (curr_e.getIndex() != INVALID_IND) + (curr_f.getIndex() != INVALID_IND);
+    printf("test for bool addition %d\n", status_check);
+    assert(status_check <= 1); // either not initiated (0) or only one valid (1)
+    if (curr_v.getIndex() != INVALID_IND){
+        printf(" STATUS: at vertex %d\n", curr_v.getIndex());
+        Vertex old_v = curr_v;
+        vertex_to_next(curr_v);
+        if (curr_v == old_v){
+            printf("Vertex %d is stable?!!??!\n", curr_v.getIndex());
+            return;
+        }
+    }
+    else if (curr_e.getIndex() != INVALID_IND){
+        printf(" STATUS: at edge %d: %d, %d\n", curr_e.getIndex(), curr_e.firstVertex().getIndex(), curr_e.secondVertex().getIndex());
+        Edge old_e = curr_e;
+        edge_to_next(curr_e);
+        if (curr_e == old_e){
+            printf("Edge %d is stable?!!??!\n", curr_e.getIndex());
+            return;
+        }
+    }
+    else if (curr_f.getIndex() != INVALID_IND){
+        Face old_f = Face(curr_f); // TODO: do I have to do this?
+        Halfedge he = curr_f.halfedge();
+        printf(" STATUS: at face %d: %d, %d, %d, ..\n", he.tailVertex().getIndex(), he.tipVertex().getIndex(), he.next().tipVertex().getIndex());
+        face_to_next(curr_f);
+        if (curr_f == old_f){
+            stable_state = true;
+        }
+    }
+    else {
+        printf(" $$$ initialize the contact first! $$$\n");
+    }
 }

@@ -134,7 +134,6 @@ void ForwardSolver::compute_final_edge_probabilities(){
 
 
 void ForwardSolver::find_contact(Vector3 initial_ori){ // 0-based vector, need to add G_offset
-    // just rotating the g_vec
     Vertex contact_point = mesh->vertex(0);
     double max_inner_product = 0.; // smth should be positive, if we choose a ref inside the convex hull
     for (Vertex v: hullMesh->vertices()){
