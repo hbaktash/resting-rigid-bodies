@@ -221,7 +221,7 @@ void Forward3DSolver::face_to_next(Face f){
     Halfedge curr_he = f.halfedge(),
              first_he = f.halfedge();
     while (true) {
-        printf("at he %d\n", curr_he.getIndex());
+        // printf("at he %d\n", curr_he.getIndex());
         // will only check rolling to v0v1 at this iteration; v2 is only used for checking rolling onto v1
         Vertex v1 = curr_he.tipVertex(),
                v0 = curr_he.tailVertex(),

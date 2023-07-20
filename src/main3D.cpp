@@ -39,13 +39,14 @@ Forward3DSolver forwardSolver;
 
 // Polyscope visualization handle, to quickly add data to the surface
 polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, 
-                       *dummy_psMesh2, *dummy_psMesh3, *dummy_forward_vis,
+                       *dummy_psMesh2, *dummy_psMesh3, *dummy_psMesh_for_patches,
+                       *dummy_forward_vis,
                        *coloredPsMesh;
 
 polyscope::PointCloud *psG, // point cloud with single G
                       *curr_state_pt, 
                       *gauss_map_pc, *face_normals_pc,
-                      *stable_face_normals_pc, *edge_equilibria_pc,
+                      *stable_face_normals_pc, *edge_equilibria_pc, *almost_stable_edge_pc,
                       *stable_vertices_gm_pc, 
                       *raster_pc;
 
@@ -69,7 +70,7 @@ float stable_edge_radi = 0.0,
 // Gauss map stuff
 double gm_distance = 2.1,
        gm_radi = 1.0;
-Vector3 shift({0., gm_distance, 0.}),
+Vector3 gm_shift({0., gm_distance, 0.}),
         colored_shift({0., gm_distance, gm_distance});
 
 int arcs_seg_count = 13,
@@ -78,6 +79,16 @@ int arcs_seg_count = 13,
 // raster image stuff
 int sample_count = 8000; 
 FaceData<Vector3> face_colors;
+bool recolor_faces = true,
+     real_time_raster = false;
+
+// snail trail stuff
+bool show_snail_trail = true;
+polyscope::PointCloud *snail_trail_pc;
+polyscope::SurfaceMesh *dummy_ps_mesh_for_snail_trail;
+Vector3 snail_trail_color({0.5,0.5,0.5}),
+        old_g_vec, new_g_vec;
+int snail_trail_dummy_counter =0;
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet")};
@@ -85,7 +96,7 @@ std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
 // draw an arc connecting two points on the sphere; for Gauss map purposes
-void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind){
+void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind, polyscope::SurfaceMesh* hosting_psMesh){
   // p1, p2 just represent normal vectors
   if (norm(p1) > 1.01 || norm(p2) > 1.01)
     polyscope::warning("wtf? p1, p2 norm larger than 1");
@@ -112,17 +123,24 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, s
     curr_point = next_point;
     next_point += forward_vec;
   }
-  polyscope::SurfaceGraphQuantity* psArcCurve = dummy_psMesh2->addSurfaceGraphQuantity("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
+  polyscope::SurfaceGraphQuantity* psArcCurve = hosting_psMesh->addSurfaceGraphQuantity("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
   psArcCurve->setRadius(arc_curve_radi, false);
   if (edge_ind < 100)
     psArcCurve->setColor({0.03, 0.03, 0.03});
-  else
+  else if (edge_ind < 200)
     psArcCurve->setColor({0.05, 0.5, 0.5});
+  else 
+    psArcCurve->setColor({snail_trail_color.x, snail_trail_color.y, snail_trail_color.z});
   psArcCurve->setEnabled(true);
 }
 
 
 void draw_stable_patches_on_gauss_map(){
+  std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
+  dummy_psMesh_for_patches = polyscope::registerSurfaceMesh(
+      "dummy mesh for patch arcs",
+      geometry->inputVertexPositions, dummy_face);
+  
   arc_counter = 0;
   for (Edge e: forwardSolver.hullMesh->edges()){
     for (Vertex v: e.adjacentVertices()){
@@ -135,7 +153,7 @@ void draw_stable_patches_on_gauss_map(){
         Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
         Vector3 v_stable_vec = forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G;
         draw_arc_on_sphere(normalize(ortho_g), normalize(v_stable_vec), 
-                           shift, gm_radi, arcs_seg_count, 100 + arc_counter);
+                           gm_shift, gm_radi, arcs_seg_count, 100 + arc_counter, dummy_psMesh_for_patches);
         arc_counter++;
       }
     }
@@ -175,8 +193,7 @@ void draw_stable_face_normals_on_gauss_map(){
 
 void visualize_gauss_map(){
   // just draw the sphere next to the main surface
-  Vector3 shift = {0., gm_distance, 0.};
-  std::vector<Vector3> sphere_pos = {shift};
+  std::vector<Vector3> sphere_pos = {gm_shift};
   gauss_map_pc = polyscope::registerPointCloud("Gauss Map", sphere_pos);
   gauss_map_pc->setPointColor({0.74,0.7,0.9});
   gauss_map_pc->setPointRadius(gm_radi, false);
@@ -185,7 +202,7 @@ void visualize_gauss_map(){
   // point cloud for face normals
   std::vector<Vector3> face_normal_points, stable_face_normals;
   for (Face f: forwardSolver.hullMesh->faces()){
-    Vector3 normal_pos_on_gm = forwardSolver.hullGeometry->faceNormal(f) + shift;
+    Vector3 normal_pos_on_gm = forwardSolver.hullGeometry->faceNormal(f) + gm_shift;
     face_normal_points.push_back(normal_pos_on_gm);
     if (forwardSolver.face_is_stable(f)){
       stable_face_normals.push_back(normal_pos_on_gm);
@@ -215,14 +232,13 @@ void visualize_gauss_map(){
     Vector3 n1 = forwardSolver.hullGeometry->faceNormal(f1),
             n2 = forwardSolver.hullGeometry->faceNormal(f2);
     // draw with polyscope
-    draw_arc_on_sphere(n1, n2, shift, gm_radi, arcs_seg_count, e.getIndex());
+    draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2);
   }
 }
 
 
 void show_edge_equilibria_on_gauss_map(){
-  std::vector<Vector3> edge_equilibria_points;
-  Vector3 shift = {0., gm_distance, 0.};
+  std::vector<Vector3> edge_equilibria_points, almost_stable_edge_points;
   for (Edge e: forwardSolver.hullMesh->edges()){
     if (forwardSolver.edge_is_stablizable(e) && forwardSolver.edge_is_stable(e)){
       Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
@@ -230,13 +246,26 @@ void show_edge_equilibria_on_gauss_map(){
       Vector3 GB = B - G,
               AB = B - A;
       Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
-      edge_equilibria_points.push_back(normalize(ortho_g) + shift);
+      edge_equilibria_points.push_back(normalize(ortho_g) + gm_shift);
+    }
+    else if (forwardSolver.edge_is_stablizable(e)){
+      Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
+      Vector3 A = forwardSolver.hullGeometry->inputVertexPositions[v1], B = forwardSolver.hullGeometry->inputVertexPositions[v2];
+      Vector3 GB = B - G,
+              AB = B - A;
+      Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
+      almost_stable_edge_points.push_back(normalize(ortho_g) + gm_shift);
     }
   }
   edge_equilibria_pc = polyscope::registerPointCloud("Edge equilibria", edge_equilibria_points);
   edge_equilibria_pc->setPointRadius(face_normal_vertex_gm_radi, false);
   edge_equilibria_pc->setPointColor({0.2, 0.2, 0.9});
   edge_equilibria_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+
+  almost_stable_edge_pc = polyscope::registerPointCloud("Almost stable Edges", almost_stable_edge_points);
+  almost_stable_edge_pc->setPointRadius(face_normal_vertex_gm_radi, false);
+  almost_stable_edge_pc->setPointColor({0.04, 0.6, 0.6});
+  almost_stable_edge_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 }
 
 
@@ -412,7 +441,7 @@ void visualize_contact(){
     edgeInds.push_back({0, 1});
     positions.push_back(p1); positions.push_back(p2);
     curr_state_segment =  dummy_forward_vis->addSurfaceGraphQuantity("current contact edge", positions, edgeInds);
-    curr_state_segment->setRadius(curve_radi_scale/1.5);
+    curr_state_segment->setRadius(curve_radi_scale/2.3);
     curr_state_segment->setColor({0., 0., 1.});
     curr_state_segment->setEnabled(true);
   }
@@ -493,7 +522,7 @@ void build_raster_image(){
   for (Face f: forwardSolver.hullMesh->faces()){
     std::vector<Vector3> tmp_points = face_samples[f];
     for (Vector3 tmp_p: tmp_points){
-      raster_positions.push_back(tmp_p + shift);
+      raster_positions.push_back(tmp_p + gm_shift);
       raster_colors.push_back(face_colors[f]);
     }
   }
@@ -502,6 +531,17 @@ void build_raster_image(){
   pc_col_quant->setEnabled(true);
 }
 
+
+void color_faces(){
+  if (recolor_faces){
+    face_colors = generate_random_colors(forwardSolver.hullMesh);
+    for (Face f: forwardSolver.hullMesh->faces()){
+      if (!forwardSolver.face_is_stable(f))
+        face_colors[f] = default_face_color;
+    }
+    recolor_faces = false;
+  }
+}
 
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
@@ -514,6 +554,8 @@ void myCallback() {
               all_polygons_current_item = tmp_str;
               generate_polyhedron_example(all_polygons_current_item);
               update_solver();
+              recolor_faces = true;
+              color_faces();
           }
           if (is_selected)
               ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
@@ -553,6 +595,11 @@ void myCallback() {
       ImGui::SliderFloat("G phi", &G_phi, 0., 2*PI)) {
     G = {cos(G_phi)*sin(G_theta)*G_r, cos(G_phi)*cos(G_theta)*G_r, sin(G_phi)*G_r};
     update_visuals_with_G();
+    if (real_time_raster){
+      color_faces();
+      build_raster_image();
+    }
+    // build_raster_image();
   }
   if (ImGui::Button("uniform mass G")){
     G = find_center_of_mass(*mesh, *geometry);
@@ -573,22 +620,34 @@ void myCallback() {
     initial_g_vec = {cos(g_vec_phi)*sin(g_vec_theta), cos(g_vec_phi)*cos(g_vec_theta), sin(g_vec_phi)};
     forwardSolver.find_contact(initial_g_vec);
     initialize_state_vis();
+    // snail trail stuff
+    snail_trail_dummy_counter = 0;
+    std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
+    dummy_psMesh2 = polyscope::registerSurfaceMesh("dummy mesh for gauss map arcs", geometry->inputVertexPositions, dummy_face);
   }
   if (ImGui::Button("next state")){
+    old_g_vec = forwardSolver.curr_g_vec;
     forwardSolver.next_state();
+    new_g_vec = forwardSolver.curr_g_vec;
     visualize_g_vec();
     visualize_contact();
+    if(show_snail_trail && norm(old_g_vec-new_g_vec) != 0.){ // proly dont have to use tol
+      draw_arc_on_sphere(old_g_vec, new_g_vec, gm_shift, gm_radi, arcs_seg_count, 200 + snail_trail_dummy_counter, dummy_ps_mesh_for_snail_trail);
+      snail_trail_dummy_counter++;
+    }
   }
   if (ImGui::SliderInt("sample count", &sample_count, 1000, 100000));
   if (ImGui::Button("build raster image")){
-    face_colors = generate_random_colors(forwardSolver.hullMesh);
-    for (Face f: forwardSolver.hullMesh->faces()){
-      if (!forwardSolver.face_is_stable(f))
-        face_colors[f] = default_face_color;
-    }
+    color_faces();
     visualize_colored_polyhedra();
     build_raster_image();
   }
+  if(ImGui::Button("recolor faces")){
+    recolor_faces = true;// so bad lol
+    color_faces();
+    visualize_colored_polyhedra();
+  }
+  if (ImGui::Checkbox("real time raster", &real_time_raster));
 }
 
 
@@ -602,7 +661,8 @@ int main(int argc, char **argv) {
 
   // Initialize polyscope
   polyscope::init();
-  
+  color_faces();
+  visualize_colored_polyhedra();
   // Set the callback function
   polyscope::state::userCallback = myCallback;
   polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
