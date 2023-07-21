@@ -86,7 +86,7 @@ bool recolor_faces = true,
 bool show_snail_trail = true;
 polyscope::PointCloud *snail_trail_pc;
 polyscope::SurfaceMesh *dummy_ps_mesh_for_snail_trail;
-Vector3 snail_trail_color({0.5,0.5,0.5}),
+Vector3 snail_trail_color({0.8,0.8,0.2}),
         old_g_vec, new_g_vec;
 int snail_trail_dummy_counter =0;
 
@@ -96,7 +96,7 @@ std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
 // draw an arc connecting two points on the sphere; for Gauss map purposes
-void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind, polyscope::SurfaceMesh* hosting_psMesh){
+void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind, polyscope::SurfaceMesh* hosting_psMesh, double radi_scale = 1.){
   // p1, p2 just represent normal vectors
   if (norm(p1) > 1.01 || norm(p2) > 1.01)
     polyscope::warning("wtf? p1, p2 norm larger than 1");
@@ -124,7 +124,7 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, s
     next_point += forward_vec;
   }
   polyscope::SurfaceGraphQuantity* psArcCurve = hosting_psMesh->addSurfaceGraphQuantity("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
-  psArcCurve->setRadius(arc_curve_radi, false);
+  psArcCurve->setRadius(arc_curve_radi * radi_scale, false);
   if (edge_ind < 100)
     psArcCurve->setColor({0.03, 0.03, 0.03});
   else if (edge_ind < 200)
@@ -623,7 +623,7 @@ void myCallback() {
     // snail trail stuff
     snail_trail_dummy_counter = 0;
     std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
-    dummy_psMesh2 = polyscope::registerSurfaceMesh("dummy mesh for gauss map arcs", geometry->inputVertexPositions, dummy_face);
+    dummy_ps_mesh_for_snail_trail = polyscope::registerSurfaceMesh("dummy mesh snail trail", geometry->inputVertexPositions, dummy_face);
   }
   if (ImGui::Button("next state")){
     old_g_vec = forwardSolver.curr_g_vec;
@@ -632,7 +632,8 @@ void myCallback() {
     visualize_g_vec();
     visualize_contact();
     if(show_snail_trail && norm(old_g_vec-new_g_vec) != 0.){ // proly dont have to use tol
-      draw_arc_on_sphere(old_g_vec, new_g_vec, gm_shift, gm_radi, arcs_seg_count, 200 + snail_trail_dummy_counter, dummy_ps_mesh_for_snail_trail);
+      draw_arc_on_sphere(old_g_vec, new_g_vec, gm_shift, gm_radi, arcs_seg_count, 200 + snail_trail_dummy_counter, dummy_ps_mesh_for_snail_trail,
+                         1.5);
       snail_trail_dummy_counter++;
     }
   }
