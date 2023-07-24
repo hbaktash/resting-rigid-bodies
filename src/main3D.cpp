@@ -73,6 +73,9 @@ double gm_distance = 2.1,
 Vector3 gm_shift({0., gm_distance, 0.}),
         colored_shift({0., gm_distance, gm_distance});
 
+glm::vec3 default_arc_color({0.05, 0.05, 0.05}),
+          default_patch_arc_color({0.05, 0.5, 0.5});
+
 int arcs_seg_count = 13,
     arc_counter = 0;
 
@@ -86,8 +89,8 @@ bool recolor_faces = true,
 bool show_snail_trail = true;
 polyscope::PointCloud *snail_trail_pc;
 polyscope::SurfaceMesh *dummy_ps_mesh_for_snail_trail;
-Vector3 snail_trail_color({0.8,0.8,0.2}),
-        old_g_vec, new_g_vec;
+glm::vec3 snail_trail_color({0.8,0.8,0.2});
+Vector3 old_g_vec, new_g_vec;
 int snail_trail_dummy_counter =0;
 
 // example choice
@@ -96,7 +99,8 @@ std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
 // draw an arc connecting two points on the sphere; for Gauss map purposes
-void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind, polyscope::SurfaceMesh* hosting_psMesh, double radi_scale = 1.){
+void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind, polyscope::SurfaceMesh* hosting_psMesh, 
+                        double radi_scale = 1., Vector3 color = Vector3({-1., 0, 0})){
   // p1, p2 just represent normal vectors
   if (norm(p1) > 1.01 || norm(p2) > 1.01)
     polyscope::warning("wtf? p1, p2 norm larger than 1");
@@ -125,12 +129,17 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, s
   }
   polyscope::SurfaceGraphQuantity* psArcCurve = hosting_psMesh->addSurfaceGraphQuantity("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
   psArcCurve->setRadius(arc_curve_radi * radi_scale, false);
-  if (edge_ind < 100)
-    psArcCurve->setColor({0.03, 0.03, 0.03});
-  else if (edge_ind < 200)
-    psArcCurve->setColor({0.05, 0.5, 0.5});
-  else 
-    psArcCurve->setColor({snail_trail_color.x, snail_trail_color.y, snail_trail_color.z});
+  if (color.x == -1.){
+    if (edge_ind < 100)
+      psArcCurve->setColor(default_arc_color);
+    else if (edge_ind < 200)
+      psArcCurve->setColor(default_patch_arc_color);
+    else 
+      psArcCurve->setColor(snail_trail_color);
+  }
+  else {
+    psArcCurve->setColor({color.x, color.y, color.z});
+  }
   psArcCurve->setEnabled(true);
 }
 
@@ -502,10 +511,12 @@ void visualize_colored_polyhedra(){
 void build_raster_image(){
   FaceData<std::vector<Vector3>> face_samples(*forwardSolver.hullMesh);
   int total_invalids = 0;
+  // need to re-iterate later with the same order
+  FaceData<std::vector<Vector3>> initial_rolling_dirs(*forwardSolver.hullMesh);
   for (int i = 0; i < sample_count; i++){
     Vector3 random_g_vec = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
     if (random_g_vec.norm() <= 1){
-      if (i % 2000 == 0)
+      if (i % 5000 == 0)
         printf("$$$ at sample %d\n", i);
       random_g_vec /= norm(random_g_vec);
       Face touching_face = forwardSolver.final_touching_face(random_g_vec);
@@ -513,22 +524,32 @@ void build_raster_image(){
         total_invalids++;
         continue;
       }
+      initial_rolling_dirs[touching_face].push_back(forwardSolver.initial_roll_dir);
       face_samples[touching_face].push_back(random_g_vec);
     }
   }
   printf(" ###### total invalid faces: %d  ######\n", total_invalids);
   std::vector<Vector3> raster_positions,
                        raster_colors;
+  std::vector<Vector3> all_rolling_dirs;
   for (Face f: forwardSolver.hullMesh->faces()){
     std::vector<Vector3> tmp_points = face_samples[f];
     for (Vector3 tmp_p: tmp_points){
       raster_positions.push_back(tmp_p + gm_shift);
       raster_colors.push_back(face_colors[f]);
     }
+    std::vector<Vector3> tmp_rolling_dirs = initial_rolling_dirs[f];
+    for (Vector3 rolling_dir: tmp_rolling_dirs){
+      all_rolling_dirs.push_back(rolling_dir);
+    }
   }
   raster_pc = polyscope::registerPointCloud("raster point cloud", raster_positions);
   polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("random color", raster_colors);
   pc_col_quant->setEnabled(true);
+  polyscope::PointCloudVectorQuantity* raster_pc_vec_field = raster_pc->addVectorQuantity("init roll directions", all_rolling_dirs);
+  raster_pc_vec_field->setEnabled(true);
+  raster_pc_vec_field->setVectorLengthScale(0.05, false);
+  raster_pc_vec_field->setVectorRadius(0.01, false);
 }
 
 
@@ -542,6 +563,7 @@ void color_faces(){
     recolor_faces = false;
   }
 }
+
 
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see

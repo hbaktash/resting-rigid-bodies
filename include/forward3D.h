@@ -29,6 +29,8 @@ class Forward3DSolver {
     Face curr_f;
     Vector3 curr_g_vec;
     bool stable_state = false;
+    // for later display
+    Vector3 initial_roll_dir;
 
     // DP stuff; implicitly using a DAG
     FaceData<Face> next_falling_face;
@@ -65,6 +67,5 @@ class Forward3DSolver {
     // // empirical sampling
     Face final_touching_face(Vector3 initial_ori);
     // void empirically_build_probabilities(int sample_count);
-
 
 };

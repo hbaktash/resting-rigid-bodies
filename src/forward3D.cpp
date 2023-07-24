@@ -29,7 +29,7 @@ void Forward3DSolver::find_contact(Vector3 initial_ori){
             max_inner_product = dot(Gv, initial_ori);
         }
     }
-    
+
     // update state & initialize tracing
     curr_v = contact_point;
     curr_e = Edge();
@@ -38,6 +38,11 @@ void Forward3DSolver::find_contact(Vector3 initial_ori){
     curr_g_vec = initial_ori;
 
     stable_state = false;
+
+    // for vector field visuals
+    Vector3 p = hullGeometry->inputVertexPositions[contact_point];
+    Vector3 G_proj = project_on_plane(G, p, curr_g_vec.normalize()); // project G onto the ground plane going through P
+    initial_roll_dir = (G_proj - p).normalize();
 }
 
 
