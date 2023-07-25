@@ -7,7 +7,7 @@ FaceData<Vector3> generate_random_colors(ManifoldSurfaceMesh *mesh){
   Vector3 holy_vec({exp(1.), PI, 1});
   holy_vec = holy_vec.normalize();
   // init point
-  Vector3 curr_color = {randomReal(0,1), randomReal(0,1), randomReal(0,1)};
+  Vector3 curr_color = {0.8, 0.6, 0.2}; //{randomReal(0,1), randomReal(0,1), randomReal(0,1)};
   for (Face f: mesh->faces()){
     face_colors[f] = curr_color;
     curr_color += holy_vec;

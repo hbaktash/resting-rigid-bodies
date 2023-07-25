@@ -42,7 +42,7 @@ void Forward3DSolver::find_contact(Vector3 initial_ori){
     // for vector field visuals
     Vector3 p = hullGeometry->inputVertexPositions[contact_point];
     Vector3 G_proj = project_on_plane(G, p, curr_g_vec.normalize()); // project G onto the ground plane going through P
-    initial_roll_dir = (G_proj - p).normalize();
+    initial_roll_dir = (G_proj - p);
 }
 
 
@@ -314,6 +314,6 @@ Face Forward3DSolver::final_touching_face(Vector3 initial_ori){
         if (stable_state)
             break;
     }
-    assert(curr_f.getIndex() != INVALID_IND);
+    // assert(curr_f.getIndex() != INVALID_IND);
     return curr_f;
 }
