@@ -77,6 +77,7 @@ set(polyhedra_SRCS
   src/mesh_factory.cpp
   src/geometry_utils.cpp
   src/coloring.cpp
+  src/visual_utils.cpp
 	# add any other source files here
 )
 
@@ -87,6 +88,7 @@ set(bullet_SRCS
   src/geometry_utils.cpp
   src/bullet_sim.cpp
   src/coloring.cpp
+  src/visual_utils.cpp
   # add any other source files here
 )
 

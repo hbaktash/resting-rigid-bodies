@@ -17,6 +17,7 @@
 #include "mesh_factory.h"
 #include "geometry_utils.h"
 #include "bullet_sim.h"
+#include "visual_utils.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -30,13 +31,14 @@ Vector3 G;
 Vector3 refresh_g_vec({0,-1,0});
 
 // stuff for Gauss map
-float arc_curve_radi = 0.01,
-      face_normal_vertex_gm_radi = 0.03,
+float face_normal_vertex_gm_radi = 0.03,
       gm_distance = 2.1,
       gm_radi = 1.;
 int arcs_seg_count = 13;
 Vector3 shift = {0., 0. , gm_distance},
         colored_shift = {0., 0. , -gm_distance};
+float arc_curve_radi = 0.01;
+
 
 double ground_box_y = -3;
 Vector3 ground_box_shape({10,1,10});
@@ -123,42 +125,6 @@ void visualize_colored_polyhedra(){
   faceQnty2->setEnabled(true);
 }
 
-// draw an arc connecting two points on the sphere; for Gauss map purposes
-void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind){
-  // p1, p2 just represent normal vectors
-  if (norm(p1) > 1.01 || norm(p2) > 1.01)
-    polyscope::warning("wtf? p1, p2 norm larger than 1");
-  
-  std::vector<std::array<size_t, 2>> edgeInds;
-  std::vector<Vector3> positions;
-  double sqrt_radi = sqrt(radius);
-  // walk on p1-p2 segment
-  Vector3 curr_point = p1,
-          forward_vec = (p2-p1)/(double)seg_count;
-  Vector3 next_point = curr_point + forward_vec;
-  Vector3 curr_point_on_sphere = normalize(curr_point) * sqrt_radi + center ,
-          next_point_on_sphere = normalize(next_point) * sqrt_radi + center;
-  positions.push_back(curr_point_on_sphere);
-  for (size_t i = 0; i < seg_count; i++){
-    // add to positions list
-    curr_point_on_sphere = normalize(curr_point) * sqrt_radi + center ,
-    next_point_on_sphere = normalize(next_point) * sqrt_radi + center;
-    positions.push_back(next_point_on_sphere);
-    // add segment indices
-    edgeInds.push_back({i, i+1});
-
-    // update points
-    curr_point = next_point;
-    next_point += forward_vec;
-  }
-  polyscope::SurfaceGraphQuantity* psArcCurve = dummy_psMesh2->addSurfaceGraphQuantity("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
-  psArcCurve->setRadius(arc_curve_radi, false);
-  if (edge_ind < 100)
-    psArcCurve->setColor({0.03, 0.03, 0.03});
-  else
-    psArcCurve->setColor({0.05, 0.5, 0.5});
-  psArcCurve->setEnabled(true);
-}
 
 // copying from main polyhedra exec; should proly move these to a sep module
 // TODO check the face normal flipped issue!!!
@@ -199,7 +165,7 @@ void visualize_gauss_map(){
     Vector3 n1 = geometry->faceNormal(f1),
             n2 = geometry->faceNormal(f2);
     // draw with polyscope
-    draw_arc_on_sphere(n1, n2, shift, gm_radi, arcs_seg_count, e.getIndex());
+    draw_arc_on_sphere(n1, n2, shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2);
   }
 }
 
