@@ -466,6 +466,33 @@ void initialize_state_vis(){
 }
 
 
+void color_faces(){
+  if (recolor_faces){
+    face_colors = generate_random_colors(forwardSolver.hullMesh);
+    for (Face f: forwardSolver.hullMesh->faces()){
+      if (!forwardSolver.face_is_stable(f))
+        face_colors[f] = default_face_color;
+    }
+    recolor_faces = false;
+  }
+}
+
+
+void visualize_colored_polyhedra(){
+  VertexData<Vector3> shifted_positions(*forwardSolver.hullMesh);
+  for (Vertex v: forwardSolver.hullMesh->vertices()){
+    shifted_positions[v] = forwardSolver.hullGeometry->inputVertexPositions[v] + colored_shift;
+  }
+  coloredPsMesh = polyscope::registerSurfaceMesh("colored polyhedra", shifted_positions, forwardSolver.hullMesh->getFaceVertexList());
+  // generate random colors and color the faces
+  polyscope::SurfaceFaceColorQuantity *faceQnty = coloredPsMesh->addFaceColorQuantity("random face colors", face_colors);
+  faceQnty->setEnabled(true);
+  // // add colors to the original polyhedra as well?
+  // polyscope::SurfaceFaceColorQuantity *faceQnty2 = psMesh->addFaceColorQuantity("random face colors2", face_colors);
+  // faceQnty2->setEnabled(true);
+}
+
+
 void update_visuals_with_G(){
   forwardSolver.G = G;
   draw_G();
@@ -489,19 +516,6 @@ void update_visuals_with_G(){
     draw_stable_patches_on_gauss_map();
 }
 
-void visualize_colored_polyhedra(){
-  VertexData<Vector3> shifted_positions(*forwardSolver.hullMesh);
-  for (Vertex v: forwardSolver.hullMesh->vertices()){
-    shifted_positions[v] = forwardSolver.hullGeometry->inputVertexPositions[v] + colored_shift;
-  }
-  coloredPsMesh = polyscope::registerSurfaceMesh("colored polyhedra", shifted_positions, forwardSolver.hullMesh->getFaceVertexList());
-  // generate random colors and color the faces
-  polyscope::SurfaceFaceColorQuantity *faceQnty = coloredPsMesh->addFaceColorQuantity("random face colors", face_colors);
-  faceQnty->setEnabled(true);
-  // // add colors to the original polyhedra as well?
-  // polyscope::SurfaceFaceColorQuantity *faceQnty2 = psMesh->addFaceColorQuantity("random face colors2", face_colors);
-  // faceQnty2->setEnabled(true);
-}
 
 // maybe move to another file, to merge with bullet sim; this and some other functions
 // sample and raster; colors should be generated beforehand
@@ -555,16 +569,6 @@ void build_raster_image(){
 }
 
 
-void color_faces(){
-  if (recolor_faces){
-    face_colors = generate_random_colors(forwardSolver.hullMesh);
-    for (Face f: forwardSolver.hullMesh->faces()){
-      if (!forwardSolver.face_is_stable(f))
-        face_colors[f] = default_face_color;
-    }
-    recolor_faces = false;
-  }
-}
 
 
 // A user-defined callback, for creating control panels (etc)

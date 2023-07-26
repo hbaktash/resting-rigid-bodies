@@ -107,22 +107,23 @@ bool Forward3DSolver::edge_is_stablizable(Edge e){
 
 bool Forward3DSolver::face_is_stable(Face f){
     // need to check the 3 dihedral angles
-    // build the base triangle
-    Halfedge he = f.halfedge();
-    Vertex v1 = he.tailVertex(), v2 = he.tipVertex(), v3 = he.next().tipVertex();
-    assert(v1 == he.next().next().tipVertex());
-    Vector3 A = hullGeometry->inputVertexPositions[v1], 
-            B = hullGeometry->inputVertexPositions[v2], 
-            C = hullGeometry->inputVertexPositions[v3];
-    // build compatible normals; dir: A->B->C
-    Vector3 N_base = cross(B - A, C - B),
-            N_GAB  = cross(A - B, G - A),
-            N_GBC  = cross(B - C, G - B),
-            N_GCA  = cross(C - A, G - C);
-    if (dot(N_base, N_GAB) >= 0 ||
-        dot(N_base, N_GBC) >= 0 ||
-        dot(N_base, N_GCA) >= 0)
-        return false;
+    // iterate over all edges of the face and check the dihedral angle
+    Halfedge curr_he = f.halfedge(),
+             first_he = f.halfedge();
+    while (true){
+        Vertex v1 = curr_he.tailVertex(), v2 = curr_he.tipVertex(), v3 = curr_he.next().tipVertex();
+        Vector3 A = hullGeometry->inputVertexPositions[v1], 
+                B = hullGeometry->inputVertexPositions[v2], 
+                C = hullGeometry->inputVertexPositions[v3];
+        // build compatible normals; dir: A->B->C
+        Vector3 N_ABC = cross(B - A, C - B),
+                N_GAB  = cross(A - B, G - A);
+        if (dot(N_ABC, N_GAB) >= 0)
+            return false;
+        curr_he = curr_he.next();
+        if (curr_he == first_he)
+            break;
+    }
     return true;
 }
 
@@ -181,7 +182,8 @@ void Forward3DSolver::edge_to_next(Edge e){
                 rotation_plane_normal = (p2 - p1).normalize();
         // future projections will be onto the rotation plane
 
-        // find immediate neighbors of v1 on the two neigh faces; would be simpler with triangle assumption
+        // find immediate neighbors of v1 on the two neigh faces; 
+        // assuming planar polygonal faces
         Halfedge he = e.halfedge();
         Vertex va = he.prevOrbitFace().tailVertex(), // va is on the he.face()  
                vb = he.twin().next().tipVertex();    // vb is on the twin.face()

@@ -9,6 +9,25 @@ using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 
+class StablePoint {
+  public:
+    Vector3 position;
+    Vertex host_vertex = Vertex();
+    Edge host_edge = Edge();
+    std::vector<StablePoint> adj_stable_points;
+
+    // constructors
+    StablePoint(){}
+    StablePoint(Vertex host_v, Vector3 position);
+    StablePoint(Edge host_e, Vector3 position);
+
+    // ipp stuff
+    bool is_vertex();
+    bool is_edge();
+
+};
+
+
 Vector3 project_on_plane(Vector3 p, Vector3 offset, Vector3 normal);
 
 class Forward3DSolver {
