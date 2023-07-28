@@ -1,12 +1,13 @@
 #include "mesh_factory.h"
 
+
 Vector3 spherical_to_xyz(double r, double phi, double theta){
   return Vector3({r*cos(phi)*sin(theta), r*cos(phi)*cos(theta), r*sin(phi)});
 }
 
-
-
-
+Vector3 cylindrical_to_xyz(double h, double r, double theta){        
+  return Vector3({r*cos(theta), h, r*sin(theta)});
+}
 
 std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
 generate_polyhedra(std::string poly_str){

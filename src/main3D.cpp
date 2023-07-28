@@ -45,7 +45,7 @@ polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1,
                        *coloredPsMesh;
 
 polyscope::PointCloud *psG, // point cloud with single G
-                      *curr_state_pt, 
+                      *curr_state_pt, *curr_g_vec_gm_pt,
                       *gauss_map_pc, *face_normals_pc,
                       *stable_face_normals_pc, *edge_equilibria_pc, *stabilizable_edge_pc, *stable_edge_pc,
                       *stable_vertices_gm_pc, 
@@ -76,7 +76,9 @@ double gm_distance = 2.1,
        gm_radi = 1.0;
 Vector3 gm_shift({0., gm_distance, 0.}),
         colored_shift({gm_distance, gm_distance, 0.});
-bool color_arcs = false;
+bool color_arcs = false,
+     draw_unstable_edge_arcs = true,
+     draw_stable_g_vec_for_unstable_edge_arcs = false;
 
 // arc stuff
 float arc_curve_radi = 0.01;
@@ -174,15 +176,22 @@ void draw_edge_arcs_on_gauss_map(){
             n2 = forwardSolver.hullGeometry->faceNormal(f2);
     // draw with polyscope
     if (color_arcs) {
-      glm::vec3 arc_color = glm::vec3({-1.,0,0});
-      if (forwardSolver.edge_is_stable(e) && forwardSolver.edge_is_stablizable(e))
+      glm::vec3 arc_color = glm::vec3({-1.,0,0}); // default color
+      if (forwardSolver.edge_is_stable(e) && forwardSolver.edge_is_stablizable(e)){
         arc_color = both_edge_color;
-      else if (forwardSolver.edge_is_stablizable(e))
-        arc_color = stabilizable_edge_color;
-      else if (forwardSolver.edge_is_stable(e))
+        draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2, 1., arc_color);
+      }
+      else if (forwardSolver.edge_is_stable(e)){
         arc_color = stable_edge_color;
-      draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2, 1., arc_color); // default color
-    } // else
+        draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2, 1., arc_color);
+      }
+      else if (draw_unstable_edge_arcs) {
+        if (forwardSolver.edge_is_stablizable(e))
+          arc_color = stabilizable_edge_color;
+        
+        draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2, 1., arc_color);
+      }
+    } // else; draw all arcs with black
     else {
       draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2); // default color
     }
@@ -255,15 +264,17 @@ void show_edge_equilibria_on_gauss_map(){
   edge_equilibria_pc->setPointColor({0.2, 0.2, 0.9});
   edge_equilibria_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 
-  stabilizable_edge_pc = polyscope::registerPointCloud("Stabilizable Edge equilibria", stabilizable_edge_equilibria_points);
-  stabilizable_edge_pc->setPointRadius(face_normal_vertex_gm_radi, false);
-  stabilizable_edge_pc->setPointColor(stabilizable_edge_color);
-  stabilizable_edge_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  if (draw_stable_g_vec_for_unstable_edge_arcs){
+    stabilizable_edge_pc = polyscope::registerPointCloud("Stabilizable Edge equilibria", stabilizable_edge_equilibria_points);
+    stabilizable_edge_pc->setPointRadius(face_normal_vertex_gm_radi, false);
+    stabilizable_edge_pc->setPointColor(stabilizable_edge_color);
+    stabilizable_edge_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 
-  stable_edge_pc = polyscope::registerPointCloud("stable Edge equilibria", stable_edge_equilibria_points);
-  stable_edge_pc->setPointRadius(face_normal_vertex_gm_radi, false);
-  stable_edge_pc->setPointColor(stable_edge_color);
-  stable_edge_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+    stable_edge_pc = polyscope::registerPointCloud("stable Edge equilibria", stable_edge_equilibria_points);
+    stable_edge_pc->setPointRadius(face_normal_vertex_gm_radi, false);
+    stable_edge_pc->setPointColor(stable_edge_color);
+    stable_edge_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  }
 }
 
 
@@ -289,14 +300,12 @@ void update_solver(){
   for (Vertex v: forwardSolver.hullMesh->vertices()){
     forwardSolver.hullGeometry->inputVertexPositions[v] = geometry->inputVertexPositions[v.getIndex()];
   }
-  // forwardSolver.compute_vertex_probabilities();
-
   // Register the mesh with polyscope
   psInputMesh = polyscope::registerSurfaceMesh(
       "input mesh",
       geometry->inputVertexPositions, mesh->getFaceVertexList(),
       polyscopePermutations(*mesh));
-  psInputMesh->setTransparency(0.85);
+  psInputMesh->setTransparency(0.75);
   draw_G();
 }
 
@@ -410,6 +419,7 @@ void visualize_g_vec(){
   psG_vec->setEnabled(true);
   psG_vec->setVectorRadius(curve_radi_scale * 1.);
   psG_vec->setVectorLengthScale(0.2);
+  psG_vec->setVectorColor({0.,0.,0.});
 }
 
 
@@ -420,10 +430,18 @@ void visualize_contact(){
   // add the other two
   if (forwardSolver.curr_v.getIndex() != INVALID_IND) {
     printf("at Vertex\n");
+    // show contact vertex on polyhedra
     std::vector<Vector3> curr_state_pos = {forwardSolver.hullGeometry->inputVertexPositions[forwardSolver.curr_v]}; // first and second should be the same since we just initialized.
     curr_state_pt = polyscope::registerPointCloud("current Vertex", curr_state_pos);
     curr_state_pt->setEnabled(true);
     curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
+    
+    // show gravity vec on Gauss Map
+    std::vector<Vector3> curr_g_vec_pos = {forwardSolver.curr_g_vec + gm_shift}; // first and second should be the same since we just initialized.
+    curr_g_vec_gm_pt = polyscope::registerPointCloud("current g vec", curr_g_vec_pos);
+    curr_g_vec_gm_pt->setEnabled(true);
+    curr_g_vec_gm_pt->setPointRadius(face_normal_vertex_gm_radi*1.1, false);
+    curr_g_vec_gm_pt->setPointColor({0.,0.,0.});
   }
   else if (forwardSolver.curr_e.getIndex() != INVALID_IND){
     printf("at Edge\n");
@@ -640,6 +658,8 @@ void myCallback() {
     visualize_gauss_map();
   }
   if (ImGui::Checkbox("colored arcs (slows)", &color_arcs));
+  if (ImGui::Checkbox("draw unstable edge arcs", &draw_unstable_edge_arcs)) draw_edge_arcs_on_gauss_map();
+  if (ImGui::Checkbox("show to-be stable g_vec for unstable edge arcs", &draw_stable_g_vec_for_unstable_edge_arcs)) show_edge_equilibria_on_gauss_map();
 
   if (ImGui::Button("Draw patches")){
     draw_stable_patches_on_gauss_map();

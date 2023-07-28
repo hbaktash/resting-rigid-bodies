@@ -1,6 +1,31 @@
 #include "forward3D.h"
 
+// stable point functions
 
+// constructors
+StablePoint::StablePoint(Vertex host_v, Vector3 _position){
+    this->host_vertex = host_v;
+    this->position = _position;
+    this->host_edge = Edge();
+}
+
+StablePoint::StablePoint(Edge host_e, Vector3 _position){
+    this->host_edge = host_e;
+    this->position = _position;
+    this->host_vertex = Vertex();
+}
+
+// ipp stuff
+bool StablePoint::is_vertex(){
+    return host_vertex.getIndex() != INVALID_IND; // and assuming edge is kept invalid
+}
+
+bool StablePoint::is_edge(){
+    return host_edge.getIndex() != INVALID_IND; // and assuming edge is kept invalid
+}
+
+
+// forward solver functions
 
 Vector3 project_on_plane(Vector3 point, Vector3 offset, Vector3 normal){
     Vector3 unit_normal = normal.normalize();

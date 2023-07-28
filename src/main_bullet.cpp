@@ -40,7 +40,7 @@ Vector3 shift = {0., 0. , gm_distance},
 float arc_curve_radi = 0.01;
 
 
-double ground_box_y = -3;
+double ground_box_y = -2;
 Vector3 ground_box_shape({10,1,10});
 
 polyscope::SlicePlane* psPlane;

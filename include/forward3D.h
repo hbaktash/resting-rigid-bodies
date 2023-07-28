@@ -24,11 +24,11 @@ class StablePoint {
     // ipp stuff
     bool is_vertex();
     bool is_edge();
-
 };
 
 
 Vector3 project_on_plane(Vector3 p, Vector3 offset, Vector3 normal);
+
 
 class Forward3DSolver {
 
@@ -52,9 +52,9 @@ class Forward3DSolver {
     Vector3 initial_roll_dir;
 
     // DP stuff; implicitly using a DAG
-    FaceData<Face> next_falling_face;
     VertexData<double> vertex_probabilities;
-    
+    FaceData<Face> next_falling_face;
+
     // for debugging purposes
     Vector3 tmp_test_vec;
 
