@@ -297,32 +297,34 @@ void Forward3DSolver::next_state(){
         printf(" &&&& already at a stable state! &&&&\n");
         return;
     }
-    
+    printf("here???\n");
     int status_check = (curr_v.getIndex() != INVALID_IND) + (curr_e.getIndex() != INVALID_IND) + (curr_f.getIndex() != INVALID_IND);
     // printf("test for bool addition %d\n", status_check);
     assert(status_check <= 1); // either not initiated (0) or only one valid (1)
     if (curr_v.getIndex() != INVALID_IND){
-        // printf(" STATUS: at vertex %d\n", curr_v.getIndex());
+        printf(" STATUS: at vertex %d\n", curr_v.getIndex());
         Vertex old_v = curr_v;
         vertex_to_next(curr_v);
         if (curr_v == old_v){
             printf("Vertex %d is stable?!!??!\n", curr_v.getIndex());
+            stable_state = true;
             return;
         }
     }
     else if (curr_e.getIndex() != INVALID_IND){
-        // printf(" STATUS: at edge %d: %d, %d\n", curr_e.getIndex(), curr_e.firstVertex().getIndex(), curr_e.secondVertex().getIndex());
+        printf(" STATUS: at edge %d: %d, %d\n", curr_e.getIndex(), curr_e.firstVertex().getIndex(), curr_e.secondVertex().getIndex());
         Edge old_e = curr_e;
         edge_to_next(curr_e);
         if (curr_e == old_e){
             printf("Edge %d is stable?!!??!\n", curr_e.getIndex());
+            stable_state = true;
             return;
         }
     }
     else if (curr_f.getIndex() != INVALID_IND){
         Face old_f = Face(curr_f); // TODO: do I have to do this?
         Halfedge he = curr_f.halfedge();
-        // printf(" STATUS: at face %d: %d, %d, %d, ..\n", old_f.getIndex(), he.tailVertex().getIndex(), he.tipVertex().getIndex(), he.next().tipVertex().getIndex());
+        printf(" STATUS: at face %d: %d, %d, %d, ..\n", old_f.getIndex(), he.tailVertex().getIndex(), he.tipVertex().getIndex(), he.next().tipVertex().getIndex());
         face_to_next(curr_f);
         if (curr_f == old_f){
             stable_state = true;

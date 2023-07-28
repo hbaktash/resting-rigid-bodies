@@ -48,7 +48,7 @@ polyscope::PointCloud *psG, // point cloud with single G
                       *curr_state_pt, *curr_g_vec_gm_pt,
                       *gauss_map_pc, *face_normals_pc,
                       *stable_face_normals_pc, *edge_equilibria_pc, *stabilizable_edge_pc, *stable_edge_pc,
-                      *stable_vertices_gm_pc, 
+                      *stable_vertices_gm_pc, *hidden_stable_vertices_gm_pc,
                       *raster_pc;
 
 polyscope::SurfaceGraphQuantity* curr_state_segment;
@@ -78,7 +78,8 @@ Vector3 gm_shift({0., gm_distance, 0.}),
         colored_shift({gm_distance, gm_distance, 0.});
 bool color_arcs = false,
      draw_unstable_edge_arcs = true,
-     draw_stable_g_vec_for_unstable_edge_arcs = false;
+     draw_stable_g_vec_for_unstable_edge_arcs = false,
+     show_hidden_stable_vertex_normals = true;
 
 // arc stuff
 float arc_curve_radi = 0.01;
@@ -133,16 +134,27 @@ void draw_stable_patches_on_gauss_map(){
 
 void draw_stable_vertices_on_gauss_map(){
   Vector3 shift = {0., gm_distance, 0.};
-  std::vector<Vector3> stable_vertices;
+  std::vector<Vector3> stable_vertices, hidden_stable_vertices;
   for (Vertex v: forwardSolver.hullMesh->vertices()){
     if (forwardSolver.vertex_is_stablizable(v)){
       stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G)+shift);
+    }
+    else {
+      hidden_stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G)+shift);
     }
   }
   stable_vertices_gm_pc = polyscope::registerPointCloud("stable Vertices Normals", stable_vertices);
   stable_vertices_gm_pc->setPointRadius(pt_cloud_stablizable_radi, false);
   stable_vertices_gm_pc->setPointColor({0.1,0.9,0.1});
   stable_vertices_gm_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+
+  // hidden stable vertices
+  if (show_hidden_stable_vertex_normals){
+    hidden_stable_vertices_gm_pc = polyscope::registerPointCloud("hidden stable Vertices Normals", hidden_stable_vertices);
+    hidden_stable_vertices_gm_pc->setPointRadius(pt_cloud_stablizable_radi, false);
+    hidden_stable_vertices_gm_pc->setPointColor({0.1,0.5,0.1});
+    hidden_stable_vertices_gm_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  }
 }
 
 
@@ -419,7 +431,7 @@ void visualize_g_vec(){
   psG_vec->setEnabled(true);
   psG_vec->setVectorRadius(curve_radi_scale * 1.);
   psG_vec->setVectorLengthScale(0.2);
-  psG_vec->setVectorColor({0.,0.,0.});
+  psG_vec->setVectorColor({0.8,0.1,0.1});
 }
 
 
@@ -548,7 +560,9 @@ void build_raster_image(){
       if (i % 5000 == 0)
         printf("$$$ at sample %d\n", i);
       random_g_vec /= norm(random_g_vec);
+      printf("here1\n");
       Face touching_face = forwardSolver.final_touching_face(random_g_vec);
+      printf("here2\n");
       if (touching_face.getIndex() == INVALID_IND){
         total_invalids++;
         continue;
@@ -660,7 +674,8 @@ void myCallback() {
   if (ImGui::Checkbox("colored arcs (slows)", &color_arcs));
   if (ImGui::Checkbox("draw unstable edge arcs", &draw_unstable_edge_arcs)) draw_edge_arcs_on_gauss_map();
   if (ImGui::Checkbox("show to-be stable g_vec for unstable edge arcs", &draw_stable_g_vec_for_unstable_edge_arcs)) show_edge_equilibria_on_gauss_map();
-
+  if (ImGui::Checkbox("show hidden stable vertex normals", &show_hidden_stable_vertex_normals)) draw_stable_vertices_on_gauss_map();
+  
   if (ImGui::Button("Draw patches")){
     draw_stable_patches_on_gauss_map();
   }
