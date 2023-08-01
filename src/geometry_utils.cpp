@@ -4,6 +4,20 @@ double signed_volume(Vector3 a, Vector3 b, Vector3 c, Vector3 d){
     return (1.0/6.0)*dot(cross(b-a,c-a),d-a);
 }
 
+// check if G is inside the polyehdra (positive mass)
+bool G_is_inside(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry, Vector3 G){
+    return true;
+    for (Face f : mesh.faces()){
+        // assuming planar faces
+        Vertex v = f.halfedge().vertex();
+        Vector3 p = geometry.inputVertexPositions[v];
+        // assuming outward face normals
+        if(dot(p - G, geometry.faceNormal(f)) <= 0.)
+            return false;
+    }
+    return true;
+}
+
 Vector3 find_center_of_mass(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry){
     Vector3 O({0.,0.,0.}); // could be anywhere
     Vector3 G({0.,0.,0.});

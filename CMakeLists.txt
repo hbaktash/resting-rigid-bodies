@@ -78,6 +78,7 @@ set(polyhedra_SRCS
   src/geometry_utils.cpp
   src/coloring.cpp
   src/visual_utils.cpp
+  src/markov_model.cpp
 	# add any other source files here
 )
 

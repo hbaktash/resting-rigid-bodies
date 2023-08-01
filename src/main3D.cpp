@@ -104,7 +104,7 @@ Vector3 old_g_vec, new_g_vec;
 int snail_trail_dummy_counter =0;
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet")};
+std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
@@ -154,6 +154,10 @@ void draw_stable_vertices_on_gauss_map(){
     hidden_stable_vertices_gm_pc->setPointRadius(pt_cloud_stablizable_radi, false);
     hidden_stable_vertices_gm_pc->setPointColor({0.1,0.5,0.1});
     hidden_stable_vertices_gm_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  }
+  else {
+    if (polyscope::hasPointCloud("hidden stable Vertices Normals"))
+      polyscope::removePointCloud("hidden stable Vertices Normals");
   }
 }
 
@@ -287,6 +291,12 @@ void show_edge_equilibria_on_gauss_map(){
     stable_edge_pc->setPointColor(stable_edge_color);
     stable_edge_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
   }
+  else{
+    if (polyscope::hasPointCloud("stable Edge equilibria"))
+      polyscope::removePointCloud("stable Edge equilibria");
+    if (polyscope::hasPointCloud("Stabilizable Edge equilibria"))
+      polyscope::removePointCloud("Stabilizable Edge equilibria");
+  }
 }
 
 
@@ -305,13 +315,8 @@ void draw_G() {
 }
 
 void update_solver(){
-  forwardSolver = Forward3DSolver(mesh, geometry, G);
   //assuming convex input here
-  forwardSolver.hullMesh = new ManifoldSurfaceMesh(mesh->getFaceVertexList()); //mesh->copy().release();
-  forwardSolver.hullGeometry = new VertexPositionGeometry(*forwardSolver.hullMesh); // geometry->copy().release();
-  for (Vertex v: forwardSolver.hullMesh->vertices()){
-    forwardSolver.hullGeometry->inputVertexPositions[v] = geometry->inputVertexPositions[v.getIndex()];
-  }
+  forwardSolver = Forward3DSolver(mesh, geometry, G);
   // Register the mesh with polyscope
   psInputMesh = polyscope::registerSurfaceMesh(
       "input mesh",
@@ -654,12 +659,13 @@ void myCallback() {
       ImGui::SliderFloat("G theta", &G_theta, 0., 2*PI)||
       ImGui::SliderFloat("G phi", &G_phi, 0., 2*PI)) {
     G = {cos(G_phi)*sin(G_theta)*G_r, cos(G_phi)*cos(G_theta)*G_r, sin(G_phi)*G_r};
-    update_visuals_with_G();
-    if (real_time_raster){
-      color_faces();
-      build_raster_image();
+    if (G_is_inside(*forwardSolver.hullMesh, *forwardSolver.hullGeometry, G)){
+      update_visuals_with_G();
+      if (real_time_raster){
+        color_faces();
+        build_raster_image();
+      }
     }
-    // build_raster_image();
   }
   if (ImGui::Button("uniform mass G")){
     G = find_center_of_mass(*mesh, *geometry);

@@ -1,32 +1,7 @@
 #include "forward3D.h"
 
-// stable point functions
-
-// constructors
-StablePoint::StablePoint(Vertex host_v, Vector3 _position){
-    this->host_vertex = host_v;
-    this->position = _position;
-    this->host_edge = Edge();
-}
-
-StablePoint::StablePoint(Edge host_e, Vector3 _position){
-    this->host_edge = host_e;
-    this->position = _position;
-    this->host_vertex = Vertex();
-}
-
-// ipp stuff
-bool StablePoint::is_vertex(){
-    return host_vertex.getIndex() != INVALID_IND; // and assuming edge is kept invalid
-}
-
-bool StablePoint::is_edge(){
-    return host_edge.getIndex() != INVALID_IND; // and assuming edge is kept invalid
-}
-
 
 // forward solver functions
-
 Vector3 project_on_plane(Vector3 point, Vector3 offset, Vector3 normal){
     Vector3 unit_normal = normal.normalize();
     return point + unit_normal * dot(offset - point, unit_normal);
@@ -35,16 +10,24 @@ Vector3 project_on_plane(Vector3 point, Vector3 offset, Vector3 normal){
 
 Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPositionGeometry* inputGeo_,
                              Vector3 inputG_){
-    mesh = inputMesh_;
-    geometry = inputGeo_;
+    hullMesh = inputMesh_;
+    hullGeometry = inputGeo_;
     G = inputG_;
 }
 
+// initialize state holders
+void Forward3DSolver::initialize_state(Vertex curr_v_, Edge curr_e_, Face curr_f_, Vector3 curr_g_vec_){
+    curr_v = curr_v_;
+    curr_e = curr_e_;
+    curr_f = curr_f_;
+    curr_g_vec = curr_g_vec_;
+    stable_state = face_is_stable(curr_f); // null-ness is checked inside the function
+}
 
 // find initial contact and basically refresh the current state
 void Forward3DSolver::find_contact(Vector3 initial_ori){
     // just find the max inner product with the g_vec 
-    Vertex contact_point = mesh->vertex(0);
+    Vertex contact_point = hullMesh->vertex(0);
     double max_inner_product = 0.; // smth should be positive, if we choose a ref inside the convex hull
     for (Vertex v: hullMesh->vertices()){
         Vector3 pos = hullGeometry->inputVertexPositions[v];
@@ -131,6 +114,8 @@ bool Forward3DSolver::edge_is_stablizable(Edge e){
 
 
 bool Forward3DSolver::face_is_stable(Face f){
+    if (f.getIndex() == INVALID_IND)
+        return false;
     // need to check the 3 dihedral angles
     // iterate over all edges of the face and check the dihedral angle
     Halfedge curr_he = f.halfedge(),
@@ -140,8 +125,8 @@ bool Forward3DSolver::face_is_stable(Face f){
         Vector3 A = hullGeometry->inputVertexPositions[v1], 
                 B = hullGeometry->inputVertexPositions[v2], 
                 C = hullGeometry->inputVertexPositions[v3];
-        // build compatible normals; dir: A->B->C
-        Vector3 N_ABC = cross(B - A, C - B),
+        // assume outward normals!
+        Vector3 N_ABC = hullGeometry->faceNormal(f),// cross(B - A, C - B),
                 N_GAB  = cross(A - B, G - A);
         if (dot(N_ABC, N_GAB) >= 0)
             return false;
@@ -328,6 +313,7 @@ void Forward3DSolver::next_state(){
         face_to_next(curr_f);
         if (curr_f == old_f){
             stable_state = true;
+            return;
         }
     }
     else {
@@ -338,6 +324,7 @@ void Forward3DSolver::next_state(){
 
 Face Forward3DSolver::final_touching_face(Vector3 initial_ori){
     find_contact(initial_ori);
+    printf(" Found contact! \n");
     while(true){
         next_state();
         if (stable_state)

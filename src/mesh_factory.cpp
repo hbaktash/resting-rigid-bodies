@@ -83,6 +83,48 @@ generate_polyhedra(std::string poly_str){
                {1, 4, 2},
                {1, 5, 7}};
     }
+    else if (std::strcmp(poly_str.c_str(), "Conway spiral 4") == 0){
+      // from https://arxiv.org/abs/2103.13727
+      std::vector<double> angles({66.173, 44.519, 29.875, 19.716, 19.716});
+      size_t tip_ind = 5 * 4 + 1 - 1;// 21 vertices total
+      double tmp_r = 1.,
+             tmp_theta = 0.;
+      for (size_t i = 0; i < 4; i++){ // the 2d spiral
+        double tmp_alpha = angles[i]*PI/180.;
+        tmp_theta += tmp_alpha;
+        printf("tmp theta %f\n", tmp_theta);
+        tmp_r *= cos(tmp_alpha);
+        double cyli_r = tmp_r * sin(tmp_theta),
+               cyli_h = tmp_r * cos(tmp_theta);
+        for (size_t j = 0; j < 5; j++){ // rotation along an axis by PI/5
+          double cyli_theta = (double)j * 2.* PI/ 5.;
+          positions.push_back(cylindrical_to_xyz(cyli_h, cyli_r, cyli_theta));
+          size_t ind = 5 * i + j,
+                 next_ind = 5 * i + ((j+1) % 5); 
+          if (i == 0){
+            faces.push_back({ind, tip_ind, next_ind});
+          }
+          else {
+            faces.push_back({next_ind, ind, ind - 5, next_ind - 5});
+          }
+        }
+      }
+      // bottom face
+      faces.push_back({15,16,17,18,19});
+      // faces.push_back({19,18,17,16,15});
+      // tip vertex location
+      positions.push_back(cylindrical_to_xyz(1., 0., 0.));
+
+      for (std::vector<size_t> f: faces){
+        for (size_t ind: f){
+          printf(" %d,", ind);
+        }
+        printf("\n");
+      }
+      for (Vector3 pos: positions){
+        std::cout << "pos: " << pos << "\n";
+      }
+    }
     else if (std::strcmp(poly_str.c_str(), "rndbs 6-gon 1") == 0){
     }
     else if (std::strcmp(poly_str.c_str(), "rndbs 9-gon 1") == 0){

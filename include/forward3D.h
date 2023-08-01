@@ -8,47 +8,23 @@
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
-
-class StablePoint {
-  public:
-    Vector3 position;
-    Vertex host_vertex = Vertex();
-    Edge host_edge = Edge();
-    std::vector<StablePoint> adj_stable_points;
-
-    // constructors
-    StablePoint(){}
-    StablePoint(Vertex host_v, Vector3 position);
-    StablePoint(Edge host_e, Vector3 position);
-
-    // ipp stuff
-    bool is_vertex();
-    bool is_edge();
-};
-
-
 Vector3 project_on_plane(Vector3 p, Vector3 offset, Vector3 normal);
-
 
 class Forward3DSolver {
 
   public:
-    //input goemetry (a polyhedra) and center of mass
+    //input convex goemetry (a polyhedra) and center of mass
     Vector3 G;
-    ManifoldSurfaceMesh* mesh;
-    VertexPositionGeometry* geometry;
-
-    // convex hull geometry; another polyhedra
     ManifoldSurfaceMesh* hullMesh;
     VertexPositionGeometry* hullGeometry;
 
-    // current state; simulation 
+    // current state; for simulation 
     Vertex curr_v;
     Edge curr_e;
     Face curr_f;
     Vector3 curr_g_vec;
     bool stable_state = false;
-    // for later display
+    // for later vector field display
     Vector3 initial_roll_dir;
 
     // DP stuff; implicitly using a DAG
@@ -62,6 +38,8 @@ class Forward3DSolver {
     Forward3DSolver() {}
     Forward3DSolver(ManifoldSurfaceMesh* inputMesh, VertexPositionGeometry* inputGeo, Vector3 G);
 
+    // initialize state
+    void initialize_state(Vertex curr_v, Edge curr_e, Face curr_f, Vector3 curr_g_vec);
     // find initial contact vertex
     void find_contact(Vector3 initial_ori);
 
