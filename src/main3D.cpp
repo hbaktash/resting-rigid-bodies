@@ -152,7 +152,7 @@ void draw_stable_vertices_on_gauss_map(){
   if (show_hidden_stable_vertex_normals){
     hidden_stable_vertices_gm_pc = polyscope::registerPointCloud("hidden stable Vertices Normals", hidden_stable_vertices);
     hidden_stable_vertices_gm_pc->setPointRadius(pt_cloud_stablizable_radi, false);
-    hidden_stable_vertices_gm_pc->setPointColor({0.1,0.5,0.1});
+    hidden_stable_vertices_gm_pc->setPointColor({0.03,0.4,0.03});
     hidden_stable_vertices_gm_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
   }
   else {
