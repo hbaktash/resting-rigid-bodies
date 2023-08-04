@@ -42,15 +42,29 @@ class RollingMarkovModel {
         RollingMarkovModel(Forward3DSolver *forward_solver_);
         RollingMarkovModel(ManifoldSurfaceMesh* mesh_, VertexPositionGeometry* geometry_, Vector3 G_);
 
-        // for building the actual Markov model
-        VertexData<bool> vertex_stabilizablity;
-        HalfedgeData<SudoFace*> first_sudo_face; // null on the sink side, potent on the source side; if both not null, then we got a stabilizable edge (edge singularity)
+        // ---  one-time computable quantities ---
+
+        // whether the stable point can be reached or not
+        VertexData<bool> vertex_stabilizablity; 
+        VertexData<Vector3> vertex_stable_normal; 
+        void compute_vertex_stabilizablity();
+        // either reachable or un-reachable; inferable from _vertex_stabilizability_
+        // edge rolls to a face if singular; else rolls to a vertex
+        EdgeData<bool> edge_is_singular; 
+        void compute_edge_is_singular();
+        // is 0 , if the normal is unreachable, or doesnt fall on the edge (edge too short)
+        EdgeData<Vector3> edge_stable_normal; 
+        void compute_edge_stable_normal();
+
+
+        // deviding arcs t SudoEdges; Markov chain edge surgery
+        HalfedgeData<SudoFace*> root_sudo_face; // trivial (or null??) on the sink side, potent on the source side (aligned with flow dir); if both not null, then we got a stabilizable edge (edge singularity)
 
         // deterministic routes; assuming G is inside (positive mass), o.w. it won't be a DAG (will have loops)
         FaceData<Face> face_to_face; // might need to roll through a bunch of edges before getting to next face
         EdgeData<Face> edge_to_face;
-        // probabilistic routes
-        VertexData<std::vector<std::pair<Edge, double>>> vertex_to_edge_prob;
-        EdgeData<std::vector<std::pair<Edge, double>>> edge_to_edge_prob;
+        // probabilistic routes; only local routes (size-2 chains)
+        double vertex_to_edge_prob(Vertex v, Edge e);
+        double edge_to_edge_prob(Edge e1, Edge e2);
 
 };

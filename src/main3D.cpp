@@ -61,13 +61,14 @@ float pt_cloud_radi_scale = 0.1,
       g_vec_theta = 0.,
       g_vec_phi = 0.;
 
-float stable_edge_radi = 0.0,
+float stable_edge_radi = 0.007,
       stablizable_edge_radi = 0.009,
       both_edge_radi = 0.013,
       pt_cloud_stablizable_radi = 0.03,
       face_normal_vertex_gm_radi = 0.03;
 glm::vec3 stable_edge_color({0.2, 0.3, 0.3}),
-          stabilizable_edge_color({0.1, 0.4, 0.6}),
+          stabilizable_edge_color({0.05, 0.05, 0.05}),
+          // stabilizable_edge_color({0.1, 0.4, 0.6}),
           both_edge_color({0.1, 0.1, 0.8});
 
 
@@ -79,7 +80,8 @@ Vector3 gm_shift({0., gm_distance, 0.}),
 bool color_arcs = false,
      draw_unstable_edge_arcs = true,
      draw_stable_g_vec_for_unstable_edge_arcs = false,
-     show_hidden_stable_vertex_normals = true;
+     show_hidden_stable_vertex_normals = true,
+     draw_stable_patches = false;
 
 // arc stuff
 float arc_curve_radi = 0.01;
@@ -101,7 +103,7 @@ bool show_snail_trail = true;
 polyscope::PointCloud *snail_trail_pc;
 polyscope::SurfaceMesh *dummy_ps_mesh_for_snail_trail;
 Vector3 old_g_vec, new_g_vec;
-int snail_trail_dummy_counter =0;
+int snail_trail_dummy_counter = 0;
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4")};
@@ -112,21 +114,22 @@ static const char* all_polygons_current_item_c_str = "tet";
 void draw_stable_patches_on_gauss_map(){
   std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
   dummy_psMesh_for_patches = polyscope::registerSurfaceMesh("dummy mesh for patch arcs", geometry->inputVertexPositions, dummy_face);
-  
-  arc_counter = 0;
-  for (Edge e: forwardSolver.hullMesh->edges()){
-    for (Vertex v: e.adjacentVertices()){
-      if (forwardSolver.edge_is_stable(e) && forwardSolver.edge_is_stablizable(e) &&
-          forwardSolver.vertex_is_stablizable(v)){
-        Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
-        Vector3 A = forwardSolver.hullGeometry->inputVertexPositions[v1], B = forwardSolver.hullGeometry->inputVertexPositions[v2];
-        Vector3 GB = B - G,
-                AB = B - A;
-        Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
-        Vector3 v_stable_vec = forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G;
-        draw_arc_on_sphere(normalize(ortho_g), normalize(v_stable_vec), gm_shift, gm_radi, arcs_seg_count, 100 + arc_counter, dummy_psMesh_for_patches, 1., 
-                           color_arcs ? patch_arc_fancy_color : glm::vec3({-1.,0,0})); // fancy color if coloring edge arcs
-        arc_counter++;
+  if (draw_stable_patches){
+    arc_counter = 0;
+    for (Edge e: forwardSolver.hullMesh->edges()){
+      for (Vertex v: e.adjacentVertices()){
+        if (forwardSolver.edge_is_stable(e) && forwardSolver.edge_is_stablizable(e) &&
+            forwardSolver.vertex_is_stablizable(v)){
+          Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
+          Vector3 A = forwardSolver.hullGeometry->inputVertexPositions[v1], B = forwardSolver.hullGeometry->inputVertexPositions[v2];
+          Vector3 GB = B - G,
+                  AB = B - A;
+          Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
+          Vector3 v_stable_vec = forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G;
+          draw_arc_on_sphere(normalize(ortho_g), normalize(v_stable_vec), gm_shift, gm_radi, arcs_seg_count, 100 + arc_counter, dummy_psMesh_for_patches, 1., 
+                            color_arcs ? patch_arc_fancy_color : glm::vec3({-1.,0,0})); // fancy color if coloring edge arcs
+          arc_counter++;
+        }
       }
     }
   }
@@ -204,7 +207,6 @@ void draw_edge_arcs_on_gauss_map(){
       else if (draw_unstable_edge_arcs) {
         if (forwardSolver.edge_is_stablizable(e))
           arc_color = stabilizable_edge_color;
-        
         draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2, 1., arc_color);
       }
     } // else; draw all arcs with black
@@ -547,7 +549,7 @@ void update_visuals_with_G(){
   draw_stable_vertices_on_gauss_map();
   show_edge_equilibria_on_gauss_map();
   draw_stable_face_normals_on_gauss_map();
-  if (polyscope::hasSurfaceMesh("dummy mesh for gauss map arcs"))
+  if (polyscope::hasSurfaceMesh("dummy mesh for gauss map arcs") && draw_stable_patches)
     draw_stable_patches_on_gauss_map();
 }
 
@@ -565,9 +567,7 @@ void build_raster_image(){
       if (i % 5000 == 0)
         printf("$$$ at sample %d\n", i);
       random_g_vec /= norm(random_g_vec);
-      printf("here1\n");
       Face touching_face = forwardSolver.final_touching_face(random_g_vec);
-      printf("here2\n");
       if (touching_face.getIndex() == INVALID_IND){
         total_invalids++;
         continue;
@@ -671,17 +671,19 @@ void myCallback() {
     G = find_center_of_mass(*mesh, *geometry);
     update_visuals_with_G();
   }
-  if (ImGui::Button("Show Gauss Map") || 
-      ImGui::SliderInt("seg count for arcs", &arcs_seg_count, 1, 100)||
-      ImGui::SliderFloat("arc curve radi", &arc_curve_radi, 0., 0.04)||
-      ImGui::SliderFloat("face normal vertex radi", &face_normal_vertex_gm_radi, 0., 0.04)){///face_normal_vertex_gm_radi
+  if (ImGui::Button("Show Gauss Map") 
+      // || 
+      // ImGui::SliderInt("seg count for arcs", &arcs_seg_count, 1, 100)||
+      // ImGui::SliderFloat("arc curve radi", &arc_curve_radi, 0., 0.04)||
+      // ImGui::SliderFloat("face normal vertex radi", &face_normal_vertex_gm_radi, 0., 0.04)
+      ){///face_normal_vertex_gm_radi
     visualize_gauss_map();
   }
   if (ImGui::Checkbox("colored arcs (slows)", &color_arcs));
   if (ImGui::Checkbox("draw unstable edge arcs", &draw_unstable_edge_arcs)) draw_edge_arcs_on_gauss_map();
   if (ImGui::Checkbox("show to-be stable g_vec for unstable edge arcs", &draw_stable_g_vec_for_unstable_edge_arcs)) show_edge_equilibria_on_gauss_map();
   if (ImGui::Checkbox("show hidden stable vertex normals", &show_hidden_stable_vertex_normals)) draw_stable_vertices_on_gauss_map();
-  
+  if (ImGui::Checkbox("draw stable patches", &draw_stable_patches)) draw_stable_patches_on_gauss_map();
   if (ImGui::Button("Draw patches")){
     draw_stable_patches_on_gauss_map();
   }

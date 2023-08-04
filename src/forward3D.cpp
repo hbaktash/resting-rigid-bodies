@@ -7,6 +7,12 @@ Vector3 project_on_plane(Vector3 point, Vector3 offset, Vector3 normal){
     return point + unit_normal * dot(offset - point, unit_normal);
 }
 
+Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B){
+    Vector3 PB = B - P,
+            AB = B - A;
+    Vector3 ortho_p = PB - AB*dot(AB, PB)/dot(AB,AB);
+    return ortho_p;
+}
 
 Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPositionGeometry* inputGeo_,
                              Vector3 inputG_){
@@ -82,7 +88,9 @@ bool Forward3DSolver::edge_is_stable(Edge e){
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 p1 = hullGeometry->inputVertexPositions[v1], p2 = hullGeometry->inputVertexPositions[v2];
     if (dot(G - p1, p2-p1) <= 0 ||
-        dot(G - p2, p1-p2) <= 0) // Gv1v2 triangle is obtuse
+        dot(G - p2, p1-p2) <= 0) // <Gv1v2 is open 
+                                 // (or whatever people call it in English; 
+                                 // I hate this language honestly.)
         return false;
     return true;
 }
@@ -95,14 +103,14 @@ bool Forward3DSolver::edge_is_stablizable(Edge e){
     // finding the orthogonal vector from G onto AB 
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 A = hullGeometry->inputVertexPositions[v1], B = hullGeometry->inputVertexPositions[v2];
-    Vector3 GB = B - G,
-            AB = B - A;
-    Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
+    Vector3 ortho_g =  point_to_segment_normal(G, A, B); //GB - AB*dot(AB, GB)/dot(AB,AB);
+    
+    // debugger
     tmp_test_vec = ortho_g;
     // checking if other vertices are more aligned with orhto_G
     double ortho_g_norm = dot(ortho_g, ortho_g);
     for (Vertex other_v: hullMesh->vertices()){
-        if (other_v != e.firstVertex() && other_v != e.secondVertex()){
+        if (other_v != v1 && other_v != v2){
             Vector3 GP = hullGeometry->inputVertexPositions[other_v] - G;
             if (dot(GP,ortho_g) > ortho_g_norm){
                 return false;
@@ -116,7 +124,7 @@ bool Forward3DSolver::edge_is_stablizable(Edge e){
 bool Forward3DSolver::face_is_stable(Face f){
     if (f.getIndex() == INVALID_IND)
         return false;
-    // need to check the 3 dihedral angles
+    // need to check all the dihedral angles made on each edge
     // iterate over all edges of the face and check the dihedral angle
     Halfedge curr_he = f.halfedge(),
              first_he = f.halfedge();
@@ -238,7 +246,7 @@ void Forward3DSolver::face_to_next(Face f){
     Halfedge curr_he = f.halfedge(),
              first_he = f.halfedge();
     while (true) {
-        printf("at he %d\n", curr_he.getIndex());
+        // printf("at he %d\n", curr_he.getIndex());
         // will only check rolling to v0v1 at this iteration; v2 is only used for checking rolling onto v1
         Vertex v1 = curr_he.tipVertex(),
                v0 = curr_he.tailVertex(),
@@ -263,7 +271,7 @@ void Forward3DSolver::face_to_next(Face f){
             break;
         }
         if (angle_Gv1v0 >= PI/2. && angle_Gv1v2 >= PI/2.){
-            printf("got to vertex!!\n");
+            // printf("got to vertex!!\n");
             vertex_to_next(v1);
             break;
         }   
@@ -278,7 +286,7 @@ void Forward3DSolver::face_to_next(Face f){
 
 void Forward3DSolver::next_state(){
     if (stable_state){
-        printf(" &&&& already at a stable state! &&&&\n");
+        // printf(" &&&& already at a stable state! &&&&\n");
         return;
     }
     int status_check = (curr_v.getIndex() != INVALID_IND) + (curr_e.getIndex() != INVALID_IND) + (curr_f.getIndex() != INVALID_IND);
@@ -322,7 +330,7 @@ void Forward3DSolver::next_state(){
 
 Face Forward3DSolver::final_touching_face(Vector3 initial_ori){
     find_contact(initial_ori);
-    printf(" Found contact! \n");
+    // printf(" Found contact! \n");
     while(true){
         next_state();
         if (stable_state)
