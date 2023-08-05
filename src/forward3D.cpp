@@ -83,20 +83,20 @@ bool Forward3DSolver::vertex_is_stablizable(Vertex v){
     return true;
 }
 
-
-bool Forward3DSolver::edge_is_stable(Edge e){
+Vertex Forward3DSolver::next_rolling_vertex(Edge e){
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 p1 = hullGeometry->inputVertexPositions[v1], p2 = hullGeometry->inputVertexPositions[v2];
-    if (dot(G - p1, p2-p1) <= 0 ||
-        dot(G - p2, p1-p2) <= 0) // <Gv1v2 is open 
-                                 // (or whatever people call it in English; 
-                                 // I hate this language honestly.)
-        return false;
-    return true;
+    if (dot(G - p1, p2-p1) <= 0) return v1;  // <Gv1v2 is open 
+    else if (dot(G - p2, p1-p2) <= 0) return v2;  // <Gv2v1 is open
+    else return Vertex();
+    
 }
 
 
-// Vector3 
+bool Forward3DSolver::edge_is_stable(Edge e){
+    return next_rolling_vertex(e).getIndex() == INVALID_IND;
+}
+
 
 
 bool Forward3DSolver::edge_is_stablizable(Edge e){

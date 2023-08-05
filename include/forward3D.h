@@ -9,6 +9,7 @@ using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 Vector3 project_on_plane(Vector3 p, Vector3 offset, Vector3 normal);
+Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B);
 
 class Forward3DSolver {
 
@@ -48,6 +49,7 @@ class Forward3DSolver {
     // stabilizable := the normal from G can touch the ground
     // stable := the normal from G falls withing the element
     bool vertex_is_stablizable(Vertex v);
+    Vertex next_rolling_vertex(Edge e); // INVALID index if edge is singular; i.e. stable
     bool edge_is_stable(Edge e);
     bool edge_is_stablizable(Edge e);
     bool face_is_stable(Face f);
