@@ -46,21 +46,24 @@ class RollingMarkovModel {
         // ---  one-time computable quantities ---
 
         // whether the stable point can be reached or not
-        VertexData<bool> vertex_stabilizablity; 
-        VertexData<Vector3> vertex_stable_normal; 
+        VertexData<bool> vertex_stabilizablity;
+        VertexData<Vector3> vertex_stable_normal;
         void compute_vertex_stabilizablity();
         // either reachable or un-reachable; inferable from _vertex_stabilizability_
         // edge rolls to a face if singular; else rolls to a vertex
-        EdgeData<bool> edge_is_singular; 
+        EdgeData<bool> edge_is_singular;
         void compute_edge_singularity_and_init_source_dir();
         // is 0 , if the normal is unreachable, or doesnt fall on the edge (edge too short)
-        EdgeData<Vector3> edge_stable_normal; 
+        EdgeData<Vector3> edge_stable_normal;
         void compute_edge_stable_normal();
 
 
         // deviding arcs t SudoEdges; Markov chain edge surgery
         HalfedgeData<SudoFace*> root_sudo_face; // trivial (or null??) on the sink side, potent on the source side (aligned with flow dir); if both not null, then we got a stabilizable edge (edge singularity)
         void initiate_root_sudo_face(Edge e); // deals with both he's
+
+        // start from sources and trace the vector field to split edge arcs and generate SudoEdges
+        void generate_sudo_faces();
 
         // deterministic routes; assuming G is inside (positive mass), o.w. it won't be a DAG (will have loops)
         FaceData<Face> face_to_face; // might need to roll through a bunch of edges before getting to next face

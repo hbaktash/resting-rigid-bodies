@@ -107,7 +107,7 @@ void RollingMarkovModel::compute_edge_singularity_and_init_source_dir(){
 
 // is 0 if the normal is unreachable; and if non-singular: the normal doesnt fall on the edge (edge too short)
 void RollingMarkovModel::compute_edge_stable_normal(){
-    // compute_edge_is_singular() should be called before
+    // edge_is_singular should be populated and initiated before
     if (edge_is_singular.size() == 0) throw std::logic_error("edge_is_singular should be called before this.\n");
     
     Vector3 zero_vec({0.,0.,0.});
@@ -120,3 +120,5 @@ void RollingMarkovModel::compute_edge_stable_normal(){
         }
     } 
 }
+
+
