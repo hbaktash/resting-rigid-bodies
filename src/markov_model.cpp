@@ -3,8 +3,8 @@
 
 
 // trivial constructors
-SudoFace::SudoFace(Edge host_edge_, Vector3 normal_, SudoFace *next_sudo_face_, SudoFace *prev_sudo_face_){
-    host_edge = host_edge_;
+SudoFace::SudoFace(Halfedge host_he_, Vector3 normal_, SudoFace *next_sudo_face_, SudoFace *prev_sudo_face_){
+    host_he = host_he_;
     normal = normal_;
     next_sudo_face = next_sudo_face_;
     prev_sudo_face = prev_sudo_face_;
@@ -33,21 +33,45 @@ RollingMarkovModel::RollingMarkovModel(ManifoldSurfaceMesh* mesh_, VertexPositio
 
 // split the SudoEdge starting with this SudoFace 
 // TODO: source/sink assignment!
+// TODO: decide on twin he assignment; null/potent for sink side
 SudoFace* SudoFace::split_sudo_edge(Vector3 new_normal){
     // current SudoEdge will be the first, by contract
     if (this == next_sudo_face){
         printf("This is a terminal SudoFace");
         return nullptr;
     }
-
     // SudoEdge is well-defined 
-    SudoFace *new_sudo_face = new SudoFace(host_he, new_normal, next_sudo_face, this);
-    next_sudo_face->prev_sudo_face = new_sudo_face;
+    SudoFace *new_sudo_face = new SudoFace(this->host_he, new_normal, this->next_sudo_face, this);
+    this->next_sudo_face->prev_sudo_face = new_sudo_face;
     this->next_sudo_face = new_sudo_face;
     // leave the twin side to the caller; to handle singular edges and to pass the twin pointers.
     return new_sudo_face;
 }
 
+
+// BFS on vertices
+void RollingMarkovModel::generate_sudo_faces(){
+    // initiate the bfs queue
+    VertexData<bool> vertex_has_been_in_list(*mesh, false); // for O(1) inclusion queries
+    std::list<Vertex> bfs_list;
+    for (Vertex v: mesh->vertices()){
+        if (vertex_stabilizablity[v]){
+            bfs_list.push_back(v);
+            vertex_has_been_in_list[v] = true;
+        }
+    }
+    while (true){
+        Vertex curr_v = bfs_list.front();
+        bfs_list.pop_front();
+        // TODO: do smth about curr_v
+        for (Vertex adj_v: curr_v.adjacentVertices()){
+            if (!vertex_has_been_in_list[adj_v]){
+                bfs_list.push_back(adj_v);
+                vertex_has_been_in_list[adj_v] = true;
+            }
+        }
+    }
+}
 
 // whether the stable point can be reached or not
 void RollingMarkovModel::compute_vertex_stabilizablity(){
@@ -118,7 +142,7 @@ void RollingMarkovModel::compute_edge_stable_normal(){
                     B = geometry->inputVertexPositions[e.secondVertex()];
             edge_stable_normal[e] = point_to_segment_normal(G, A, B).normalize();
         }
-    } 
+    }
 }
 
 

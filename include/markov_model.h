@@ -58,9 +58,9 @@ class RollingMarkovModel {
         void compute_edge_stable_normal();
 
 
-        // deviding arcs t SudoEdges; Markov chain edge surgery
+        // linked list data structure for smaller SudoArcs; needed for Markov chain edge surgery
         HalfedgeData<SudoFace*> root_sudo_face; // trivial (or null??) on the sink side, potent on the source side (aligned with flow dir); if both not null, then we got a stabilizable edge (edge singularity)
-        void initiate_root_sudo_face(Edge e); // deals with both he's
+        void initiate_root_sudo_face(Edge e);   // deals with both he's
 
         // start from sources and trace the vector field to split edge arcs and generate SudoEdges
         void generate_sudo_faces();
