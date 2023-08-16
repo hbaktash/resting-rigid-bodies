@@ -17,7 +17,7 @@ class SudoFace{
         Vector3 normal;
         SudoFace *next_sudo_face, // on the host edge, just used for iteration 
                  *prev_sudo_face; // .. prev of first = first, and next of last = last
-        SudoFace *twin;
+        // SudoFace *twin;
         SudoFace *source_sudo_face, // on neighboring edges
                  *sink_sudo_face;
 
@@ -52,18 +52,24 @@ class RollingMarkovModel {
         // either reachable or un-reachable; inferable from _vertex_stabilizability_
         // edge rolls to a face if singular; else rolls to a vertex
         EdgeData<bool> edge_is_singular;
+        EdgeData<int> edge_roll_dir;
         void compute_edge_singularity_and_init_source_dir();
         // is 0 , if the normal is unreachable, or doesnt fall on the edge (edge too short)
         EdgeData<Vector3> edge_stable_normal;
         void compute_edge_stable_normal();
 
-
         // linked list data structure for smaller SudoArcs; needed for Markov chain edge surgery
         HalfedgeData<SudoFace*> root_sudo_face; // trivial (or null??) on the sink side, potent on the source side (aligned with flow dir); if both not null, then we got a stabilizable edge (edge singularity)
-        void initiate_root_sudo_face(Edge e);   // deals with both he's
+        void initiate_root_sudo_face(Halfedge he);   // deals with both he's
 
         // start from sources and trace the vector field to split edge arcs and generate SudoEdges
-        void generate_sudo_faces();
+        // initiate the bfs queue
+        std::list<Halfedge> bfs_list;
+        void split_chain_edges();
+
+        // handle single source HalfEdge/SudoEdge
+        void outflow_halfedge(Halfedge he);
+        void outflow_sudoEdge(SudoFace* tail_sf);
 
         // deterministic routes; assuming G is inside (positive mass), o.w. it won't be a DAG (will have loops)
         FaceData<Face> face_to_face; // might need to roll through a bunch of edges before getting to next face

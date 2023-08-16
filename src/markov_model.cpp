@@ -49,29 +49,47 @@ SudoFace* SudoFace::split_sudo_edge(Vector3 new_normal){
 }
 
 
-// BFS on vertices
-void RollingMarkovModel::generate_sudo_faces(){
+// handle single source SudoEdge
+void RollingMarkovModel::outflow_sudoEdge(SudoFace* tail_sf){
+    Halfedge host_he = tail_sf->host_he;
+    Vertex curr_v = host_he.tipVertex(); // flow is along the halfedge
+
+}
+
+// handle single source HalfEdge
+void RollingMarkovModel::outflow_halfedge(Halfedge he){
+    if (edge_is_singular[he.edge()]) // if singular, won't need further splitting
+        return;                      // TODO: do something else or compute probabilities later?
+    SudoFace* curr_sf = root_sudo_face[he];
+    SudoFace* search_init_sf = root_sudo_face[he];
+    while (curr_sf->next_sudo_face != curr_sf){
+        outflow_sudoEdge(curr_sf);
+    }
+}
+
+
+// BFS on vertices/halfedges
+void RollingMarkovModel::split_chain_edges(){
     // initiate the bfs queue
-    VertexData<bool> vertex_has_been_in_list(*mesh, false); // for O(1) inclusion queries
-    std::list<Vertex> bfs_list;
+    bfs_list = std::list<Halfedge>();
     for (Vertex v: mesh->vertices()){
         if (vertex_stabilizablity[v]){
-            bfs_list.push_back(v);
-            vertex_has_been_in_list[v] = true;
-        }
-    }
-    while (true){
-        Vertex curr_v = bfs_list.front();
-        bfs_list.pop_front();
-        // TODO: do smth about curr_v
-        for (Vertex adj_v: curr_v.adjacentVertices()){
-            if (!vertex_has_been_in_list[adj_v]){
-                bfs_list.push_back(adj_v);
-                vertex_has_been_in_list[adj_v] = true;
+            for (Halfedge he: v.outgoingHalfedges()){
+                bfs_list.push_back(he);
+                // vertex_has_been_in_list[v] = true;
             }
         }
     }
+    // do the BFS and flow the vector field
+    assert(bfs_list.size() != 0); // should have at least one source/stable vertex
+    while (true){
+        Halfedge curr_he = bfs_list.front();
+        bfs_list.pop_front();
+        // TODO: do smth about curr_he
+        outflow_halfedge(curr_he);
+    }
 }
+
 
 // whether the stable point can be reached or not
 void RollingMarkovModel::compute_vertex_stabilizablity(){
@@ -85,33 +103,34 @@ void RollingMarkovModel::compute_vertex_stabilizablity(){
 }
 
 // initialize 
-void RollingMarkovModel::initiate_root_sudo_face(Edge e){
-    Halfedge he = e.halfedge();
+void RollingMarkovModel::initiate_root_sudo_face(Halfedge he){
+    // Halfedge he = e.halfedge();
     Vertex v1 = he.tailVertex(),
            v2 = he.tipVertex();
     SudoFace *sf1 = new SudoFace(he, geometry->faceNormal(he.face()), nullptr, nullptr),
-             *sf2 = new SudoFace(he, geometry->faceNormal(he.twin().face()), nullptr, nullptr),
-             *sf1_twin = new SudoFace(he.twin(), geometry->faceNormal(he.twin().face()), nullptr, nullptr),
-             *sf2_twin = new SudoFace(he.twin(), geometry->faceNormal(he.face()), nullptr, nullptr);
+             *sf2 = new SudoFace(he, geometry->faceNormal(he.twin().face()), nullptr, nullptr);
+            //  *sf1_twin = new SudoFace(he.twin(), geometry->faceNormal(he.twin().face()), nullptr, nullptr),
+            //  *sf2_twin = new SudoFace(he.twin(), geometry->faceNormal(he.face()), nullptr, nullptr);
     sf1->next_sudo_face = sf2;
     sf1->prev_sudo_face = sf1;
     sf2->next_sudo_face = sf2;
     sf2->prev_sudo_face = sf1;
 
-    sf1_twin->next_sudo_face = sf1_twin;
-    sf1_twin->prev_sudo_face = sf2_twin;
-    sf2_twin->next_sudo_face = sf1_twin;
-    sf2_twin->prev_sudo_face = sf2_twin;
+    // sf1_twin->next_sudo_face = sf1_twin;
+    // sf1_twin->prev_sudo_face = sf2_twin;
+    // sf2_twin->next_sudo_face = sf1_twin;
+    // sf2_twin->prev_sudo_face = sf2_twin;
 
-    sf1->twin = sf1_twin;
-    sf1_twin->twin = sf1;
-    sf2->twin = sf2_twin;
-    sf2_twin->twin = sf2;
+    // sf1->twin = sf1_twin;
+    // sf1_twin->twin = sf1;
+    // sf2->twin = sf2_twin;
+    // sf2_twin->twin = sf2;
 }
 
 // edge rolls to a face if singular; else rolls to a vertex 
 void RollingMarkovModel::compute_edge_singularity_and_init_source_dir(){
     edge_is_singular = EdgeData<bool>(*mesh, false); // ~ is stable, by fwdSolver function names
+    edge_roll_dir = EdgeData<int>(*mesh, 0);
     // initial assignment of real faces as SudoFaces
     root_sudo_face = HalfedgeData<SudoFace*>(*mesh);
     for (Edge e: mesh->edges()){
@@ -119,13 +138,20 @@ void RollingMarkovModel::compute_edge_singularity_and_init_source_dir(){
         
         if (next_vertex.getIndex() == INVALID_IND){ // singular edge
             edge_is_singular[e] = true;
-            Halfedge he1 = e.halfedge(), 
-                     he2 = e.halfedge().twin();
         }
-        Vertex prev_vertex = e.otherVertex(next_vertex);
+        else if (next_vertex == e.secondVertex())
+            edge_roll_dir[e] = 1;
+        else if (next_vertex == e.firstVertex())
+            edge_roll_dir[e] = -1;
+        else 
+            printf(" %%% This should not happen %%% \n");
+        // Vertex prev_vertex = e.otherVertex(next_vertex);
         Halfedge vec_field_aligned_he = (e.secondVertex() == next_vertex) ? e.halfedge() : e.halfedge().twin();
-        // questionable; should I make the twin side null? or populate it?
-        initiate_root_sudo_face(e);
+        // // questionable; should I make the twin side null? or populate it?
+        // // Going for null approach and initiating during BFS
+        // initiate_root_sudo_face(e);
+        initiate_root_sudo_face(vec_field_aligned_he);
+        
     }
 }
 
