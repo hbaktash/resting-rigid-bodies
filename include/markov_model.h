@@ -4,6 +4,7 @@
 // #include "geometrycentral/surface/vertex_position_geometry.h"
 // #include "geometrycentral/surface/surface_point.h"
 #include "forward3D.h"
+#include "arc_algebra.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -70,7 +71,8 @@ class RollingMarkovModel {
         // handle single source HalfEdge/SudoEdge
         void outflow_halfedge(Halfedge he);
         void outflow_sudoEdge(SudoFace* tail_sf);
-
+        //includes a bunch of splits only on the dest SudoEdge
+        void flow_sf_to_sf(SudoFace* src_sf1, SudoFace* src_sf2, SudoFace* dest_sf1, SudoFace* dest_sf2);
         // deterministic routes; assuming G is inside (positive mass), o.w. it won't be a DAG (will have loops)
         FaceData<Face> face_to_face; // might need to roll through a bunch of edges before getting to next face
         EdgeData<Face> edge_to_face;

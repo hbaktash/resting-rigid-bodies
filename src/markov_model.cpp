@@ -36,11 +36,13 @@ RollingMarkovModel::RollingMarkovModel(ManifoldSurfaceMesh* mesh_, VertexPositio
 // TODO: decide on twin he assignment; null/potent for sink side
 SudoFace* SudoFace::split_sudo_edge(Vector3 new_normal){
     // current SudoEdge will be the first, by contract
+    assert(new_normal.norm() == 1.);
     if (this == next_sudo_face){
         printf("This is a terminal SudoFace");
         return nullptr;
     }
     // SudoEdge is well-defined 
+    // TODO: handle new normal not being new!
     SudoFace *new_sudo_face = new SudoFace(this->host_he, new_normal, this->next_sudo_face, this);
     this->next_sudo_face->prev_sudo_face = new_sudo_face;
     this->next_sudo_face = new_sudo_face;
@@ -49,24 +51,64 @@ SudoFace* SudoFace::split_sudo_edge(Vector3 new_normal){
 }
 
 
+// flow sf to sf and split the dest if needed, recursive and should return dest_sf2 in the end
+// TODO: make it return void?? and just assert output to be dest_sf2
+void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* src_sf2, SudoFace* dest_sf1, SudoFace* dest_sf2){
+    Vertex host_v = src_sf1->host_he.tipVertex(); // since src_sf is the source; already determined in initialization;
+    Vector3 source_normal = vertex_stable_normal[host_v];
+
+    Vector3 tail_intersection_normal_src = intersect_arc_ray_with_arc(source_normal, src_sf1->normal, dest_sf1->normal, dest_sf2->normal);
+    if (tail_intersection_normal_src.norm() == 0.){ // no intersection
+        Vector3 tail_intersection_normal_dest = intersect_arc_ray_with_arc(source_normal, dest_sf1->normal, src_sf1->normal, src_sf2->normal);
+            if (tail_intersection_normal_dest.norm() == 0.){ // then no intersection on 
+                return;
+            }
+            else { // TODO: handle and calculate the probabilities here: sf to sf; with and without splits
+                Vector3 tip_intersection_normal_src = intersect_arc_ray_with_arc(source_normal, src_sf2->normal, dest_sf1->normal, dest_sf2->normal);
+                if (tip_intersection_normal_src.norm() == 0.){ // then src covers all of dest; TODO calc prob of 
+                    // TODO: find the probability here
+                    return; // Could possibly speed up the next search here by returning the last normal
+                }
+                else { // need to split dest sf
+                    SudoFace* new_dest_sf = dest_sf1->split_sudo_edge(tip_intersection_normal_src);
+                    // TODO: find the probability here
+                    flow_sf_to_sf(src_sf1, src_sf2, new_dest_sf, dest_sf2);
+                }
+            }
+    }
+    else {
+
+    }
+}
+
 // handle single source SudoEdge
 void RollingMarkovModel::outflow_sudoEdge(SudoFace* tail_sf){
     Halfedge host_he = tail_sf->host_he;
     Vertex curr_v = host_he.tipVertex(); // flow is along the halfedge
+    
+    // greedy approach first
+    for (Halfedge he: curr_v.outgoingHalfedges()){
+        SudoFace* tmp_sf = root_sudo_face[he];
+        if (tmp_sf != nullptr){ // this HalfEdge has outflow from the current vertex 
+            while (tmp_sf->next_sudo_face != tmp_sf){
 
+                tmp_sf
+            }
+        }
+    }
 }
 
 // handle single source HalfEdge
 void RollingMarkovModel::outflow_halfedge(Halfedge he){
-    if (edge_is_singular[he.edge()]) // if singular, won't need further splitting
+    if (edge_is_singular[he.edge()]) // if singular, won't need further outflow tracing (is already chopped by prev source halfEdges)
         return;                      // TODO: do something else or compute probabilities later?
     SudoFace* curr_sf = root_sudo_face[he];
-    SudoFace* search_init_sf = root_sudo_face[he];
+    // SudoFace* search_init_sf = root_sudo_face[he]; // TODO: need to do smth about this for speed-up
     while (curr_sf->next_sudo_face != curr_sf){
         outflow_sudoEdge(curr_sf);
+        curr_sf = curr_sf->next_sudo_face;
     }
 }
-
 
 // BFS on vertices/halfedges
 void RollingMarkovModel::split_chain_edges(){
@@ -132,7 +174,7 @@ void RollingMarkovModel::compute_edge_singularity_and_init_source_dir(){
     edge_is_singular = EdgeData<bool>(*mesh, false); // ~ is stable, by fwdSolver function names
     edge_roll_dir = EdgeData<int>(*mesh, 0);
     // initial assignment of real faces as SudoFaces
-    root_sudo_face = HalfedgeData<SudoFace*>(*mesh);
+    root_sudo_face = HalfedgeData<SudoFace*>(*mesh, nullptr);
     for (Edge e: mesh->edges()){
         Vertex next_vertex = forward_solver->next_rolling_vertex(e);
         

@@ -15,6 +15,7 @@
 #include "mesh_factory.h"
 #include "geometry_utils.h"
 #include "visual_utils.h"
+#include "markov_model.h"
 
 // #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 // #include <CGAL/Polyhedron_3.h>

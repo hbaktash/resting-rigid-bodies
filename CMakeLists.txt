@@ -79,6 +79,7 @@ set(polyhedra_SRCS
   src/coloring.cpp
   src/visual_utils.cpp
   src/markov_model.cpp
+  src/arc_algebra.cpp
 	# add any other source files here
 )
 
