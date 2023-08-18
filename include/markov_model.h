@@ -60,12 +60,13 @@ class RollingMarkovModel {
         void compute_edge_stable_normal();
 
         // linked list data structure for smaller SudoArcs; needed for Markov chain edge surgery
-        HalfedgeData<SudoFace*> root_sudo_face; // trivial (or null??) on the sink side, potent on the source side (aligned with flow dir); if both not null, then we got a stabilizable edge (edge singularity)
+        HalfedgeData<SudoFace*> root_sudo_face; // null on the sink side, potent on the source side (aligned with flow dir); if both not null, then we got a stabilizable edge (edge singularity)
         void initiate_root_sudo_face(Halfedge he);   // deals with both he's
 
         // start from sources and trace the vector field to split edge arcs and generate SudoEdges
-        // initiate the bfs queue
+        // initiate the recursive surgery
         std::list<Halfedge> bfs_list;
+        HalfedgeData<bool> he_processed;
         void split_chain_edges();
 
         // handle single source HalfEdge/SudoEdge

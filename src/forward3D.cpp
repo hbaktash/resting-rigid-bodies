@@ -90,7 +90,7 @@ Vertex Forward3DSolver::next_rolling_vertex(Edge e){
             p2 = hullGeometry->inputVertexPositions[v2];
     if (dot(G-p1, p2-p1) <= 0) return v1;  // <Gv1v2 is open 
     else if (dot(G-p2, p1-p2) <= 0) return v2;  // <Gv2v1 is open
-    else return Vertex(); // INVALID ind    
+    else return Vertex(); // INVALID ind for singular edges!
 }
 
 bool Forward3DSolver::edge_is_stable(Edge e){
