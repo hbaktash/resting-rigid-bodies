@@ -55,7 +55,9 @@ SudoFace* SudoFace::split_sudo_edge(Vector3 new_normal){
 
 // flow sf to sf and split the dest if needed, recursive and should return dest_sf2 in the end
 // TODO: make it return void?? and just assert output to be dest_sf2
-void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* src_sf2, SudoFace* dest_sf1, SudoFace* dest_sf2){
+void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
+    SudoFace *src_sf2 = src_sf1->next_sudo_face,
+             *dest_sf2= dest_sf1->next_sudo_face; 
     Vertex host_v = src_sf1->host_he.tipVertex(); // since src_sf is the source; already determined in initialization;
     Vector3 source_normal = vertex_stable_normal[host_v];
 
@@ -115,66 +117,76 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* src_sf2, Sud
     else; //shouldnt get here!
 }
 
-// handle single source SudoEdge
-void RollingMarkovModel::outflow_sudoEdge(SudoFace* tail_sf){
-    Halfedge host_he = tail_sf->host_he;
-    Vertex curr_v = host_he.tipVertex(); // flow is along the halfedge
-    
-    // greedy approach first
-    for (Halfedge he: curr_v.outgoingHalfedges()){
-        SudoFace* tmp_sf = root_sudo_face[he];
-        if (tmp_sf != nullptr){ // this HalfEdge has outflow from the current vertex (or is singular)
-            while (tmp_sf->next_sudo_face != tmp_sf){
-
-                tmp_sf
-            }
+void RollingMarkovModel::flow_he_to_he(Halfedge src, Halfedge dest){
+    SudoFace *curr_src_sf = root_sudo_face[src];
+    SudoFace *root_dest_sf = root_sudo_face[dest]; // never changes; even due to splits;
+    assert(root_dest_sf != nullptr && curr_src_sf != nullptr);
+    while (curr_src_sf->next_sudo_face != curr_src_sf) {
+        SudoFace *curr_dest_sf = root_dest_sf;
+        while(curr_dest_sf->next_sudo_face != curr_dest_sf){
+            flow_sf_to_sf(curr_src_sf, curr_dest_sf);
+            curr_dest_sf = curr_dest_sf->next_sudo_face;
         }
+        curr_src_sf = curr_src_sf->next_sudo_face;
     }
 }
 
-// handle single source HalfEdge
-void RollingMarkovModel::outflow_halfedge(Halfedge he){
-    if (edge_is_singular[he.edge()]) // if singular, won't need further outflow tracing (is already chopped by prev source halfEdges)
-        return;                      // TODO: do something else or compute probabilities later?
-    SudoFace* curr_sf = root_sudo_face[he];
-    // SudoFace* search_init_sf = root_sudo_face[he]; // TODO: need to do smth about this for speed-up
-    while (curr_sf->next_sudo_face != curr_sf){
-        outflow_sudoEdge(curr_sf);
-        curr_sf = curr_sf->next_sudo_face;
+// handle single sink HalfEdge
+void RollingMarkovModel::process_halfedge(Halfedge he){
+    if (vertex_is_stabilizable[he.tailVertex()]) // the edge is fully reachable from the stable tail vertex
+        return;
+    else
+        assert(forward_solver->next_rolling_vertex(he.edge()) == he.tipVertex()); // the he aligns with the flow
+    if (he_processed[he])
+        return;
+    
+    Vertex v = he.tailVertex();
+    for (Halfedge src_he: v.incomingHalfedges()){
+        if (root_sudo_face[src_he] != nullptr && !he_processed[src_he]){ // HalfEdge is a source in this vertex
+            process_halfedge(src_he);
+        }
+        flow_he_to_he(src_he, he);
     }
+
+
 }
 
 // recursion starting from singular/stable edges
 void RollingMarkovModel::split_chain_edges(){
-    // initiate the bfs queue
-    // bfs_list = std::list<Halfedge>();
-    // for (Vertex v: mesh->vertices()){
-    //     if (vertex_stabilizablity[v]){
-    //         for (Halfedge he: v.outgoingHalfedges()){
-    //             bfs_list.push_back(he);
-    //             // vertex_has_been_in_list[v] = true;
-    //         }
-    //     }
-    // }
-    // TODO: do the recursion
-    // do the BFS and flow the vector field
-    assert(bfs_list.size() != 0); // should have at least one source/stable vertex
-    while (true){
-        Halfedge curr_he = bfs_list.front();
-        bfs_list.pop_front();
-        // TODO: do smth about curr_he
-        outflow_halfedge(curr_he);
+    // DP to avoid spliting a HalfEdge twice
+    he_processed = HalfedgeData<bool>(*mesh, false);
+    // use singular edges as starting seeds the recursion
+    for (Edge e: mesh->edges()){ 
+        if (edge_is_singular[e]){ // go back up from singular edges; split any edge if needed
+            Vertex v1 = e.firstVertex(), 
+                   v2 = e.secondVertex();
+            if (!vertex_is_stabilizable[v1])  // v1 is not a source/stable
+                termilar_hes.push_back(e.halfedge());
+            else
+                he_processed[e.halfedge()] = true;
+            
+            if (!vertex_is_stabilizable[v2]) // v2 is not a source/stable
+                termilar_hes.push_back(e.halfedge().twin());
+            else
+                he_processed[e.halfedge().twin()] = true;
+
+            // TODO: find probabilities for else cases immediately
+        }
+    }
+    // recursive DFS from every starting seed edge (singular edge)
+    for (Halfedge he: termilar_hes){
+
     }
 }
 
 
 // whether the stable point can be reached or not
 void RollingMarkovModel::compute_vertex_stabilizablity(){
-    vertex_stabilizablity = VertexData<bool>(*mesh, false);
+    vertex_is_stabilizable = VertexData<bool>(*mesh, false);
     vertex_stable_normal = VertexData<Vector3>(*mesh);
     for (Vertex v: mesh->vertices()){
         if (forward_solver->vertex_is_stablizable(v))
-            vertex_stabilizablity[v] = true;
+            vertex_is_stabilizable[v] = true;
         vertex_stable_normal[v] = (geometry->inputVertexPositions[v] - G).normalize();
     }
 }

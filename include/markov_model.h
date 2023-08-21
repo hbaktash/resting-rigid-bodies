@@ -47,7 +47,7 @@ class RollingMarkovModel {
         // ---  one-time computable quantities ---
 
         // whether the stable point can be reached or not
-        VertexData<bool> vertex_stabilizablity;
+        VertexData<bool> vertex_is_stabilizable;
         VertexData<Vector3> vertex_stable_normal;
         void compute_vertex_stabilizablity();
         // either reachable or un-reachable; inferable from _vertex_stabilizability_
@@ -65,15 +65,15 @@ class RollingMarkovModel {
 
         // start from sources and trace the vector field to split edge arcs and generate SudoEdges
         // initiate the recursive surgery
-        std::list<Halfedge> bfs_list;
+        std::list<Halfedge> termilar_hes; // bfs_list
         HalfedgeData<bool> he_processed;
         void split_chain_edges();
 
         // handle single source HalfEdge/SudoEdge
-        void outflow_halfedge(Halfedge he);
+        void process_halfedge(Halfedge he);
         void outflow_sudoEdge(SudoFace* tail_sf);
         //includes a bunch of splits only on the dest SudoEdge
-        void flow_sf_to_sf(SudoFace* src_sf1, SudoFace* src_sf2, SudoFace* dest_sf1, SudoFace* dest_sf2);
+        void flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1);
         // deterministic routes; assuming G is inside (positive mass), o.w. it won't be a DAG (will have loops)
         FaceData<Face> face_to_face; // might need to roll through a bunch of edges before getting to next face
         EdgeData<Face> edge_to_face;
