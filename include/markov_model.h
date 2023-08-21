@@ -71,7 +71,7 @@ class RollingMarkovModel {
 
         // handle single source HalfEdge/SudoEdge
         void process_halfedge(Halfedge he);
-        void outflow_sudoEdge(SudoFace* tail_sf);
+        void flow_he_to_he(Halfedge src, Halfedge dest);
         //includes a bunch of splits only on the dest SudoEdge
         void flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1);
         // deterministic routes; assuming G is inside (positive mass), o.w. it won't be a DAG (will have loops)

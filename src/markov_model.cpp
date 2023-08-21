@@ -147,8 +147,7 @@ void RollingMarkovModel::process_halfedge(Halfedge he){
         }
         flow_he_to_he(src_he, he);
     }
-
-
+    he_processed[he] = true;
 }
 
 // recursion starting from singular/stable edges
@@ -175,7 +174,7 @@ void RollingMarkovModel::split_chain_edges(){
     }
     // recursive DFS from every starting seed edge (singular edge)
     for (Halfedge he: termilar_hes){
-
+        process_halfedge(he);
     }
 }
 
