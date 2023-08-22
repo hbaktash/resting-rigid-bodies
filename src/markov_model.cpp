@@ -53,8 +53,7 @@ SudoFace* SudoFace::split_sudo_edge(Vector3 new_normal){
 }
 
 
-// flow sf to sf and split the dest if needed, recursive and should return dest_sf2 in the end
-// TODO: make it return void?? and just assert output to be dest_sf2
+// flow sf to sf and split the dest if needed
 void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
     SudoFace *src_sf2 = src_sf1->next_sudo_face,
              *dest_sf2= dest_sf1->next_sudo_face; 
@@ -66,7 +65,7 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
     Vector3 tip_intersection_normal_src = intersect_arc_ray_with_arc(source_normal, src_sf2->normal, dest_sf1->normal, dest_sf2->normal);
     Vector3 tail_intersection_normal_dest = intersect_arc_ray_with_arc(source_normal, dest_sf1->normal, src_sf1->normal, src_sf2->normal);
     Vector3 tip_intersection_normal_dest = intersect_arc_ray_with_arc(source_normal, dest_sf2->normal, src_sf1->normal, src_sf2->normal);
-    std::cout << "src1: (" << src_sf1->normal << ")  src2: ("<< src_sf2->normal << ") dest1: ("<< dest_sf1->normal << ") dest2: (" << dest_sf2->normal <<")\n";
+    // std::cout << "src1: (" << src_sf1->normal << ")  src2: ("<< src_sf2->normal << ") dest1: ("<< dest_sf1->normal << ") dest2: (" << dest_sf2->normal <<")\n";
     // check whether hits are inside arc segments or not
     bool tail_src_hits  = tail_intersection_normal_src.norm() >= EPS,
          tip_src_hits   = tip_intersection_normal_src.norm()  >= EPS,
@@ -168,8 +167,10 @@ void RollingMarkovModel::split_chain_edges(){
                    v2 = e.secondVertex();
             if (!vertex_is_stabilizable[v1])  // v1 is not a source/stable
                 termilar_hes.push_back(e.halfedge());
-            else
+            else {
                 he_processed[e.halfedge()] = true;
+                
+            }
             
             if (!vertex_is_stabilizable[v2]) // v2 is not a source/stable
                 termilar_hes.push_back(e.halfedge().twin());
@@ -242,7 +243,7 @@ void RollingMarkovModel::compute_edge_stable_normals(){
     Vector3 zero_vec({0.,0.,0.});
     EdgeData<Vector3> edge_stable_normal(*mesh, zero_vec);
     for (Edge e: mesh->edges()){
-        if (edge_is_singular[e] && forward_solver->edge_is_stablizable(e)){ // stabilizable ~= reachable
+        if (edge_is_singular[e]){ // not cheking stabilizability ~= reachablility
             Vector3 A = geometry->inputVertexPositions[e.firstVertex()],
                     B = geometry->inputVertexPositions[e.secondVertex()];
             edge_stable_normal[e] = point_to_segment_normal(G, A, B).normalize();
@@ -257,3 +258,25 @@ void RollingMarkovModel::initialize_pre_computes(){
     compute_edge_stable_normals();
 }
 
+//
+double RollingMarkovModel::get_he_face_probability(Halfedge he){
+    if (edge_is_singular[he.edge()]){
+        Vector3 f1_normal = geometry->faceNormal(he.face()),
+                f2_normal = geometry->faceNormal(he.twin().face()),
+                stable_normal = edge_stable_normal[he.edge()];
+        assert(stable_normal.norm() >= EPS);
+        double total_angle = angle(f1_normal, f2_normal),
+               sn_f1_angle  = angle(f1_normal, stable_normal),
+               sn_f2_angle  = angle(f2_normal, stable_normal);
+        if (sn_f1_angle <= total_angle && sn_f2_angle <= total_angle)
+            return sn_f1_angle/total_angle;
+        else if (sn_f1_angle >= total_angle)
+            return 1.; // goes to f1
+        else if (sn_f2_angle >= total_angle)
+            return 0.; // goes to f2
+        else
+            assert(false); // not possible
+    }
+    else 
+        return 0.;
+}

@@ -81,7 +81,15 @@ class RollingMarkovModel {
         //includes a bunch of splits only on the dest SudoEdge
         void flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1);
         
+        std::vector<std::pair<SudoFace*, SudoFace*>> sf_sf_pairs;
+        std::vector<double> sf_sf_probs;
+        std::vector<std::pair<SudoFace*, Face>> sf_face_pairs;
+        std::vector<double> sf_face_probs;
+        std::vector<std::pair<Vertex, SudoFace*>> vertex_sf_pairs;
+        std::vector<double> vertex_sf_probs;
         
+        // prob of going from a HalfEdge to a neigh face
+        double get_he_face_probability(Halfedge he);
         // TODO: 
         // deterministic routes; assuming G is inside (positive mass), o.w. it won't be a DAG (will have loops)
         FaceData<Face> face_to_face; // might need to roll through a bunch of edges before getting to next face
