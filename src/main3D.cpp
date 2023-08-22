@@ -106,6 +106,10 @@ polyscope::SurfaceMesh *dummy_ps_mesh_for_snail_trail;
 Vector3 old_g_vec, new_g_vec;
 int snail_trail_dummy_counter = 0;
 
+// Markov Chain stuff
+RollingMarkovModel *markov_model;
+polyscope::PointCloud *sudo_faces_pc;
+
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4")};
 std::string all_polygons_current_item = "tet";
@@ -425,7 +429,38 @@ void generate_polyhedron_example(std::string poly_str){
     geometry = geometry_ptr.release();
 }
 
+// initialize Markov chain and do the pre-computes
+void initiate_markov_model(){
+  markov_model = new RollingMarkovModel(&forwardSolver);
+  markov_model->initialize_pre_computes();
+  markov_model->split_chain_edges();
+}
 
+// split the Markov chain
+void split_markov_chain(){
+}
+
+// visualize 
+void visualize_sudo_faces(){
+  std::vector<Vector3> sf_positions;
+  for (Halfedge he: markov_model->mesh->halfedges()){
+    SudoFace *curr_sf = markov_model->root_sudo_face[he];
+    if (curr_sf != nullptr){
+      while (curr_sf->next_sudo_face != curr_sf){
+        sf_positions.push_back(curr_sf->normal + gm_shift);
+        curr_sf = curr_sf->next_sudo_face;
+      }
+    }
+  }
+
+  sudo_faces_pc = polyscope::registerPointCloud("sudo faces", sf_positions);
+  sudo_faces_pc->setEnabled(true);
+  sudo_faces_pc->setPointRadius(face_normal_vertex_gm_radi * 1.2, false);
+  sudo_faces_pc->setPointColor({0.,1.,1.});
+}
+
+
+// color input polyhedra with default
 void color_faces_with_default(){
   FaceData<Vector3> face_colors(*forwardSolver.hullMesh, default_face_color);
   polyscope::SurfaceFaceColorQuantity *fColor = psInputMesh->addFaceColorQuantity("state vis color", face_colors);
@@ -433,6 +468,7 @@ void color_faces_with_default(){
 }
 
 
+// show current g vector
 void visualize_g_vec(){
   std::vector<Vector3> the_g_vec = {forwardSolver.curr_g_vec};
   polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
@@ -443,6 +479,7 @@ void visualize_g_vec(){
 }
 
 
+// visualize current touching element: Vertex/Edge/Face
 void visualize_contact(){
   if (polyscope::hasPointCloud("current Vertex")) polyscope::removePointCloud("current Vertex");
   dummy_forward_vis->removeQuantity("current contact edge"); // has a built-in existance checker
@@ -460,7 +497,7 @@ void visualize_contact(){
     std::vector<Vector3> curr_g_vec_pos = {forwardSolver.curr_g_vec + gm_shift}; // first and second should be the same since we just initialized.
     curr_g_vec_gm_pt = polyscope::registerPointCloud("current g vec", curr_g_vec_pos);
     curr_g_vec_gm_pt->setEnabled(true);
-    curr_g_vec_gm_pt->setPointRadius(face_normal_vertex_gm_radi*1.1, false);
+    curr_g_vec_gm_pt->setPointRadius(face_normal_vertex_gm_radi * 1.1, false);
     curr_g_vec_gm_pt->setPointColor({0.,0.,0.});
   }
   else if (forwardSolver.curr_e.getIndex() != INVALID_IND){
@@ -608,7 +645,6 @@ void build_raster_image(){
 
 
 
-
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
 // https://github.com/ocornut/imgui/blob/master/imgui.h
@@ -726,6 +762,11 @@ void myCallback() {
   }
   if (ImGui::Checkbox("real time raster", &real_time_raster));
   if (ImGui::Checkbox("normalize vector field", &normalize_vecF));
+
+  if (ImGui::Button("show sudo faces")){
+    initiate_markov_model();
+    visualize_sudo_faces();
+  }
 }
 
 

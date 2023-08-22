@@ -1,6 +1,6 @@
 #include "markov_model.h"
 
-
+// double EPS = 1e-8;
 
 // trivial constructors
 SudoFace::SudoFace(Halfedge host_he_, Vector3 normal_, SudoFace *next_sudo_face_, SudoFace *prev_sudo_face_){
@@ -35,15 +35,15 @@ RollingMarkovModel::RollingMarkovModel(ManifoldSurfaceMesh* mesh_, VertexPositio
 // TODO: source/sink assignment!
 // TODO: decide on twin he assignment; null/potent for sink side
 SudoFace* SudoFace::split_sudo_edge(Vector3 new_normal){
-    assert(new_normal.norm() == 1.);
+    assert(abs(new_normal.norm() - 1.) <= EPS);
     // cases that no split is required
     if (this == next_sudo_face){
         printf("This is a terminal SudoFace");
         return this;
     }
-    if (new_normal == this->normal)
+    if ((new_normal - this->normal).norm() <= EPS)
         return this;
-    if (new_normal == next_sudo_face->normal)
+    if ((new_normal - next_sudo_face->normal).norm() <= EPS)
         return next_sudo_face;
     // proper split is required 
     SudoFace *new_sudo_face = new SudoFace(this->host_he, new_normal, this->next_sudo_face, this);
@@ -66,11 +66,12 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
     Vector3 tip_intersection_normal_src = intersect_arc_ray_with_arc(source_normal, src_sf2->normal, dest_sf1->normal, dest_sf2->normal);
     Vector3 tail_intersection_normal_dest = intersect_arc_ray_with_arc(source_normal, dest_sf1->normal, src_sf1->normal, src_sf2->normal);
     Vector3 tip_intersection_normal_dest = intersect_arc_ray_with_arc(source_normal, dest_sf2->normal, src_sf1->normal, src_sf2->normal);
+    std::cout << "src1: (" << src_sf1->normal << ")  src2: ("<< src_sf2->normal << ") dest1: ("<< dest_sf1->normal << ") dest2: (" << dest_sf2->normal <<")\n";
     // check whether hits are inside arc segments or not
-    bool tail_src_hits  = tail_intersection_normal_src.norm() != 0.,
-         tip_src_hits   = tip_intersection_normal_src.norm() != 0.,
-         tail_dest_hits = tail_intersection_normal_dest.norm() != 0.,
-         tip_dest_hits  = tip_intersection_normal_dest.norm() != 0.;
+    bool tail_src_hits  = tail_intersection_normal_src.norm() >= EPS,
+         tip_src_hits   = tip_intersection_normal_src.norm()  >= EPS,
+         tail_dest_hits = tail_intersection_normal_dest.norm()>= EPS,
+         tip_dest_hits  = tip_intersection_normal_dest.norm() >= EPS;
     if (tail_src_hits && !tip_src_hits){ // one hit. src tail
         SudoFace* new_dest_sf = dest_sf1->split_sudo_edge(tail_intersection_normal_src);
         new_dest_sf->source_sudo_face = src_sf1;
@@ -133,19 +134,23 @@ void RollingMarkovModel::flow_he_to_he(Halfedge src, Halfedge dest){
 
 // handle single sink HalfEdge
 void RollingMarkovModel::process_halfedge(Halfedge he){
-    if (vertex_is_stabilizable[he.tailVertex()]) // the edge is fully reachable from the stable tail vertex
+    if (he_processed[he]) // actually dont need this; checked before calling
         return;
-    else
-        assert(forward_solver->next_rolling_vertex(he.edge()) == he.tipVertex()); // the he aligns with the flow
-    if (he_processed[he])
+    if (vertex_is_stabilizable[he.tailVertex()]) // No split needed. The edge is fully reachable from the stable tail vertex
         return;
+    // else
+        // assert(forward_solver->next_rolling_vertex(he.edge()) == he.tipVertex()); // the HalfEdge aligns with the flow
+
+    printf("  -- processing he %d, %d\n", he.tailVertex().getIndex(), he.tipVertex().getIndex());
     
     Vertex v = he.tailVertex();
     for (Halfedge src_he: v.incomingHalfedges()){
-        if (root_sudo_face[src_he] != nullptr && !he_processed[src_he]){ // HalfEdge is a source in this vertex
+        printf("    & checking possible src_he %d, %d,   singular: %d, has root sf %d \n", src_he.tailVertex().getIndex(), src_he.tipVertex().getIndex(), edge_is_singular[src_he.edge()], root_sudo_face[src_he] != nullptr);
+        if (root_sudo_face[src_he] != nullptr && !edge_is_singular[src_he.edge()]){ // src_he is a source in this vertex
             process_halfedge(src_he);
+            printf("    * flowing from %d,%d \n", src_he.tailVertex().getIndex(), src_he.tipVertex().getIndex());
+            flow_he_to_he(src_he, he);
         }
-        flow_he_to_he(src_he, he);
     }
     he_processed[he] = true;
 }
@@ -155,8 +160,10 @@ void RollingMarkovModel::split_chain_edges(){
     // DP to avoid spliting a HalfEdge twice
     he_processed = HalfedgeData<bool>(*mesh, false);
     // use singular edges as starting seeds the recursion
+    printf("finding terminal seeds \n");
     for (Edge e: mesh->edges()){ 
         if (edge_is_singular[e]){ // go back up from singular edges; split any edge if needed
+            printf("  -- at singular edge %d, %d \n", e.firstVertex().getIndex(), e.secondVertex().getIndex());
             Vertex v1 = e.firstVertex(), 
                    v2 = e.secondVertex();
             if (!vertex_is_stabilizable[v1])  // v1 is not a source/stable
@@ -172,12 +179,12 @@ void RollingMarkovModel::split_chain_edges(){
             // TODO: find probabilities for else cases immediately
         }
     }
-    // recursive DFS from every starting seed edge (singular edge)
+    // Recursive DFS from every starting seed edge (singular edge)
+    printf("processing halfedges\n");
     for (Halfedge he: termilar_hes){
         process_halfedge(he);
     }
 }
-
 
 // whether the stable point can be reached or not
 void RollingMarkovModel::compute_vertex_stabilizablity(){
@@ -197,50 +204,38 @@ void RollingMarkovModel::initiate_root_sudo_face(Halfedge he){
            v2 = he.tipVertex();
     SudoFace *sf1 = new SudoFace(he, geometry->faceNormal(he.face()), nullptr, nullptr),
              *sf2 = new SudoFace(he, geometry->faceNormal(he.twin().face()), nullptr, nullptr);
-            //  *sf1_twin = new SudoFace(he.twin(), geometry->faceNormal(he.twin().face()), nullptr, nullptr),
-            //  *sf2_twin = new SudoFace(he.twin(), geometry->faceNormal(he.face()), nullptr, nullptr);
     sf1->next_sudo_face = sf2;
     sf1->prev_sudo_face = sf1;
     sf2->next_sudo_face = sf2;
     sf2->prev_sudo_face = sf1;
 
-    // sf1_twin->next_sudo_face = sf1_twin;
-    // sf1_twin->prev_sudo_face = sf2_twin;
-    // sf2_twin->next_sudo_face = sf1_twin;
-    // sf2_twin->prev_sudo_face = sf2_twin;
-
-    // sf1->twin = sf1_twin;
-    // sf1_twin->twin = sf1;
-    // sf2->twin = sf2_twin;
-    // sf2_twin->twin = sf2;
+    root_sudo_face[he] = sf1;
 }
 
 // edge rolls to a face if singular; else rolls to a vertex 
 void RollingMarkovModel::compute_edge_singularity_and_init_source_dir(){
     edge_is_singular = EdgeData<bool>(*mesh, false); // ~ is stable, by fwdSolver function names
-    edge_roll_dir = EdgeData<int>(*mesh, 0);
     // initial assignment of real faces as SudoFaces
     root_sudo_face = HalfedgeData<SudoFace*>(*mesh, nullptr);
     for (Edge e: mesh->edges()){
         Vertex next_vertex = forward_solver->next_rolling_vertex(e);
         
-        if (next_vertex.getIndex() == INVALID_IND) // singular edge
+        if (next_vertex.getIndex() == INVALID_IND){ // singular edge
             edge_is_singular[e] = true;
-        else if (next_vertex == e.secondVertex())
-            edge_roll_dir[e] = 1;
-        else if (next_vertex == e.firstVertex())
-            edge_roll_dir[e] = -1;
-        else 
-            printf(" %%% This should not happen %%% \n");
-        
-        Halfedge vec_field_aligned_he = (e.firstVertex() == next_vertex) ? e.halfedge().twin() : e.halfedge();
-        // so singular he is also aligned with the vector field
-        initiate_root_sudo_face(vec_field_aligned_he);
+            initiate_root_sudo_face(e.halfedge());
+            initiate_root_sudo_face(e.halfedge().twin());
+        }
+        else {
+            Halfedge vec_field_aligned_he = (e.firstVertex() == next_vertex) ? e.halfedge().twin() : e.halfedge();
+            // so singular he is also aligned with the vector field
+            initiate_root_sudo_face(vec_field_aligned_he);
+            printf(" inited sf for non singular he %d, %d\n", vec_field_aligned_he.tailVertex().getIndex(), vec_field_aligned_he.tipVertex().getIndex());
+        }
     }
 }
 
 // is 0 if the normal is unreachable; and if non-singular: the normal doesnt fall on the edge (edge too short)
-void RollingMarkovModel::compute_edge_stable_normal(){
+void RollingMarkovModel::compute_edge_stable_normals(){
     // edge_is_singular should be populated and initiated before
     if (edge_is_singular.size() == 0) throw std::logic_error("edge_is_singular should be called before this.\n");
     
@@ -255,4 +250,10 @@ void RollingMarkovModel::compute_edge_stable_normal(){
     }
 }
 
+// just call all the pre-compute initializations
+void RollingMarkovModel::initialize_pre_computes(){
+    compute_vertex_stabilizablity();
+    compute_edge_singularity_and_init_source_dir();
+    compute_edge_stable_normals();
+}
 
