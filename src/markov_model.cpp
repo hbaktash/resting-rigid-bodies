@@ -2,8 +2,10 @@
 
 // double EPS = 1e-8;
 
+size_t SudoFace::counter = 0;
+
 // trivial constructors
-SudoFace::SudoFace(Halfedge host_he_, Vector3 normal_, SudoFace *next_sudo_face_, SudoFace *prev_sudo_face_){
+SudoFace::SudoFace(Halfedge host_he_, Vector3 normal_, SudoFace *next_sudo_face_, SudoFace *prev_sudo_face_): index(counter++){
     host_he = host_he_;
     normal = normal_;
     next_sudo_face = next_sudo_face_;
@@ -71,27 +73,78 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
          tip_src_hits   = tip_intersection_normal_src.norm()  >= EPS,
          tail_dest_hits = tail_intersection_normal_dest.norm()>= EPS,
          tip_dest_hits  = tip_intersection_normal_dest.norm() >= EPS;
+    
+    Vertex v = dest_sf1->host_he.tailVertex();
+    double total_src_angle = angle(src_sf1->normal, src_sf2->normal);
+    double vertex_patch_area = geometry->vertexGaussianCurvature(v);
+
     if (tail_src_hits && !tip_src_hits){ // one hit. src tail
         SudoFace* new_dest_sf = dest_sf1->split_sudo_edge(tail_intersection_normal_src);
         new_dest_sf->source_sudo_face = src_sf1;
-        // TODO: check dest hits to get probability
+        // assigning probability
+        assert((tail_dest_hits && !tip_dest_hits) || (!tail_dest_hits && tip_dest_hits)); // exactly one should hit
+        if (tip_dest_hits){ // aligned orientation of src and dest
+            double dest_portion_angle = angle(tip_intersection_normal_dest, src_sf1->normal);
+            double prob = dest_portion_angle/total_src_angle;
+            sf_sf_pairs.push_back({src_sf1, new_dest_sf});
+            sf_sf_probs.push_back(prob);
+
+            // vertex to sf
+            double vertex_sf_prob = patch_area(tip_intersection_normal_dest, src_sf1->normal, new_dest_sf->normal, new_dest_sf->next_sudo_face->normal);
+            vertex_sf_pairs.push_back({v, new_dest_sf});
+            vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
+
+        }
+        if (tail_dest_hits){ // miss-aligned orientation of src and dest
+            double dest_portion_angle = angle(tail_intersection_normal_dest, src_sf1->normal);
+            double prob = dest_portion_angle/total_src_angle;
+            sf_sf_pairs.push_back({src_sf1, dest_sf1});
+            sf_sf_probs.push_back(prob);
+
+            // vertex to sf
+            double vertex_sf_prob = patch_area(tail_intersection_normal_dest, src_sf1->normal, dest_sf1->normal, dest_sf1->next_sudo_face->normal);
+            vertex_sf_pairs.push_back({v, dest_sf1});
+            vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
+        }
         return;
     }
     else if (!tail_src_hits && tip_src_hits){ // one hit. src tip
         SudoFace* new_dest_sf = dest_sf1->split_sudo_edge(tip_intersection_normal_src);
         new_dest_sf->source_sudo_face = src_sf2;
-        // TODO: check dest hits to get probability
+        // assigning probability
+        assert((tail_dest_hits && !tip_dest_hits) || (!tail_dest_hits && tip_dest_hits)); // exactly one should hit
+        if (tip_dest_hits){ // aligned orientation of src and dest
+            double dest_portion_angle = angle(tip_intersection_normal_dest, src_sf2->normal);
+            double prob = dest_portion_angle/total_src_angle;
+            sf_sf_pairs.push_back({src_sf1, new_dest_sf});
+            sf_sf_probs.push_back(prob);
+            // TODO vertex sf prob
+        }
+        if (tail_dest_hits){ // miss-aligned orientation of src and dest
+            double dest_portion_angle = angle(tail_intersection_normal_dest, src_sf2->normal);
+            double prob = dest_portion_angle/total_src_angle;
+            sf_sf_pairs.push_back({src_sf1, dest_sf1});
+            sf_sf_probs.push_back(prob);
+            // TODO vertex sf prob
+        }
         return;
     }
     else if (!tail_src_hits && !tip_src_hits){ //  no hits!
         if (tail_dest_hits){ // all of dest sudoEdge is covered 
             assert(tip_dest_hits); // either none hit or both should
-            //TODO: check dest hits to get probability
+            // assigning probability
+            double dest_portion_angle = angle(tip_intersection_normal_dest, tail_intersection_normal_dest);
+            double prob = dest_portion_angle/total_src_angle;
+            sf_sf_pairs.push_back({src_sf1, dest_sf1});
+            sf_sf_probs.push_back(prob);
+            // TODO vertex sf prob
             return;
         }
         else { // total miss on dest sudoEdge
             assert(!tip_dest_hits); // either none hit or both should
-            //TODO: probability is zero, assign it smwhere
+            // assigning probability
+            // is zero by default
+            // TODO vertex sf prob
             return;
         }
     }
@@ -133,13 +186,12 @@ void RollingMarkovModel::flow_he_to_he(Halfedge src, Halfedge dest){
 
 // handle single sink HalfEdge
 void RollingMarkovModel::process_halfedge(Halfedge he){
-    if (he_processed[he]) // actually dont need this; checked before calling
+    if (he_processed[he])
         return;
     if (vertex_is_stabilizable[he.tailVertex()]) // No split needed. The edge is fully reachable from the stable tail vertex
         return;
     // else
         // assert(forward_solver->next_rolling_vertex(he.edge()) == he.tipVertex()); // the HalfEdge aligns with the flow
-
     printf("  -- processing he %d, %d\n", he.tailVertex().getIndex(), he.tipVertex().getIndex());
     
     Vertex v = he.tailVertex();
@@ -165,19 +217,30 @@ void RollingMarkovModel::split_chain_edges(){
             printf("  -- at singular edge %d, %d \n", e.firstVertex().getIndex(), e.secondVertex().getIndex());
             Vertex v1 = e.firstVertex(), 
                    v2 = e.secondVertex();
+            Halfedge he = e.halfedge(),
+                     he_twin = e.halfedge().twin();
             if (!vertex_is_stabilizable[v1])  // v1 is not a source/stable
-                termilar_hes.push_back(e.halfedge());
+                termilar_hes.push_back(he);
             else {
-                he_processed[e.halfedge()] = true;
-                
+                he_processed[he] = true;
+                double face_roll_prob = get_he_face_probability(he);
+                sf_face_pairs.push_back({root_sudo_face[he], he.face()});
+                sf_face_probs.push_back(face_roll_prob);
+                sf_face_pairs.push_back({root_sudo_face[he], he_twin.face()});
+                sf_face_probs.push_back(1. - face_roll_prob);
             }
             
             if (!vertex_is_stabilizable[v2]) // v2 is not a source/stable
-                termilar_hes.push_back(e.halfedge().twin());
-            else
-                he_processed[e.halfedge().twin()] = true;
-
-            // TODO: find probabilities for else cases immediately
+                termilar_hes.push_back(he_twin);
+            else {
+                he_processed[he_twin] = true;
+                double face_roll_prob = get_he_face_probability(he_twin);
+                sf_face_pairs.push_back({root_sudo_face[he_twin], he_twin.face()});
+                sf_face_probs.push_back(face_roll_prob);
+                sf_face_pairs.push_back({root_sudo_face[he_twin], he.face()});
+                sf_face_probs.push_back(1. - face_roll_prob);
+            }
+            // TODO: assign vertex edge probabilities for singular edges
         }
     }
     // Recursive DFS from every starting seed edge (singular edge)

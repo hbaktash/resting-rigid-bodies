@@ -1,3 +1,22 @@
+/************************************************************************
+*
+* ADOBE CONFIDENTIAL
+* ___________________
+*
+* Copyright [first year code created] Adobe
+* All Rights Reserved.
+*
+* NOTICE: All information contained herein is, and remains
+* the property of Adobe and its suppliers, if any. The intellectual
+* and technical concepts contained herein are proprietary to Adobe
+* and its suppliers and are protected by all applicable intellectual
+* property laws, including trade secret and copyright laws.
+* Dissemination of this information or reproduction of this material
+* is strictly forbidden unless prior written permission is obtained
+* from Adobe.
+*************************************************************************
+*/
+
 #pragma once
 
 // #include "geometrycentral/surface/manifold_surface_mesh.h"
@@ -13,7 +32,10 @@ using namespace geometrycentral::surface;
 // SudoFaces form a linked list, the root can be accessed from each edge 
 // every SudoEdge formed by two SudoFaces is represented by the "first" SudoFace
 class SudoFace{
+    private:
+        static size_t counter;
     public:
+        const size_t index;
         Halfedge host_he;
         Vector3 normal;
         SudoFace *next_sudo_face, // on the host edge, just used for iteration 

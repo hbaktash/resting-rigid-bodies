@@ -7,6 +7,11 @@
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
+
+bool is_on_arc_segment(Vector3 nomral, Vector3 A, Vector3 B);
+
+double patch_area(Vector3 A, Vector3 B, Vector3 C, Vector3 D);
+
 // 0 if not within AB, else intersection normal with norm 1
 Vector3 intersect_arc_ray_with_arc(Vector3 R1, Vector3 R2, Vector3 A, Vector3 B);
 
