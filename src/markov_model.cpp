@@ -1,3 +1,21 @@
+/************************************************************************
+*
+* ADOBE CONFIDENTIAL
+* ___________________
+*
+* Copyright [first year code created] Adobe
+* All Rights Reserved.
+*
+* NOTICE: All information contained herein is, and remains
+* the property of Adobe and its suppliers, if any. The intellectual
+* and technical concepts contained herein are proprietary to Adobe
+* and its suppliers and are protected by all applicable intellectual
+* property laws, including trade secret and copyright laws.
+* Dissemination of this information or reproduction of this material
+* is strictly forbidden unless prior written permission is obtained
+* from Adobe.
+*************************************************************************
+*/
 #include "markov_model.h"
 
 // double EPS = 1e-8;
@@ -76,14 +94,16 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
     
     Vertex v = dest_sf1->host_he.tailVertex();
     double total_src_angle = angle(src_sf1->normal, src_sf2->normal);
-    double vertex_patch_area = geometry->vertexGaussianCurvature(v);
+    double vertex_patch_area = PI; // geometry->vertexGaussianCurvature(v); // TODO implement for the polygonal case :\
 
     if (tail_src_hits && !tip_src_hits){ // one hit. src tail
         SudoFace* new_dest_sf = dest_sf1->split_sudo_edge(tail_intersection_normal_src);
         new_dest_sf->source_sudo_face = src_sf1;
         // assigning probability
-        assert((tail_dest_hits && !tip_dest_hits) || (!tail_dest_hits && tip_dest_hits)); // exactly one should hit
-        if (tip_dest_hits){ // aligned orientation of src and dest
+        // assert((tail_dest_hits && !tip_dest_hits) || (!tail_dest_hits && tip_dest_hits)); // exactly one should hit
+        if (tip_dest_hits && 
+            (!tail_dest_hits || (tail_intersection_normal_dest - src_sf1->normal).norm() <= EPS)){ // either no hit on the other end, or is the same as the src tail
+            
             double dest_portion_angle = angle(tip_intersection_normal_dest, src_sf1->normal);
             double prob = dest_portion_angle/total_src_angle;
             sf_sf_pairs.push_back({src_sf1, new_dest_sf});
@@ -95,7 +115,8 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
             vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
 
         }
-        if (tail_dest_hits){ // miss-aligned orientation of src and dest
+        else if (tail_dest_hits && 
+            (!tip_dest_hits || (tip_intersection_normal_dest - src_sf1->normal).norm() <= EPS)){ // miss-aligned orientation of src and dest
             double dest_portion_angle = angle(tail_intersection_normal_dest, src_sf1->normal);
             double prob = dest_portion_angle/total_src_angle;
             sf_sf_pairs.push_back({src_sf1, dest_sf1});
@@ -106,32 +127,37 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
             vertex_sf_pairs.push_back({v, dest_sf1});
             vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
         }
+        else 
+            throw std::logic_error("tip/tail intersections have gone wrong\n");
         return;
     }
     else if (!tail_src_hits && tip_src_hits){ // one hit. src tip
         SudoFace* new_dest_sf = dest_sf1->split_sudo_edge(tip_intersection_normal_src);
         new_dest_sf->source_sudo_face = src_sf2;
         // assigning probability
-        assert((tail_dest_hits && !tip_dest_hits) || (!tail_dest_hits && tip_dest_hits)); // exactly one should hit
-        if (tip_dest_hits){ // aligned orientation of src and dest
+        // assert((tail_dest_hits && !tip_dest_hits) || (!tail_dest_hits && tip_dest_hits)); // exactly one should hit
+        if (tip_dest_hits && 
+            (!tail_dest_hits || (tail_intersection_normal_dest - src_sf2->normal).norm() <= EPS)){ // aligned orientation of src and dest
             double dest_portion_angle = angle(tip_intersection_normal_dest, src_sf2->normal);
             double prob = dest_portion_angle/total_src_angle;
             sf_sf_pairs.push_back({src_sf1, new_dest_sf});
             sf_sf_probs.push_back(prob);
             // TODO vertex sf prob
         }
-        if (tail_dest_hits){ // miss-aligned orientation of src and dest
+        else if (tail_dest_hits && 
+            (!tip_dest_hits || (tip_intersection_normal_dest - src_sf2->normal).norm() <= EPS)){ // miss-aligned orientation of src and dest
             double dest_portion_angle = angle(tail_intersection_normal_dest, src_sf2->normal);
             double prob = dest_portion_angle/total_src_angle;
             sf_sf_pairs.push_back({src_sf1, dest_sf1});
             sf_sf_probs.push_back(prob);
             // TODO vertex sf prob
         }
+        else 
+            throw std::logic_error("tip/tail intersections have gone wrong\n");
         return;
     }
     else if (!tail_src_hits && !tip_src_hits){ //  no hits!
-        if (tail_dest_hits){ // all of dest sudoEdge is covered 
-            assert(tip_dest_hits); // either none hit or both should
+        if (tail_dest_hits && tip_dest_hits){ // all of dest sudoEdge is covered; one could hit because of pre/next SudoEdge overlaps
             // assigning probability
             double dest_portion_angle = angle(tip_intersection_normal_dest, tail_intersection_normal_dest);
             double prob = dest_portion_angle/total_src_angle;
@@ -140,8 +166,7 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
             // TODO vertex sf prob
             return;
         }
-        else { // total miss on dest sudoEdge
-            assert(!tip_dest_hits); // either none hit or both should
+        else { // total miss on dest sudoEdge; 
             // assigning probability
             // is zero by default
             // TODO vertex sf prob
@@ -233,6 +258,8 @@ void RollingMarkovModel::split_chain_edges(){
             if (!vertex_is_stabilizable[v2]) // v2 is not a source/stable
                 termilar_hes.push_back(he_twin);
             else {
+
+                printf("here1\n");
                 he_processed[he_twin] = true;
                 double face_roll_prob = get_he_face_probability(he_twin);
                 sf_face_pairs.push_back({root_sudo_face[he_twin], he_twin.face()});
@@ -304,7 +331,7 @@ void RollingMarkovModel::compute_edge_stable_normals(){
     if (edge_is_singular.size() == 0) throw std::logic_error("edge_is_singular should be called before this.\n");
     
     Vector3 zero_vec({0.,0.,0.});
-    EdgeData<Vector3> edge_stable_normal(*mesh, zero_vec);
+    edge_stable_normal = EdgeData<Vector3>(*mesh, zero_vec);
     for (Edge e: mesh->edges()){
         if (edge_is_singular[e]){ // not cheking stabilizability ~= reachablility
             Vector3 A = geometry->inputVertexPositions[e.firstVertex()],

@@ -1,3 +1,22 @@
+/************************************************************************
+*
+* ADOBE CONFIDENTIAL
+* ___________________
+*
+* Copyright [first year code created] Adobe
+* All Rights Reserved.
+*
+* NOTICE: All information contained herein is, and remains
+* the property of Adobe and its suppliers, if any. The intellectual
+* and technical concepts contained herein are proprietary to Adobe
+* and its suppliers and are protected by all applicable intellectual
+* property laws, including trade secret and copyright laws.
+* Dissemination of this information or reproduction of this material
+* is strictly forbidden unless prior written permission is obtained
+* from Adobe.
+*************************************************************************
+*/
+
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/meshio.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
@@ -589,6 +608,8 @@ void update_visuals_with_G(){
   draw_stable_face_normals_on_gauss_map();
   if (polyscope::hasSurfaceMesh("dummy mesh for gauss map arcs") && draw_stable_patches)
     draw_stable_patches_on_gauss_map();
+  initiate_markov_model();
+  visualize_sudo_faces();
 }
 
 
