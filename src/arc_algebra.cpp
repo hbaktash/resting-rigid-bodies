@@ -51,3 +51,23 @@ Vector3 intersect_arc_ray_with_arc(Vector3 R1, Vector3 R2, Vector3 A, Vector3 B)
         return Vector3::zero();
     
 }
+
+
+
+// Gaussian curvature for a general polygonal case
+bool gaussian_curvature(Vertex v, VertexPositionGeometry &geometry){
+    if (v.isBoundary()) return 0.;
+    double gaussianCurvature = 2. * PI;
+    for (Halfedge he : v.outgoingHalfedges()) {
+        Vertex v_next = he.tipVertex(),
+               v_pre = he.prevOrbitFace().tailVertex();
+        Vector3 A = geometry.inputVertexPositions[v],
+                B = geometry.inputVertexPositions[v_pre],
+                C = geometry.inputVertexPositions[v_next];
+        double q = dot(unit(B - A), unit(C - A));
+        q = clamp(q, -1.0, 1.0);
+        double angle = std::acos(q);
+        gaussianCurvature -= angle;
+    }
+    return gaussianCurvature;
+}

@@ -94,13 +94,12 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
     
     Vertex v = dest_sf1->host_he.tailVertex();
     double total_src_angle = angle(src_sf1->normal, src_sf2->normal);
-    double vertex_patch_area = PI; // geometry->vertexGaussianCurvature(v); // TODO implement for the polygonal case :\
+    double vertex_patch_area = gaussian_curvature(v, *geometry);
 
     if (tail_src_hits && !tip_src_hits){ // one hit. src tail
         SudoFace* new_dest_sf = dest_sf1->split_sudo_edge(tail_intersection_normal_src);
         new_dest_sf->source_sudo_face = src_sf1;
         // assigning probability
-        // assert((tail_dest_hits && !tip_dest_hits) || (!tail_dest_hits && tip_dest_hits)); // exactly one should hit
         if (tip_dest_hits && 
             (!tail_dest_hits || (tail_intersection_normal_dest - src_sf1->normal).norm() <= EPS)){ // either no hit on the other end, or is the same as the src tail
             
@@ -142,7 +141,11 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
             double prob = dest_portion_angle/total_src_angle;
             sf_sf_pairs.push_back({src_sf1, new_dest_sf});
             sf_sf_probs.push_back(prob);
-            // TODO vertex sf prob
+
+            // vertex to sf
+            double vertex_sf_prob = patch_area(tip_intersection_normal_dest, src_sf2->normal, new_dest_sf->normal, new_dest_sf->next_sudo_face->normal);
+            vertex_sf_pairs.push_back({v, new_dest_sf});
+            vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
         }
         else if (tail_dest_hits && 
             (!tip_dest_hits || (tip_intersection_normal_dest - src_sf2->normal).norm() <= EPS)){ // miss-aligned orientation of src and dest
@@ -150,7 +153,11 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
             double prob = dest_portion_angle/total_src_angle;
             sf_sf_pairs.push_back({src_sf1, dest_sf1});
             sf_sf_probs.push_back(prob);
-            // TODO vertex sf prob
+            
+            // vertex to sf
+            double vertex_sf_prob = patch_area(tail_intersection_normal_dest, src_sf2->normal, dest_sf1->normal, dest_sf1->next_sudo_face->normal);
+            vertex_sf_pairs.push_back({v, dest_sf1});
+            vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
         }
         else 
             throw std::logic_error("tip/tail intersections have gone wrong\n");
@@ -163,37 +170,48 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
             double prob = dest_portion_angle/total_src_angle;
             sf_sf_pairs.push_back({src_sf1, dest_sf1});
             sf_sf_probs.push_back(prob);
-            // TODO vertex sf prob
+            
+            // vertex to sf
+            double vertex_sf_prob = patch_area(tip_intersection_normal_dest, tail_intersection_normal_dest, dest_sf1->normal, dest_sf1->next_sudo_face->normal);
+            vertex_sf_pairs.push_back({v, dest_sf1});
+            vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
             return;
         }
         else { // total miss on dest sudoEdge; 
             // assigning probability
             // is zero by default
-            // TODO vertex sf prob
             return;
         }
     }
     else if (tail_src_hits && tip_src_hits){ // two hits!!
         SudoFace *new_dest_sf1, *new_dest_sf2;
         // need to check alignment here
-        if ((tail_intersection_normal_src - dest_sf1->normal).norm() <= (tip_intersection_normal_src - dest_sf1->normal).norm()){ // tail-tip assignments agree on src and dest 
+        if ((tail_intersection_normal_src - dest_sf1->normal).norm() <= (tip_intersection_normal_src - dest_sf1->normal).norm()){ // src and dest have aligned orientations 
             new_dest_sf1 = dest_sf1->split_sudo_edge(tail_intersection_normal_src);
             new_dest_sf2 = new_dest_sf1->split_sudo_edge(tip_intersection_normal_src);
             new_dest_sf1->source_sudo_face = src_sf1;
             new_dest_sf2->source_sudo_face = src_sf2;
-            //TODO: assign the probability here
         }
         else {
             new_dest_sf1 = dest_sf1->split_sudo_edge(tip_intersection_normal_src);
             new_dest_sf2 = new_dest_sf1->split_sudo_edge(tail_intersection_normal_src);
             new_dest_sf1->source_sudo_face = src_sf2;
             new_dest_sf2->source_sudo_face = src_sf1;
-            //TODO: assign the probability here
         }
+        // assigning probabilities
+        double prob = 1.;
+        sf_sf_pairs.push_back({src_sf1, new_dest_sf1});
+        sf_sf_probs.push_back(prob);
+        
+        // vertex to sf
+        double vertex_sf_prob = patch_area(src_sf1->normal, src_sf2->normal, new_dest_sf1->normal, new_dest_sf1->next_sudo_face->normal);
+        vertex_sf_pairs.push_back({v, new_dest_sf1});
+        vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
         return;
     }
     else; //shouldnt get here!
 }
+
 
 void RollingMarkovModel::flow_he_to_he(Halfedge src, Halfedge dest){
     SudoFace *curr_src_sf = root_sudo_face[src];

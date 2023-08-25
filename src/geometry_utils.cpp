@@ -80,3 +80,4 @@ void center_and_normalize(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geo
         geometry->inputVertexPositions[v] /= max_radi;
     }
 }
+

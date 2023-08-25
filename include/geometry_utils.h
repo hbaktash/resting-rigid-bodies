@@ -34,9 +34,6 @@ convex_hull(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geome
 
 bool G_is_inside(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry, Vector3 G);
 
-// Gaussian curvature for a general polygonal case
-bool gaussian_curvature(Vertex v, VertexPositionGeometry &geometry);
-
 
 // assumes uniform mass density; TODO how to handle non-uniform?
 Vector3 find_center_of_mass(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geometry);
