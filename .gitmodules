@@ -4,3 +4,6 @@
 [submodule "deps/polyscope"]
 	path = deps/polyscope
 	url = https://github.com/nmwsharp/polyscope.git
+[submodule "deps/bullet3"]
+	path = deps/bullet3
+	url = https://github.com/bulletphysics/bullet3
