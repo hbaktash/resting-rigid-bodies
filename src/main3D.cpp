@@ -455,23 +455,22 @@ void initiate_markov_model(){
   markov_model->split_chain_edges();
 }
 
-// split the Markov chain
-void split_markov_chain(){
-}
 
 // visualize 
 void visualize_sudo_faces(){
   std::vector<Vector3> sf_positions;
+  size_t sf_count = 0;
   for (Halfedge he: markov_model->mesh->halfedges()){
     SudoFace *curr_sf = markov_model->root_sudo_face[he];
     if (curr_sf != nullptr){
       while (curr_sf->next_sudo_face != curr_sf){
         sf_positions.push_back(curr_sf->normal + gm_shift);
+        sf_count++;
         curr_sf = curr_sf->next_sudo_face;
       }
     }
   }
-
+  
   sudo_faces_pc = polyscope::registerPointCloud("sudo faces", sf_positions);
   sudo_faces_pc->setEnabled(true);
   sudo_faces_pc->setPointRadius(face_normal_vertex_gm_radi * 1.2, false);

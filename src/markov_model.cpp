@@ -53,7 +53,6 @@ RollingMarkovModel::RollingMarkovModel(ManifoldSurfaceMesh* mesh_, VertexPositio
 
 // split the SudoEdge starting with this SudoFace 
 // TODO: source/sink assignment!
-// TODO: decide on twin he assignment; null/potent for sink side
 SudoFace* SudoFace::split_sudo_edge(Vector3 new_normal){
     assert(abs(new_normal.norm() - 1.) <= EPS);
     // cases that no split is required

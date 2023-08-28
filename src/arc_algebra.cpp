@@ -26,7 +26,7 @@ bool is_on_arc_segment(Vector3 P, Vector3 A, Vector3 B){
     if (P.norm() <= EPS)
         return false;
     double AB_len = (A-B).norm();
-    return (P - A).norm() <= AB_len + EPS && (P - B).norm() <= AB_len + EPS;
+    return (P - A).norm() <= (AB_len + EPS) && (P - B).norm() <= (AB_len + EPS);
 }
 
 double patch_area(Vector3 A, Vector3 B, Vector3 C, Vector3 D){

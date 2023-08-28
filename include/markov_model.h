@@ -32,9 +32,8 @@ using namespace geometrycentral::surface;
 // SudoFaces form a linked list, the root can be accessed from each edge 
 // every SudoEdge formed by two SudoFaces is represented by the "first" SudoFace
 class SudoFace{
-    private:
-        static size_t counter;
     public:
+        static size_t counter;
         const size_t index;
         Halfedge host_he;
         Vector3 normal;
