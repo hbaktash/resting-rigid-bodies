@@ -93,8 +93,11 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
     
     Vertex v = dest_sf1->host_he.tailVertex();
     double total_src_angle = angle(src_sf1->normal, src_sf2->normal);
-    double vertex_patch_area = gaussian_curvature(v, *geometry);
-
+    double vertex_patch_area = vertex_gaussian_curvature[v]; // already computed
+    // TODO: handle tail to tail cases; is it already handled???
+    //       check splits and check probability pairs being generated
+    // verdict: - no redundant sudoFace is being generated
+    //          - redundant prob_pairs might be generated, with close to zero probability assigned to them
     if (tail_src_hits && !tip_src_hits){ // one hit. src tail
         SudoFace* new_dest_sf = dest_sf1->split_sudo_edge(tail_intersection_normal_src);
         new_dest_sf->source_sudo_face = src_sf1;
@@ -238,7 +241,7 @@ void RollingMarkovModel::process_halfedge(Halfedge he){
     
     Vertex v = he.tailVertex();
     for (Halfedge src_he: v.incomingHalfedges()){
-        printf("    & checking possible src_he %d, %d,   singular: %d, has root sf %d \n", src_he.tailVertex().getIndex(), src_he.tipVertex().getIndex(), edge_is_singular[src_he.edge()], root_sudo_face[src_he] != nullptr);
+        // printf("    & checking possible src_he %d, %d,   singular: %d, has root sf %d \n", src_he.tailVertex().getIndex(), src_he.tipVertex().getIndex(), edge_is_singular[src_he.edge()], root_sudo_face[src_he] != nullptr);
         if (root_sudo_face[src_he] != nullptr && !edge_is_singular[src_he.edge()]){ // src_he is a source in this vertex
             process_halfedge(src_he);
             printf("    * flowing from %d,%d \n", src_he.tailVertex().getIndex(), src_he.tipVertex().getIndex());
@@ -249,7 +252,7 @@ void RollingMarkovModel::process_halfedge(Halfedge he){
 }
 
 // recursion starting from singular/stable edges
-void RollingMarkovModel::split_chain_edges(){
+void RollingMarkovModel::split_chain_edges_and_build_probability_pairs(){
     // DP to avoid spliting a HalfEdge twice
     he_processed = HalfedgeData<bool>(*mesh, false);
     // use singular edges as starting seeds the recursion
@@ -261,15 +264,27 @@ void RollingMarkovModel::split_chain_edges(){
                    v2 = e.secondVertex();
             Halfedge he = e.halfedge(),
                      he_twin = e.halfedge().twin();
+            SudoFace *sf = root_sudo_face[he],
+                     *sf_twin = root_sudo_face[he_twin]; 
             if (!vertex_is_stabilizable[v1])  // v1 is not a source/stable
                 termilar_hes.push_back(he);
             else {
                 he_processed[he] = true;
-                double face_roll_prob = get_he_face_probability(he);
-                sf_face_pairs.push_back({root_sudo_face[he], he.face()});
+                
+                // assigning probabilities
+                // edge -> face
+                double face_roll_prob = get_he_face_probability(he); // to he.face()
+                sf_face_pairs.push_back({sf, he.face()});
                 sf_face_probs.push_back(face_roll_prob);
-                sf_face_pairs.push_back({root_sudo_face[he], he_twin.face()});
+                sf_face_pairs.push_back({sf, he_twin.face()});
                 sf_face_probs.push_back(1. - face_roll_prob);
+                // vertex -> edge
+                Vector3 v1_stable_normal = vertex_stable_normal[v1];
+                double v1f1f2_patch_area = triangle_patch_area_on_sphere(v1_stable_normal, 
+                                                                         geometry->faceNormal(he.face()),
+                                                                         geometry->faceNormal(he.twin().face()));
+                vertex_sf_pairs.push_back({v1, sf});
+                vertex_sf_probs.push_back(v1f1f2_patch_area/vertex_gaussian_curvature[v1]);
             }
             
             if (!vertex_is_stabilizable[v2]) // v2 is not a source/stable
@@ -279,12 +294,19 @@ void RollingMarkovModel::split_chain_edges(){
                 printf("here1\n");
                 he_processed[he_twin] = true;
                 double face_roll_prob = get_he_face_probability(he_twin);
-                sf_face_pairs.push_back({root_sudo_face[he_twin], he_twin.face()});
+                sf_face_pairs.push_back({sf_twin, he_twin.face()});
                 sf_face_probs.push_back(face_roll_prob);
-                sf_face_pairs.push_back({root_sudo_face[he_twin], he.face()});
+                sf_face_pairs.push_back({sf_twin, he.face()});
                 sf_face_probs.push_back(1. - face_roll_prob);
+
+                // vertex -> edge
+                Vector3 v2_stable_normal = vertex_stable_normal[v2];
+                double v2f1f2_patch_area = triangle_patch_area_on_sphere(v2_stable_normal, 
+                                                                         geometry->faceNormal(he.face()),
+                                                                         geometry->faceNormal(he_twin.face()));
+                vertex_sf_pairs.push_back({v2, sf_twin});
+                vertex_sf_probs.push_back(v2f1f2_patch_area/vertex_gaussian_curvature[v2]);
             }
-            // TODO: assign vertex edge probabilities for singular edges
         }
     }
     // Recursive DFS from every starting seed edge (singular edge)
@@ -361,8 +383,17 @@ void RollingMarkovModel::compute_edge_stable_normals(){
 // just call all the pre-compute initializations
 void RollingMarkovModel::initialize_pre_computes(){
     compute_vertex_stabilizablity();
+    compute_vertex_gaussian_curvatures();
     compute_edge_singularity_and_init_source_dir();
     compute_edge_stable_normals();
+}
+
+// pre-compute vertex gaussian curvatures
+void RollingMarkovModel::compute_vertex_gaussian_curvatures(){
+    vertex_gaussian_curvature = VertexData<double>(*mesh, 0.);
+    for (Vertex v: mesh->vertices()){
+        vertex_gaussian_curvature[v] = gaussian_curvature(v, *geometry);
+    }
 }
 
 //
@@ -371,7 +402,7 @@ double RollingMarkovModel::get_he_face_probability(Halfedge he){
         Vector3 f1_normal = geometry->faceNormal(he.face()),
                 f2_normal = geometry->faceNormal(he.twin().face()),
                 stable_normal = edge_stable_normal[he.edge()];
-        assert(stable_normal.norm() >= EPS);
+        assert(stable_normal.norm() >= EPS); // since edge is singular
         double total_angle = angle(f1_normal, f2_normal),
                sn_f1_angle  = angle(f1_normal, stable_normal),
                sn_f2_angle  = angle(f2_normal, stable_normal);

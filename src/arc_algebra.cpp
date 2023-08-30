@@ -31,7 +31,11 @@ bool is_on_arc_segment(Vector3 P, Vector3 A, Vector3 B){
 
 double patch_area(Vector3 A, Vector3 B, Vector3 C, Vector3 D){
     // TODO: double count all traingles and divide by 2 in the end
-    return 0;
+    double total_area = triangle_patch_area_on_sphere(A, B, C)+
+                        triangle_patch_area_on_sphere(A, B, D)+
+                        triangle_patch_area_on_sphere(C, D, A)+
+                        triangle_patch_area_on_sphere(C, D, B);
+    return total_area/2.;
 }
 
 Vector3 intersect_arc_ray_with_arc(Vector3 R1, Vector3 R2, Vector3 A, Vector3 B){
@@ -70,4 +74,24 @@ bool gaussian_curvature(Vertex v, VertexPositionGeometry &geometry){
         gaussianCurvature -= angle;
     }
     return gaussianCurvature;
+}
+
+
+// A being in the middle
+double angle_on_sphere(Vector3 P1, Vector3 A, Vector3 P2){
+    Vector3 n1 = cross(A, P1),
+            n2 = cross(A, P2);
+    return angle(n1, n2);
+}
+
+
+// area of a triangular patch on sphere
+double triangle_patch_area_on_sphere(Vector3 A, Vector3 B, Vector3 C){
+    Vector3 n_AB = cross(A, B),
+            n_BC = cross(B, C),
+            n_CA = cross(C, A);
+    double angle_A = angle(n_AB, -n_CA),
+           angle_B = angle(n_BC, -n_AB),
+           angle_C = angle(n_CA, -n_BC);
+    return angle_A + angle_B + angle_C - PI;
 }

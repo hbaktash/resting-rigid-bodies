@@ -73,6 +73,7 @@ class RollingMarkovModel {
         // whether the stable point can be reached or not
         VertexData<bool> vertex_is_stabilizable;
         VertexData<Vector3> vertex_stable_normal;
+        VertexData<double> vertex_gaussian_curvature;
         // either reachable or un-reachable; inferable from _vertex_stabilizability_
         // edge rolls to a face if singular; else rolls to a vertex
         EdgeData<bool> edge_is_singular;
@@ -88,14 +89,15 @@ class RollingMarkovModel {
         bool surgery_is_done = false;
 
         // pre-compute functions
-        void split_chain_edges();
         void compute_vertex_stabilizablity();
         void initiate_root_sudo_face(Halfedge he);
         void compute_edge_singularity_and_init_source_dir();
         void compute_edge_stable_normals();
         void initialize_pre_computes();
+        void compute_vertex_gaussian_curvatures();
         
         // Split and surgery functions
+        void split_chain_edges_and_build_probability_pairs();
         // handle single source HalfEdge/SudoEdge
         void process_halfedge(Halfedge he);
         void flow_he_to_he(Halfedge src, Halfedge dest);
@@ -111,10 +113,16 @@ class RollingMarkovModel {
         
         // prob of going from a HalfEdge to a neigh face
         double get_he_face_probability(Halfedge he);
-        // TODO: 
+        
+        // TODO: for prob pair debugs
+        void print_prob_pairs();
+        // TODO: build the transition matrix with Vertices, SudoEdges, Faces as nodes
+        SparseMatrix<double> build_transition_matrix();
+        
+        
+        // WTH is this
         // deterministic routes; assuming G is inside (positive mass), o.w. it won't be a DAG (will have loops)
-        FaceData<Face> face_to_face; // might need to roll through a bunch of edges before getting to next face
-        EdgeData<Face> edge_to_face;
+        FaceData<Face> face_next_face; // might need to roll through a bunch of edges before getting to next face
         // probabilistic routes; only local routes (size-2 chains)
         double vertex_to_edge_prob(Vertex v, Edge e);
         double edge_to_edge_prob(Edge e1, Edge e2);
