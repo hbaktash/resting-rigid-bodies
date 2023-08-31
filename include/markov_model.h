@@ -111,6 +111,9 @@ class RollingMarkovModel {
         std::vector<std::pair<Vertex, SudoFace*>> vertex_sf_pairs;
         std::vector<double> vertex_sf_probs;
         
+        // clear pair/prob vectors
+        void empty_prob_vectors();
+        
         // prob of going from a HalfEdge to a neigh face
         double get_he_face_probability(Halfedge he);
         

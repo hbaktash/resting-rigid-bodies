@@ -453,6 +453,7 @@ void initiate_markov_model(){
   markov_model = new RollingMarkovModel(&forwardSolver);
   markov_model->initialize_pre_computes();
   markov_model->split_chain_edges_and_build_probability_pairs();
+  markov_model->print_prob_pairs();
 }
 
 

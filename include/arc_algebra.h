@@ -38,7 +38,7 @@ Vector3 intersect_arc_ray_with_arc(Vector3 R1, Vector3 R2, Vector3 A, Vector3 B)
 
 
 // Gaussian curvature for a general polygonal case
-bool gaussian_curvature(Vertex v, VertexPositionGeometry &geometry);
+double gaussian_curvature(Vertex v, VertexPositionGeometry &geometry);
 
 // area of a triangular patch on sphere
 double triangle_patch_area_on_sphere(Vector3 A, Vector3 B, Vector3 C);

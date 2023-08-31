@@ -23,7 +23,8 @@
 size_t SudoFace::counter = 0;
 
 // trivial constructors
-SudoFace::SudoFace(Halfedge host_he_, Vector3 normal_, SudoFace *next_sudo_face_, SudoFace *prev_sudo_face_): index(counter++){
+SudoFace::SudoFace(Halfedge host_he_, Vector3 normal_, SudoFace *next_sudo_face_, SudoFace *prev_sudo_face_)
+    : index(counter++) {
     host_he = host_he_;
     normal = normal_;
     next_sudo_face = next_sudo_face_;
@@ -94,11 +95,13 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
     Vertex v = dest_sf1->host_he.tailVertex();
     double total_src_angle = angle(src_sf1->normal, src_sf2->normal);
     double vertex_patch_area = vertex_gaussian_curvature[v]; // already computed
+    printf("");
     // TODO: handle tail to tail cases; is it already handled???
     //       check splits and check probability pairs being generated
     // verdict: - no redundant sudoFace is being generated
     //          - redundant prob_pairs might be generated, with close to zero probability assigned to them
     if (tail_src_hits && !tip_src_hits){ // one hit. src tail
+        printf("        - one hit. src tail\n");
         SudoFace* new_dest_sf = dest_sf1->split_sudo_edge(tail_intersection_normal_src);
         new_dest_sf->source_sudo_face = src_sf1;
         // assigning probability
@@ -133,6 +136,7 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
         return;
     }
     else if (!tail_src_hits && tip_src_hits){ // one hit. src tip
+        printf("        - one hit. src tip\n");
         SudoFace* new_dest_sf = dest_sf1->split_sudo_edge(tip_intersection_normal_src);
         new_dest_sf->source_sudo_face = src_sf2;
         // assigning probability
@@ -166,6 +170,7 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
         return;
     }
     else if (!tail_src_hits && !tip_src_hits){ //  no hits!
+        printf("        - not hits\n");
         if (tail_dest_hits && tip_dest_hits){ // all of dest sudoEdge is covered; one could hit because of pre/next SudoEdge overlaps
             // assigning probability
             double dest_portion_angle = angle(tip_intersection_normal_dest, tail_intersection_normal_dest);
@@ -186,6 +191,7 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
         }
     }
     else if (tail_src_hits && tip_src_hits){ // two hits!!
+        printf("        - two hits!!\n");
         SudoFace *new_dest_sf1, *new_dest_sf2;
         // need to check alignment here
         if ((tail_intersection_normal_src - dest_sf1->normal).norm() <= (tip_intersection_normal_src - dest_sf1->normal).norm()){ // src and dest have aligned orientations 
@@ -211,7 +217,7 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
         vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
         return;
     }
-    else; //shouldnt get here!
+    else printf("        - WTF hits??? \n");; //shouldnt get here!
 }
 
 
@@ -219,13 +225,18 @@ void RollingMarkovModel::flow_he_to_he(Halfedge src, Halfedge dest){
     SudoFace *curr_src_sf = root_sudo_face[src];
     SudoFace *root_dest_sf = root_sudo_face[dest]; // never changes; even due to splits;
     assert(root_dest_sf != nullptr && curr_src_sf != nullptr);
+    int src_cnt = 0, dest_cnt = 0;
     while (curr_src_sf->next_sudo_face != curr_src_sf) {
         SudoFace *curr_dest_sf = root_dest_sf;
         while(curr_dest_sf->next_sudo_face != curr_dest_sf){
+            printf("     ** flow src sf #%d ind %d, to dest sf #%d ind %d \n", src_cnt, curr_src_sf->index, 
+                                                                               dest_cnt,curr_dest_sf->index);
             flow_sf_to_sf(curr_src_sf, curr_dest_sf);
             curr_dest_sf = curr_dest_sf->next_sudo_face;
+            dest_cnt++;
         }
         curr_src_sf = curr_src_sf->next_sudo_face;
+        src_cnt++;
     }
 }
 
@@ -251,8 +262,22 @@ void RollingMarkovModel::process_halfedge(Halfedge he){
     he_processed[he] = true;
 }
 
+
+void RollingMarkovModel::empty_prob_vectors(){
+    vertex_sf_pairs.clear();
+    vertex_sf_probs.clear();
+    sf_sf_pairs.clear();
+    sf_sf_probs.clear();
+    sf_face_pairs.clear();
+    sf_face_probs.clear();
+}
+
+
 // recursion starting from singular/stable edges
 void RollingMarkovModel::split_chain_edges_and_build_probability_pairs(){
+    // clean up probability pair vectors
+    empty_prob_vectors();
+
     // DP to avoid spliting a HalfEdge twice
     he_processed = HalfedgeData<bool>(*mesh, false);
     // use singular edges as starting seeds the recursion
@@ -285,13 +310,15 @@ void RollingMarkovModel::split_chain_edges_and_build_probability_pairs(){
                                                                          geometry->faceNormal(he.twin().face()));
                 vertex_sf_pairs.push_back({v1, sf});
                 vertex_sf_probs.push_back(v1f1f2_patch_area/vertex_gaussian_curvature[v1]);
+                // printf("added v_sf pair: %d  %d,%d\n", v1.getIndex(), sf->host_he.tailVertex().getIndex(),
+                //                                                       sf->host_he.tipVertex().getIndex());
+                // printf("    patch area, vertex G_Curvature: %f , %f\n", v1f1f2_patch_area, vertex_gaussian_curvature[v1]);
             }
             
             if (!vertex_is_stabilizable[v2]) // v2 is not a source/stable
                 termilar_hes.push_back(he_twin);
             else {
 
-                printf("here1\n");
                 he_processed[he_twin] = true;
                 double face_roll_prob = get_he_face_probability(he_twin);
                 sf_face_pairs.push_back({sf_twin, he_twin.face()});
@@ -359,7 +386,7 @@ void RollingMarkovModel::compute_edge_singularity_and_init_source_dir(){
             Halfedge vec_field_aligned_he = (e.firstVertex() == next_vertex) ? e.halfedge().twin() : e.halfedge();
             // so singular he is also aligned with the vector field
             initiate_root_sudo_face(vec_field_aligned_he);
-            printf(" inited sf for non singular he %d, %d\n", vec_field_aligned_he.tailVertex().getIndex(), vec_field_aligned_he.tipVertex().getIndex());
+            // printf(" inited sf for non singular he %d, %d\n", vec_field_aligned_he.tailVertex().getIndex(), vec_field_aligned_he.tipVertex().getIndex());
         }
     }
 }
@@ -393,6 +420,7 @@ void RollingMarkovModel::compute_vertex_gaussian_curvatures(){
     vertex_gaussian_curvature = VertexData<double>(*mesh, 0.);
     for (Vertex v: mesh->vertices()){
         vertex_gaussian_curvature[v] = gaussian_curvature(v, *geometry);
+        // printf(" Gaussian Curvature at %d, is %f\n", v.getIndex(), vertex_gaussian_curvature[v]);
     }
 }
 
@@ -417,4 +445,19 @@ double RollingMarkovModel::get_he_face_probability(Halfedge he){
     }
     else 
         return 0.;
+}
+
+void RollingMarkovModel::print_prob_pairs(){
+    printf("--printing probability pairs--\n\n");
+    printf("Vertex - SF:he -  probs: \n");
+    for (int i = 0; i < vertex_sf_pairs.size(); i++){
+        std::pair<Vertex, SudoFace*> v_sf_pair = vertex_sf_pairs[i];
+        Vertex v = v_sf_pair.first;
+        SudoFace* sf = v_sf_pair.second;
+        double v_sf_prob = vertex_sf_probs[i];
+        printf("  %d  -  %d,%d  -  %f  \n", v.getIndex(), 
+                                            sf->host_he.tailVertex().getIndex(), 
+                                            sf->host_he.tipVertex().getIndex(), 
+                                            v_sf_prob);
+    }
 }
