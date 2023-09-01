@@ -127,7 +127,7 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
             sf_sf_probs.push_back(prob);
 
             // vertex to sf
-            double vertex_sf_prob = patch_area(tail_intersection_normal_dest, src_sf1->normal, dest_sf1->normal, dest_sf1->next_sudo_face->normal);
+            double vertex_sf_prob = patch_area(tail_intersection_normal_dest, src_sf1->normal, dest_sf1->normal, tail_intersection_normal_src);
             vertex_sf_pairs.push_back({v, dest_sf1});
             vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
         }
@@ -161,9 +161,11 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
             sf_sf_probs.push_back(prob);
             
             // vertex to sf
-            double vertex_sf_prob = patch_area(tail_intersection_normal_dest, src_sf2->normal, dest_sf1->normal, dest_sf1->next_sudo_face->normal);
+            double tmp_patch_area = patch_area(tail_intersection_normal_dest, src_sf2->normal, dest_sf1->normal, tip_intersection_normal_src);
             vertex_sf_pairs.push_back({v, dest_sf1});
-            vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
+            vertex_sf_probs.push_back(tmp_patch_area/vertex_patch_area);
+
+            printf("            (v,sf): %d, %d   prob: %f / %f\n", v.getIndex(), dest_sf1->index, tmp_patch_area, vertex_patch_area);
         }
         else 
             throw std::logic_error("tip/tail intersections have gone wrong\n");
@@ -212,9 +214,11 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
         sf_sf_probs.push_back(prob);
         
         // vertex to sf
-        double vertex_sf_prob = patch_area(src_sf1->normal, src_sf2->normal, new_dest_sf1->normal, new_dest_sf1->next_sudo_face->normal);
+        double tmp_patch_area = patch_area(src_sf1->normal, src_sf2->normal, 
+                                           new_dest_sf1->normal, new_dest_sf1->next_sudo_face->normal);
         vertex_sf_pairs.push_back({v, new_dest_sf1});
-        vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
+        vertex_sf_probs.push_back(tmp_patch_area/vertex_patch_area);
+        printf("            (v,sf): %d, %d   prob: %f / %f\n", v.getIndex(), new_dest_sf1->index, tmp_patch_area,vertex_patch_area);
         return;
     }
     else printf("        - WTF hits??? \n");; //shouldnt get here!
@@ -229,8 +233,7 @@ void RollingMarkovModel::flow_he_to_he(Halfedge src, Halfedge dest){
     while (curr_src_sf->next_sudo_face != curr_src_sf) {
         SudoFace *curr_dest_sf = root_dest_sf;
         while(curr_dest_sf->next_sudo_face != curr_dest_sf){
-            printf("     ** flow src sf #%d ind %d, to dest sf #%d ind %d \n", src_cnt, curr_src_sf->index, 
-                                                                               dest_cnt,curr_dest_sf->index);
+            printf("     ** flow src sf %d, to dest %d \n", curr_src_sf->index, curr_dest_sf->index);
             flow_sf_to_sf(curr_src_sf, curr_dest_sf);
             curr_dest_sf = curr_dest_sf->next_sudo_face;
             dest_cnt++;
@@ -248,14 +251,18 @@ void RollingMarkovModel::process_halfedge(Halfedge he){
         return;
     // else
         // assert(forward_solver->next_rolling_vertex(he.edge()) == he.tipVertex()); // the HalfEdge aligns with the flow
-    printf("  -- processing he %d, %d\n", he.tailVertex().getIndex(), he.tipVertex().getIndex());
+    printf("  -- processing he %d, %d  f, tf: %d,%d\n", he.tailVertex().getIndex(), he.tipVertex().getIndex(),
+                                                        he.face().getIndex(), he.twin().face().getIndex());
     
     Vertex v = he.tailVertex();
     for (Halfedge src_he: v.incomingHalfedges()){
         // printf("    & checking possible src_he %d, %d,   singular: %d, has root sf %d \n", src_he.tailVertex().getIndex(), src_he.tipVertex().getIndex(), edge_is_singular[src_he.edge()], root_sudo_face[src_he] != nullptr);
         if (root_sudo_face[src_he] != nullptr && !edge_is_singular[src_he.edge()]){ // src_he is a source in this vertex
             process_halfedge(src_he);
-            printf("    * flowing from %d,%d \n", src_he.tailVertex().getIndex(), src_he.tipVertex().getIndex());
+            printf("    * flowing from %d,%d  f, tf: %d,%d \n", src_he.tailVertex().getIndex(), 
+                                                                 src_he.tipVertex().getIndex(),
+                                                                 src_he.face().getIndex(),
+                                                                 src_he.twin().face().getIndex());
             flow_he_to_he(src_he, he);
         }
     }
@@ -455,9 +462,14 @@ void RollingMarkovModel::print_prob_pairs(){
         Vertex v = v_sf_pair.first;
         SudoFace* sf = v_sf_pair.second;
         double v_sf_prob = vertex_sf_probs[i];
-        printf("  %d  -  %d,%d  -  %f  \n", v.getIndex(), 
+        printf("  %d  -  (%d) %d,%d  -  %f  \n", v.getIndex(), sf->index,
                                             sf->host_he.tailVertex().getIndex(), 
                                             sf->host_he.tipVertex().getIndex(), 
                                             v_sf_prob);
     }
+
+    for (int i = 0; i < sf_sf_pairs.size(); i++){
+    
+    }
+    
 }
