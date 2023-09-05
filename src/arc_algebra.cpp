@@ -29,6 +29,19 @@ bool is_on_arc_segment(Vector3 P, Vector3 A, Vector3 B){
     return (P - A).norm() <= (AB_len + EPS) && (P - B).norm() <= (AB_len + EPS);
 }
 
+// portion on A's side
+double arc_portion(Vector3 mid_point, Vector3 A, Vector3 B){
+    double total_angle = angle(A, B),
+           PA_angle  = angle(mid_point, A),
+           PB_angle  = angle(mid_point, B);
+    if (PA_angle >= total_angle && PA_angle >= PB_angle)
+        return 1.;
+    else if (PB_angle >= total_angle && PB_angle >= PA_angle)
+        return 0.;
+    else 
+        return PA_angle/total_angle;
+}
+
 double patch_area(Vector3 A, Vector3 B, Vector3 C, Vector3 D){
     // TODO: double count all traingles and divide by 2 in the end
     std::cout<< "$$ patch area for \n" <<

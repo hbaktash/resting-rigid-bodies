@@ -474,7 +474,7 @@ void visualize_sudo_faces(){
   
   sudo_faces_pc = polyscope::registerPointCloud("sudo faces", sf_positions);
   sudo_faces_pc->setEnabled(true);
-  sudo_faces_pc->setPointRadius(face_normal_vertex_gm_radi * 1.2, false);
+  sudo_faces_pc->setPointRadius(face_normal_vertex_gm_radi * 1.0, false);
   sudo_faces_pc->setPointColor({0.,1.,1.});
 }
 

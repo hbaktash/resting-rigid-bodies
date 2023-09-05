@@ -416,6 +416,7 @@ void RollingMarkovModel::compute_edge_stable_normals(){
 
 // just call all the pre-compute initializations
 void RollingMarkovModel::initialize_pre_computes(){
+    SudoFace::counter = 0;
     compute_vertex_stabilizablity();
     compute_vertex_gaussian_curvatures();
     compute_edge_singularity_and_init_source_dir();
@@ -438,17 +439,7 @@ double RollingMarkovModel::get_he_face_probability(Halfedge he){
                 f2_normal = geometry->faceNormal(he.twin().face()),
                 stable_normal = edge_stable_normal[he.edge()];
         assert(stable_normal.norm() >= EPS); // since edge is singular
-        double total_angle = angle(f1_normal, f2_normal),
-               sn_f1_angle  = angle(f1_normal, stable_normal),
-               sn_f2_angle  = angle(f2_normal, stable_normal);
-        if (sn_f1_angle <= total_angle && sn_f2_angle <= total_angle)
-            return sn_f1_angle/total_angle;
-        else if (sn_f1_angle >= total_angle)
-            return 1.; // goes to f1
-        else if (sn_f2_angle >= total_angle)
-            return 0.; // goes to f2
-        else
-            assert(false); // not possible
+        return arc_portion(stable_normal, f1_normal, f2_normal);
     }
     else 
         return 0.;
@@ -467,9 +458,18 @@ void RollingMarkovModel::print_prob_pairs(){
                                             sf->host_he.tipVertex().getIndex(), 
                                             v_sf_prob);
     }
-
+    printf("SF1:he   -   SF2:he   -   probs: \n");
     for (int i = 0; i < sf_sf_pairs.size(); i++){
-    
+        std::pair<SudoFace*, SudoFace*> sf_sf_pair = sf_sf_pairs[i];
+        SudoFace *sf1 = sf_sf_pair.first,
+                 *sf2 = sf_sf_pair.second;
+        double sf_sf_prob = sf_sf_probs[i];
+        printf("  (%d) %d,%d  ->  (%d) %d,%d  =  %f  \n", sf1->index, 
+                                            sf1->host_he.tailVertex().getIndex(), 
+                                            sf1->host_he.tipVertex().getIndex(), sf2->index,
+                                            sf2->host_he.tailVertex().getIndex(), 
+                                            sf2->host_he.tipVertex().getIndex(), 
+                                            sf_sf_prob);
     }
     
 }
