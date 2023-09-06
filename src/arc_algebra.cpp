@@ -31,6 +31,7 @@ bool is_on_arc_segment(Vector3 P, Vector3 A, Vector3 B){
 
 // portion on A's side
 double arc_portion(Vector3 mid_point, Vector3 A, Vector3 B){
+    assert(dot(cross(A, B), mid_point) <= EPS); // all on one arc
     double total_angle = angle(A, B),
            PA_angle  = angle(mid_point, A),
            PB_angle  = angle(mid_point, B);
@@ -44,16 +45,16 @@ double arc_portion(Vector3 mid_point, Vector3 A, Vector3 B){
 
 double patch_area(Vector3 A, Vector3 B, Vector3 C, Vector3 D){
     // TODO: double count all traingles and divide by 2 in the end
-    std::cout<< "$$ patch area for \n" <<
-                "  A:" << A << "\n"<<
-                "  B:" << B << "\n"<<
-                "  C:" << C << "\n"<<
-                "  D:" << D << "\n$$\n";
+    // std::cout<< "$$ patch area for \n" <<
+    //             "  A:" << A << "\n"<<
+    //             "  B:" << B << "\n"<<
+    //             "  C:" << C << "\n"<<
+    //             "  D:" << D << "\n$$\n";
     double ABC_area = triangle_patch_area_on_sphere(A, B, C),
            ABD_area = triangle_patch_area_on_sphere(A, B, D),
            CDA_area = triangle_patch_area_on_sphere(C, D, A),
            CDB_area = triangle_patch_area_on_sphere(C, D, B);
-    printf("$$ patch areas: %f, %f, %f, %f \n", ABC_area, ABD_area, CDA_area, CDB_area);
+    // printf("$$ patch areas: %f, %f, %f, %f \n", ABC_area, ABD_area, CDA_area, CDB_area);
     return (ABC_area + ABD_area + CDA_area + CDB_area)/2.;
 }
 

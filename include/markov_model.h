@@ -117,6 +117,9 @@ class RollingMarkovModel {
         // prob of going from a HalfEdge to a neigh face
         double get_he_face_probability(Halfedge he);
         
+        // sf to face pairs for non-trivial halfEdges
+        void build_sf_face_pairs();
+
         // TODO: for prob pair debugs
         void print_prob_pairs();
         // TODO: build the transition matrix with Vertices, SudoEdges, Faces as nodes

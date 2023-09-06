@@ -304,12 +304,6 @@ void RollingMarkovModel::split_chain_edges_and_build_probability_pairs(){
                 he_processed[he] = true;
                 
                 // assigning probabilities
-                // edge -> face
-                double face_roll_prob = get_he_face_probability(he); // to he.face()
-                sf_face_pairs.push_back({sf, he.face()});
-                sf_face_probs.push_back(face_roll_prob);
-                sf_face_pairs.push_back({sf, he_twin.face()});
-                sf_face_probs.push_back(1. - face_roll_prob);
                 // vertex -> edge
                 Vector3 v1_stable_normal = vertex_stable_normal[v1];
                 double v1f1f2_patch_area = triangle_patch_area_on_sphere(v1_stable_normal, 
@@ -327,12 +321,6 @@ void RollingMarkovModel::split_chain_edges_and_build_probability_pairs(){
             else {
 
                 he_processed[he_twin] = true;
-                double face_roll_prob = get_he_face_probability(he_twin);
-                sf_face_pairs.push_back({sf_twin, he_twin.face()});
-                sf_face_probs.push_back(face_roll_prob);
-                sf_face_pairs.push_back({sf_twin, he.face()});
-                sf_face_probs.push_back(1. - face_roll_prob);
-
                 // vertex -> edge
                 Vector3 v2_stable_normal = vertex_stable_normal[v2];
                 double v2f1f2_patch_area = triangle_patch_area_on_sphere(v2_stable_normal, 
@@ -347,6 +335,31 @@ void RollingMarkovModel::split_chain_edges_and_build_probability_pairs(){
     printf("processing halfedges\n");
     for (Halfedge he: termilar_hes){
         process_halfedge(he);
+    }
+
+    build_sf_face_pairs();
+}
+
+void RollingMarkovModel::build_sf_face_pairs(){
+    for (Halfedge he: mesh->halfedges()){
+        if (edge_is_singular[he.edge()]){
+            Face f1 = he.face(),
+                 f2 = he.twin().face();
+            Vector3 stable_normal = edge_stable_normal[he.edge()];
+            SudoFace *curr_sf = root_sudo_face[he];
+            if (curr_sf != nullptr){
+                while (curr_sf->next_sudo_face != curr_sf) {
+                    Vector3 curr_normal1 = curr_sf->normal,
+                            curr_normal2 = curr_sf->next_sudo_face->normal;
+                    double f1_prob = arc_portion(stable_normal, curr_normal1, curr_normal2);
+                    sf_face_pairs.push_back({curr_sf, f1});
+                    sf_face_probs.push_back(f1_prob);
+                    sf_face_pairs.push_back({curr_sf, f2});
+                    sf_face_probs.push_back(1. - f1_prob);
+                    curr_sf = curr_sf->next_sudo_face;
+                }
+            }
+        }
     }
 }
 
@@ -458,7 +471,7 @@ void RollingMarkovModel::print_prob_pairs(){
                                             sf->host_he.tipVertex().getIndex(), 
                                             v_sf_prob);
     }
-    printf("SF1:he   -   SF2:he   -   probs: \n");
+    printf("\nSF1:he   -   SF2:he   -   probs: \n");
     for (int i = 0; i < sf_sf_pairs.size(); i++){
         std::pair<SudoFace*, SudoFace*> sf_sf_pair = sf_sf_pairs[i];
         SudoFace *sf1 = sf_sf_pair.first,
@@ -471,5 +484,16 @@ void RollingMarkovModel::print_prob_pairs(){
                                             sf2->host_he.tipVertex().getIndex(), 
                                             sf_sf_prob);
     }
-    
+    printf("\nSF: he   -   face   -   probs: \n");
+    for (int i = 0; i < sf_face_pairs.size(); i++){
+        std::pair<SudoFace*, Face> sf_face_pair = sf_face_pairs[i];
+        SudoFace *sf = sf_face_pair.first;
+        Face f = sf_face_pair.second;
+        double sf_face_prob = sf_face_probs[i];
+        printf("  sf(%d) %d,%d  ->   f(%d)  =  %f  \n", sf->index, 
+                                            sf->host_he.tailVertex().getIndex(), 
+                                            sf->host_he.tipVertex().getIndex(), 
+                                            f.getIndex(), 
+                                            sf_face_prob);
+    }
 }
