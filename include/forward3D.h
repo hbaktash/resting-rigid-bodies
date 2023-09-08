@@ -46,9 +46,8 @@ class Forward3DSolver {
     // for later vector field display
     Vector3 initial_roll_dir;
 
-    // DP stuff; implicitly using a DAG
+    // just gaussian curvature of a vertex
     VertexData<double> vertex_probabilities;
-    FaceData<Face> next_falling_face;
 
     // for debugging purposes
     Vector3 tmp_test_vec;

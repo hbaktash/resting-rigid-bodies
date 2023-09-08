@@ -115,6 +115,7 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
 
             // vertex to sf
             double vertex_sf_prob = patch_area(tip_intersection_normal_dest, src_sf1->normal, new_dest_sf->normal, new_dest_sf->next_sudo_face->normal);
+            
             vertex_sf_pairs.push_back({v, new_dest_sf});
             vertex_sf_probs.push_back(vertex_sf_prob/vertex_patch_area);
 
@@ -445,19 +446,6 @@ void RollingMarkovModel::compute_vertex_gaussian_curvatures(){
     }
 }
 
-//
-double RollingMarkovModel::get_he_face_probability(Halfedge he){
-    if (edge_is_singular[he.edge()]){
-        Vector3 f1_normal = geometry->faceNormal(he.face()),
-                f2_normal = geometry->faceNormal(he.twin().face()),
-                stable_normal = edge_stable_normal[he.edge()];
-        assert(stable_normal.norm() >= EPS); // since edge is singular
-        return arc_portion(stable_normal, f1_normal, f2_normal);
-    }
-    else 
-        return 0.;
-}
-
 void RollingMarkovModel::print_prob_pairs(){
     printf("--printing probability pairs--\n\n");
     printf("Vertex - SF:he -  probs: \n");
@@ -495,5 +483,90 @@ void RollingMarkovModel::print_prob_pairs(){
                                             sf->host_he.tipVertex().getIndex(), 
                                             f.getIndex(), 
                                             sf_face_prob);
+    }
+}
+
+
+void RollingMarkovModel::build_transition_matrix(){
+    size_t sf_count = SudoFace::counter,
+           v_count  = mesh->nVertices(),
+           f_count  = mesh->nFaces();
+    size_t total_size = sf_count + v_count + f_count;
+    size_t  v_offset = 0,
+            sf_offset = v_count,
+            f_offset = v_count + sf_count; // for global indexing of elements
+
+    typedef Eigen::Triplet<double> T;
+
+    // not doing triplet list since duplicate pairs exist.
+    std::vector<T> tripletList;
+    tripletList.reserve(2*total_size); // just an estimate
+    transition_matrix = SparseMatrix<double>(total_size, total_size);
+    // inserting all pairs of elements; 3 types
+    for (int i = 0; i < vertex_sf_pairs.size(); i++){
+        std::pair<Vertex, SudoFace*> v_sf_pair = vertex_sf_pairs[i];
+        Vertex v = v_sf_pair.first;
+        SudoFace* sf = v_sf_pair.second;
+        double v_sf_prob = vertex_sf_probs[i];
+        if (v_sf_prob > 0) {
+            // double old_val = transition_matrix.coeffRef(v.getIndex() + v_offset, sf->index + sf_offset);
+            // if (old_val > 0){
+            //     printf(" already populated: v, sf:he  %d, (%d) %d, %d  old val: %f\n", v.getIndex(), 
+            //                                                                             sf->index, 
+            //                                                                             sf->host_he.tailVertex().getIndex(),
+            //                                                                             sf->host_he.tipVertex().getIndex(),
+            //                                                                             old_val);
+            //     printf(" new val: %f\n\n", v_sf_prob);
+            // }
+            // transition_matrix.coeffRef(v.getIndex() + v_offset, sf->index + sf_offset) = v_sf_prob;
+            tripletList.push_back(T(v.getIndex() + v_offset, sf->index + sf_offset, v_sf_prob));
+        }
+    }
+
+    for (int i = 0; i < sf_sf_pairs.size(); i++){
+        std::pair<SudoFace*, SudoFace*> sf_sf_pair = sf_sf_pairs[i];
+        SudoFace *sf1 = sf_sf_pair.first,
+                 *sf2 = sf_sf_pair.second;
+        double sf_sf_prob = sf_sf_probs[i];
+        if (sf_sf_prob > 0.)
+            tripletList.push_back(T(sf1->index + sf_offset, sf2->index + sf_offset, sf_sf_prob));
+    }
+
+    for (int i = 0; i < sf_face_pairs.size(); i++){
+        std::pair<SudoFace*, Face> sf_face_pair = sf_face_pairs[i];
+        SudoFace *sf = sf_face_pair.first;
+        Face f = sf_face_pair.second;
+        double sf_face_prob = sf_face_probs[i];
+        if (sf_face_prob > 0)
+            tripletList.push_back(T(sf->index + sf_offset, f.getIndex() + f_offset, sf_face_prob));
+    }
+
+    for (Face f: mesh->faces()){
+        tripletList.push_back(T(f.getIndex() + f_offset, f.getIndex() + f_offset, 1.));
+    }
+
+    // IMPORTANT NOTE: The dupFunctor here is used to avoid extra checks in the surgery
+    //                  and pair creation process. Unwanted duplicate pairs are:
+    //                  - vertex -> sf pairs: built in flow_sf_to_sf()
+    //                  - sf -> sf pairs    : built in flow_sf_to_sf() when next dest sf comes in again in next step
+    //  Careful if changing 
+    transition_matrix.setFromTriplets(tripletList.begin(), tripletList.end(),
+                                      [] (const double &a,const double &b) {return std::max(a, b);});
+                                      
+    // TODO: move this smwhere else?
+    build_face_next_face();
+}
+
+
+// deterministically find the next rolling face 
+void RollingMarkovModel::build_face_next_face(){
+    face_next_face = FaceData<Face>(*mesh);
+    for (Face f: mesh->faces()){
+        forward_solver->initialize_state(Vertex(), Edge(), f, geometry->faceNormal(f)); // assuming outward normals
+        forward_solver->next_state(); // could roll to an edge
+        while (forward_solver->curr_f.getIndex() == INVALID_IND){
+            forward_solver->next_state();
+        } // terminates when it gets to the next face
+        face_next_face[f] = forward_solver->curr_f;
     }
 }

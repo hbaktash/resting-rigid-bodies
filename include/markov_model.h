@@ -81,7 +81,8 @@ class RollingMarkovModel {
         EdgeData<Vector3> edge_stable_normal;
         // linked list data structure for smaller SudoArcs; needed for Markov chain edge surgery
         HalfedgeData<SudoFace*> root_sudo_face; // null on the sink side, potent on the source side (aligned with flow dir); if both not null, then we got a stabilizable edge (edge singularity)
-
+        
+        
         // start from sources and trace the vector field to split edge arcs and generate SudoEdges
         // initiate the recursive surgery
         std::list<Halfedge> termilar_hes; // bfs_list
@@ -97,40 +98,45 @@ class RollingMarkovModel {
         void compute_vertex_gaussian_curvatures();
         
         // Split and surgery functions
-        void split_chain_edges_and_build_probability_pairs();
         // handle single source HalfEdge/SudoEdge
         void process_halfedge(Halfedge he);
         void flow_he_to_he(Halfedge src, Halfedge dest);
         //includes a bunch of splits only on the dest SudoEdge
         void flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1);
+        // building sudo faces and 
+        void split_chain_edges_and_build_probability_pairs();
         
+        // connected element pairs with non-zero probabilities 
         std::vector<std::pair<SudoFace*, SudoFace*>> sf_sf_pairs;
         std::vector<double> sf_sf_probs;
         std::vector<std::pair<SudoFace*, Face>> sf_face_pairs;
         std::vector<double> sf_face_probs;
         std::vector<std::pair<Vertex, SudoFace*>> vertex_sf_pairs;
         std::vector<double> vertex_sf_probs;
-        
+        // deterministic routes; face to next face
+        FaceData<Face> face_next_face; // might need to roll through a bunch of edges before getting to next face
+        // transition matrix for the whole Markov Chain
+        SparseMatrix<double> transition_matrix;
+
         // clear pair/prob vectors
         void empty_prob_vectors();
-        
-        // prob of going from a HalfEdge to a neigh face
-        double get_he_face_probability(Halfedge he);
-        
         // sf to face pairs for non-trivial halfEdges
         void build_sf_face_pairs();
+        // forward simulate till u get to the next face
+        void build_face_next_face();
 
-        // TODO: for prob pair debugs
+        // for probability pair debugging
         void print_prob_pairs();
-        // TODO: build the transition matrix with Vertices, SudoEdges, Faces as nodes
-        SparseMatrix<double> build_transition_matrix();
+
+        // build the transition matrix with Vertices, SudoEdges, Faces as nodes
+        void build_transition_matrix();
         
+        // check basic properties that should hold
+        void check_transition_matrix();
         
-        // WTH is this
-        // deterministic routes; assuming G is inside (positive mass), o.w. it won't be a DAG (will have loops)
-        FaceData<Face> face_next_face; // might need to roll through a bunch of edges before getting to next face
         // probabilistic routes; only local routes (size-2 chains)
         double vertex_to_edge_prob(Vertex v, Edge e);
         double edge_to_edge_prob(Edge e1, Edge e2);
 
+        
 };

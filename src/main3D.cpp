@@ -788,6 +788,9 @@ void myCallback() {
     initiate_markov_model();
     visualize_sudo_faces();
   }
+  if (ImGui::Button("show sudo faces")){
+    markov_model->build_transition_matrix();
+  }
 }
 
 

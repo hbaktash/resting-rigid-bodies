@@ -259,7 +259,7 @@ void Forward3DSolver::face_to_next(Face f){
     }
     Vector3 unit_g_vec = curr_g_vec.normalize();
     // project G_proj on the same plane as the face plane
-    assert(hullGeometry->faceNormal(f) == curr_g_vec);
+    assert(hullGeometry->faceNormal(f) == curr_g_vec); // assume outward normals
     Vector3 G_proj = project_on_plane(G, hullGeometry->inputVertexPositions[f.halfedge().tailVertex()], unit_g_vec);
     Halfedge curr_he = f.halfedge(),
              first_he = f.halfedge();
