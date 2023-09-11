@@ -508,19 +508,8 @@ void RollingMarkovModel::build_transition_matrix(){
         Vertex v = v_sf_pair.first;
         SudoFace* sf = v_sf_pair.second;
         double v_sf_prob = vertex_sf_probs[i];
-        if (v_sf_prob > 0) {
-            // double old_val = transition_matrix.coeffRef(v.getIndex() + v_offset, sf->index + sf_offset);
-            // if (old_val > 0){
-            //     printf(" already populated: v, sf:he  %d, (%d) %d, %d  old val: %f\n", v.getIndex(), 
-            //                                                                             sf->index, 
-            //                                                                             sf->host_he.tailVertex().getIndex(),
-            //                                                                             sf->host_he.tipVertex().getIndex(),
-            //                                                                             old_val);
-            //     printf(" new val: %f\n\n", v_sf_prob);
-            // }
-            // transition_matrix.coeffRef(v.getIndex() + v_offset, sf->index + sf_offset) = v_sf_prob;
+        if (v_sf_prob > 0)
             tripletList.push_back(T(v.getIndex() + v_offset, sf->index + sf_offset, v_sf_prob));
-        }
     }
 
     for (int i = 0; i < sf_sf_pairs.size(); i++){
@@ -545,14 +534,15 @@ void RollingMarkovModel::build_transition_matrix(){
         tripletList.push_back(T(f.getIndex() + f_offset, f.getIndex() + f_offset, 1.));
     }
 
-    // IMPORTANT NOTE: The dupFunctor here is used to avoid extra checks in the surgery
+    // IMPORTANT NOTE: The dupFunctor here is used to avoid extra checks during the surgery
     //                  and pair creation process. Unwanted duplicate pairs are:
-    //                  - vertex -> sf pairs: built in flow_sf_to_sf()
-    //                  - sf -> sf pairs    : built in flow_sf_to_sf() when next dest sf comes in again in next step
-    //  Careful if changing 
+    //                  - vertex -> sf pairs: built in flow_sf_to_sf(); mostly duplicate probabilities
+    //                  - sf -> sf pairs    : built in flow_sf_to_sf(); 
+    //                                        zero and non-zero probabilites when tail-chasing,
+    //                                        or non-zero duplicates when next dest sf is repeated in next step
+    // ** Careful when changing either functions ** 
     transition_matrix.setFromTriplets(tripletList.begin(), tripletList.end(),
                                       [] (const double &a,const double &b) {return std::max(a, b);});
-                                      
     // TODO: move this smwhere else?
     build_face_next_face();
 }
@@ -568,5 +558,43 @@ void RollingMarkovModel::build_face_next_face(){
             forward_solver->next_state();
         } // terminates when it gets to the next face
         face_next_face[f] = forward_solver->curr_f;
+        printf(" fnf %d -> %d\n", f.getIndex(), forward_solver->curr_f.getIndex());
     }
+}
+
+
+// do some sanity checkes
+void RollingMarkovModel::check_transition_matrix(){
+    // checking row sums  
+    // printf(" Checking row sums: \n");
+    size_t n = transition_matrix.cols();
+    Vector<double> ones = Vector<double>::Ones(n);
+    // std::cout << " ** outgoing: \n" << (transition_matrix * ones).transpose() << "\n";
+    // std::cout << " ** incoming: \n" << ones.transpose() * transition_matrix << "\n";
+
+    //check final distribution
+    Vector<double> initial_dist = vertex_gaussian_curvature.toVector();
+    initial_dist.conservativeResize(n);
+    std::fill(initial_dist.begin() + mesh->nVertices(), initial_dist.end(), 0.);
+    Vector<double> curr_dist = Vector<double>(initial_dist).transpose(),
+                   next_dist = initial_dist.transpose() * transition_matrix;
+    // printf("here %d ,%d \n", initial_dist.rows(), initial_dist.cols());
+    while ((curr_dist - next_dist).norm() > EPS){
+        curr_dist = next_dist;
+        // printf(" next dist %d ,%d \n", next_dist.rows(), next_dist.cols());
+        next_dist = next_dist.transpose() * transition_matrix;
+    }
+    // std::cout << "the final distribution: \n" << (next_dist.tail(mesh->nFaces())*(1./(4.*PI))).transpose() << "\n";
+    Vector<double> face_dist = next_dist.tail(mesh->nFaces());
+    for (Face f: mesh->faces()){
+        if (face_dist(f.getIndex()) > 0.) {
+            Face curr_f = f;
+            while (face_next_face[curr_f] != curr_f){
+                face_dist.coeffRef(face_next_face[curr_f].getIndex()) += face_dist(curr_f.getIndex());
+                face_dist.coeffRef(curr_f.getIndex()) = 0.;
+                curr_f = face_next_face[curr_f];
+            }
+        }
+    }
+    std::cout << "the final distribution: \n" << (face_dist*(1./(4.*PI))).transpose() << "\n";
 }

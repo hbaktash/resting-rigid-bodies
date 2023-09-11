@@ -115,6 +115,7 @@ int sample_count = 8000;
 FaceData<Vector3> face_colors;
 bool recolor_faces = true,
      real_time_raster = false,
+     draw_point_cloud = false,
      normalize_vecF = true;
 glm::vec3 vecF_color({0.1, 0.1, 0.1});
 
@@ -617,51 +618,64 @@ void update_visuals_with_G(){
 // sample and raster; colors should be generated beforehand
 void build_raster_image(){
   FaceData<std::vector<Vector3>> face_samples(*forwardSolver.hullMesh);
-  int total_invalids = 0;
+  FaceData<double> empirical_face_probabilities(*forwardSolver.hullMesh, 0.);
+  int total_invalids = 0,
+      valid_samples = 0;
   // need to re-iterate later with the same order
   FaceData<std::vector<Vector3>> initial_rolling_dirs(*forwardSolver.hullMesh);
   for (int i = 0; i < sample_count; i++){
     Vector3 random_g_vec = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
-    if (random_g_vec.norm() <= 1){
-      if (i % 5000 == 0)
-        printf("$$$ at sample %d\n", i);
+    if (random_g_vec.norm() <= 1.){
+      // if (i % 10000 == 0 && i > 0)
+      //   printf("$$$ at sample %d\n", i);
       random_g_vec /= norm(random_g_vec);
       Face touching_face = forwardSolver.final_touching_face(random_g_vec);
       if (touching_face.getIndex() == INVALID_IND){
         total_invalids++;
         continue;
       }
-      face_samples[touching_face].push_back(random_g_vec);
-      if (normalize_vecF)
-        initial_rolling_dirs[touching_face].push_back(forwardSolver.initial_roll_dir.normalize());
-      else 
-        initial_rolling_dirs[touching_face].push_back(forwardSolver.initial_roll_dir);
+      valid_samples++;
+      empirical_face_probabilities[touching_face] += 1;
+      if (draw_point_cloud){
+        face_samples[touching_face].push_back(random_g_vec);
+        if (normalize_vecF)
+          initial_rolling_dirs[touching_face].push_back(forwardSolver.initial_roll_dir.normalize());
+        else 
+          initial_rolling_dirs[touching_face].push_back(forwardSolver.initial_roll_dir);
+      }
     }
   }
-  printf(" ###### total invalid faces: %d  ######\n", total_invalids);
+  // printf(" ###### total invalid faces: %d  ######\n", total_invalids);
+  
   std::vector<Vector3> raster_positions,
                        raster_colors;
   std::vector<Vector3> all_rolling_dirs;
   for (Face f: forwardSolver.hullMesh->faces()){
-    std::vector<Vector3> tmp_points = face_samples[f];
-    for (Vector3 tmp_p: tmp_points){
-      raster_positions.push_back(tmp_p + gm_shift);
-      raster_colors.push_back(face_colors[f]);
-    }
-    std::vector<Vector3> tmp_rolling_dirs = initial_rolling_dirs[f];
-    for (Vector3 rolling_dir: tmp_rolling_dirs){
-      all_rolling_dirs.push_back(rolling_dir);
+    empirical_face_probabilities[f] /= (double)valid_samples;
+    if (draw_point_cloud) {
+      std::vector<Vector3> tmp_points = face_samples[f];
+      for (Vector3 tmp_p: tmp_points){
+        raster_positions.push_back(tmp_p + gm_shift);
+        raster_colors.push_back(face_colors[f]);
+      }
+      std::vector<Vector3> tmp_rolling_dirs = initial_rolling_dirs[f];
+      for (Vector3 rolling_dir: tmp_rolling_dirs){
+        all_rolling_dirs.push_back(rolling_dir);
+      }
     }
   }
-  raster_pc = polyscope::registerPointCloud("raster point cloud", raster_positions);
-  raster_pc->setPointRadius(0.0078, false);
-  polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("random color", raster_colors);
-  pc_col_quant->setEnabled(true);
-  polyscope::PointCloudVectorQuantity* raster_pc_vec_field = raster_pc->addVectorQuantity("init roll directions", all_rolling_dirs);
-  raster_pc_vec_field->setEnabled(true);
-  raster_pc_vec_field->setVectorLengthScale(0.05, false);
-  raster_pc_vec_field->setVectorRadius(0.003, false);
-  raster_pc_vec_field->setVectorColor(vecF_color);
+  if (draw_point_cloud) {
+    raster_pc = polyscope::registerPointCloud("raster point cloud", raster_positions);
+    raster_pc->setPointRadius(0.0078, false);
+    polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("random color", raster_colors);
+    pc_col_quant->setEnabled(true);
+    polyscope::PointCloudVectorQuantity* raster_pc_vec_field = raster_pc->addVectorQuantity("init roll directions", all_rolling_dirs);
+    raster_pc_vec_field->setEnabled(true);
+    raster_pc_vec_field->setVectorLengthScale(0.05, false);
+    raster_pc_vec_field->setVectorRadius(0.003, false);
+    raster_pc_vec_field->setVectorColor(vecF_color);
+  }
+  std::cout << "empirical_face_probabilities: \n"<< empirical_face_probabilities.toVector().transpose() << "sum: " << empirical_face_probabilities.toVector().sum()<< "\n";
 }
 
 
@@ -770,7 +784,7 @@ void myCallback() {
       snail_trail_dummy_counter++;
     }
   }
-  if (ImGui::SliderInt("sample count", &sample_count, 1000, 100000));
+  if (ImGui::SliderInt("sample count", &sample_count, 1000, 1000000));
   if (ImGui::Button("build raster image")){
     color_faces();
     visualize_colored_polyhedra();
@@ -781,6 +795,7 @@ void myCallback() {
     color_faces();
     visualize_colored_polyhedra();
   }
+  if (ImGui::Checkbox("draw point cloud", &draw_point_cloud));
   if (ImGui::Checkbox("real time raster", &real_time_raster));
   if (ImGui::Checkbox("normalize vector field", &normalize_vecF));
 
@@ -788,8 +803,9 @@ void myCallback() {
     initiate_markov_model();
     visualize_sudo_faces();
   }
-  if (ImGui::Button("show sudo faces")){
+  if (ImGui::Button("matrix debugg")){
     markov_model->build_transition_matrix();
+    markov_model->check_transition_matrix();
   }
 }
 
