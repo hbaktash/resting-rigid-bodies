@@ -18,9 +18,10 @@
 */
 #pragma once
 
-#include "geometrycentral/surface/manifold_surface_mesh.h"
-#include "geometrycentral/surface/vertex_position_geometry.h"
-#include "geometrycentral/surface/surface_point.h"
+#include "arc_algebra.h"
+// #include "geometrycentral/surface/manifold_surface_mesh.h"
+// #include "geometrycentral/surface/vertex_position_geometry.h"
+// #include "geometrycentral/surface/surface_point.h"
 
 
 using namespace geometrycentral;
@@ -71,6 +72,32 @@ class Forward3DSolver {
     bool edge_is_stablizable(Edge e);
     bool face_is_stable(Face f);
   
+    
+    // pre-compute containers
+    // whether the stable point can be reached or not
+    VertexData<bool> vertex_is_stabilizable;
+    // stable normal of a vertex; even if not reachable
+    VertexData<Vector3> vertex_stable_normal;
+    VertexData<double> vertex_gaussian_curvature;
+    // edge rolls to a face if singular; else rolls to a vertex
+    EdgeData<bool> edge_is_singular;
+    // is 0 , if the normal is unreachable, or doesnt fall on the edge (edge too short)
+    EdgeData<Vector3> edge_stable_normal;
+    // deterministic routes; face to next face
+    FaceData<Face> face_next_face; // might need to roll through a bunch of edges before getting to next face
+    FaceData<Face> face_last_face; // keep rolling till u hit a stable face
+        
+    // pre-compute functions
+    void compute_vertex_stabilizablity();
+    void compute_edge_stable_normals();
+    void compute_vertex_gaussian_curvatures();
+    void build_face_next_faces();
+    // not basic; calls prev function
+    void build_face_last_faces();
+
+    // just calls basic precomputes
+    void initialize_pre_computes();    
+
     // Rigid Simulation stuff
     Edge vertex_to_edge(Vertex v);
     void vertex_to_next(Vertex v);

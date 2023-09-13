@@ -35,6 +35,7 @@
 #include "geometry_utils.h"
 #include "visual_utils.h"
 #include "markov_model.h"
+#include "boundary_tools.h"
 
 // #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 // #include <CGAL/Polyhedron_3.h>
@@ -60,7 +61,7 @@ Forward3DSolver forwardSolver;
 
 // Polyscope visualization handle, to quickly add data to the surface
 polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, 
-                       *dummy_psMesh2, *dummy_psMesh3, *dummy_psMesh_for_patches,
+                       *dummy_psMesh2, *dummy_psMesh3,
                        *dummy_forward_vis,
                        *coloredPsMesh;
 
@@ -100,8 +101,7 @@ Vector3 gm_shift({0., gm_distance, 0.}),
 bool color_arcs = false,
      draw_unstable_edge_arcs = true,
      draw_stable_g_vec_for_unstable_edge_arcs = false,
-     show_hidden_stable_vertex_normals = true,
-     draw_stable_patches = false;
+     show_hidden_stable_vertex_normals = true;
 
 // arc stuff
 float arc_curve_radi = 0.01;
@@ -130,6 +130,12 @@ int snail_trail_dummy_counter = 0;
 RollingMarkovModel *markov_model;
 polyscope::PointCloud *sudo_faces_pc;
 
+// boundary stuff
+BoundaryBuilder *boundary_builder;
+polyscope::PointCloud *boundary_normals_pc;
+polyscope::SurfaceMesh *dummy_psMesh_for_regions;
+bool draw_boundary_patches = false;
+
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4")};
 std::string all_polygons_current_item = "tet";
@@ -137,38 +143,35 @@ static const char* all_polygons_current_item_c_str = "tet";
 
 
 void draw_stable_patches_on_gauss_map(){
+  std::vector<Vector3> boundary_normals;
   std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
-  dummy_psMesh_for_patches = polyscope::registerSurfaceMesh("dummy mesh for patch arcs", geometry->inputVertexPositions, dummy_face);
-  if (draw_stable_patches){
+  dummy_psMesh_for_regions = polyscope::registerSurfaceMesh("dummy mesh for patch arcs", geometry->inputVertexPositions, dummy_face);
+  if (draw_boundary_patches){
     arc_counter = 0;
     for (Edge e: forwardSolver.hullMesh->edges()){
-      for (Vertex v: e.adjacentVertices()){
-        if (forwardSolver.edge_is_stable(e) && forwardSolver.edge_is_stablizable(e) &&
-            forwardSolver.vertex_is_stablizable(v)){
-          Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
-          Vector3 A = forwardSolver.hullGeometry->inputVertexPositions[v1], B = forwardSolver.hullGeometry->inputVertexPositions[v2];
-          Vector3 GB = B - G,
-                  AB = B - A;
-          Vector3 ortho_g = GB - AB*dot(AB, GB)/dot(AB,AB);
-          Vector3 v_stable_vec = forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G;
-          draw_arc_on_sphere(normalize(ortho_g), normalize(v_stable_vec), gm_shift, gm_radi, arcs_seg_count, 100 + arc_counter, dummy_psMesh_for_patches, 1., 
-                            color_arcs ? patch_arc_fancy_color : glm::vec3({-1.,0,0})); // fancy color if coloring edge arcs
-          arc_counter++;
+        BoundaryNormal *tmp_bnd_normal = boundary_builder->edge_boundary_normals[e];
+        if (tmp_bnd_normal != nullptr){
+          boundary_normals.push_back(tmp_bnd_normal->normal + gm_shift);
+          for (BoundaryNormal *neigh_bnd_normal: tmp_bnd_normal->neighbors){
+            glm::vec3 arc_color = glm::vec3({1.,0,0}); // default color
+            Vector3 n1 = tmp_bnd_normal->normal,
+                    n2 = neigh_bnd_normal->normal;
+            draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, arc_counter + forwardSolver.hullMesh->nEdges(), dummy_psMesh2, 1., arc_color);
+            arc_counter++;
+          }
         }
-      }
     }
   }
 }
 
 void draw_stable_vertices_on_gauss_map(){
-  Vector3 shift = {0., gm_distance, 0.};
   std::vector<Vector3> stable_vertices, hidden_stable_vertices;
   for (Vertex v: forwardSolver.hullMesh->vertices()){
     if (forwardSolver.vertex_is_stablizable(v)){
-      stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G)+shift);
+      stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G)+gm_shift);
     }
     else {
-      hidden_stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G)+shift);
+      hidden_stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G)+gm_shift);
     }
   }
   stable_vertices_gm_pc = polyscope::registerPointCloud("stable Vertices Normals", stable_vertices);
@@ -480,6 +483,15 @@ void visualize_sudo_faces(){
 }
 
 
+// initialize boundary builder
+void initialize_boundary_builder(){
+  boundary_builder = new BoundaryBuilder(&forwardSolver);
+  boundary_builder->build_boundary_normals();
+}
+
+// visualize boundary
+
+
 // color input polyhedra with default
 void color_faces_with_default(){
   FaceData<Vector3> face_colors(*forwardSolver.hullMesh, default_face_color);
@@ -591,6 +603,7 @@ void visualize_colored_polyhedra(){
 void update_visuals_with_G(){
   forwardSolver.G = G;
   draw_G();
+  forwardSolver.initialize_pre_computes();
   // stuff on the polyhedra
   visualize_edge_stability();
   visualize_face_stability();
@@ -607,7 +620,8 @@ void update_visuals_with_G(){
   draw_stable_vertices_on_gauss_map();
   show_edge_equilibria_on_gauss_map();
   draw_stable_face_normals_on_gauss_map();
-  if (polyscope::hasSurfaceMesh("dummy mesh for gauss map arcs") && draw_stable_patches)
+  initialize_boundary_builder();
+  if (polyscope::hasSurfaceMesh("dummy mesh for gauss map arcs") && draw_boundary_patches)
     draw_stable_patches_on_gauss_map();
   initiate_markov_model();
   visualize_sudo_faces();
@@ -755,7 +769,6 @@ void myCallback() {
   if (ImGui::Checkbox("draw unstable edge arcs", &draw_unstable_edge_arcs)) draw_edge_arcs_on_gauss_map();
   if (ImGui::Checkbox("show to-be stable g_vec for unstable edge arcs", &draw_stable_g_vec_for_unstable_edge_arcs)) show_edge_equilibria_on_gauss_map();
   if (ImGui::Checkbox("show hidden stable vertex normals", &show_hidden_stable_vertex_normals)) draw_stable_vertices_on_gauss_map();
-  if (ImGui::Checkbox("draw stable patches", &draw_stable_patches)) draw_stable_patches_on_gauss_map();
   if (ImGui::Button("Draw patches")){
     draw_stable_patches_on_gauss_map();
   }
@@ -799,6 +812,12 @@ void myCallback() {
   if (ImGui::Checkbox("real time raster", &real_time_raster));
   if (ImGui::Checkbox("normalize vector field", &normalize_vecF));
 
+  if (ImGui::Button("build and show region boundaries")) {
+    initialize_boundary_builder();
+    draw_stable_patches_on_gauss_map();
+  }
+  if (ImGui::Checkbox("draw boundary patches", &draw_boundary_patches)) draw_stable_patches_on_gauss_map();
+  
   if (ImGui::Button("show sudo faces")){
     initiate_markov_model();
     visualize_sudo_faces();

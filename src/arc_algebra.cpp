@@ -20,7 +20,6 @@
 
 double EPS = 1e-8;
  
-
 // can approximate arc len with len for comparison; since arcs are always less than 180 degrees 
 bool is_on_arc_segment(Vector3 P, Vector3 A, Vector3 B){
     if (P.norm() <= EPS)

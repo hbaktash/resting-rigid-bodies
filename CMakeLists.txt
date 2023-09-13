@@ -73,13 +73,14 @@ set(polygons_SRCS
 
 set(polyhedra_SRCS 
   src/main3D.cpp
+  src/arc_algebra.cpp
   src/forward3D.cpp
   src/mesh_factory.cpp
   src/geometry_utils.cpp
   src/coloring.cpp
   src/visual_utils.cpp
   src/markov_model.cpp
-  src/arc_algebra.cpp
+  src/boundary_tools.cpp
 	# add any other source files here
 )
 
@@ -91,6 +92,7 @@ set(bullet_SRCS
   src/bullet_sim.cpp
   src/coloring.cpp
   src/visual_utils.cpp
+  src/arc_algebra.cpp
   # add any other source files here
 )
 

@@ -357,3 +357,79 @@ Face Forward3DSolver::final_touching_face(Vector3 initial_ori){
     // assert(curr_f.getIndex() != INVALID_IND);
     return curr_f;
 }
+
+
+
+/// pre computes
+
+
+// is 0 if the normal is unreachable; and if non-singular: the normal doesnt fall on the edge (edge too short)
+void Forward3DSolver::compute_edge_stable_normals(){
+    edge_is_singular = EdgeData<bool>(*hullMesh, false); // ~ is stable, by fwdSolver function names
+    Vector3 zero_vec({0.,0.,0.});
+    edge_stable_normal = EdgeData<Vector3>(*hullMesh, zero_vec);
+    for (Edge e: hullMesh->edges()){
+        Vertex next_vertex = next_rolling_vertex(e);
+        if (next_vertex.getIndex() == INVALID_IND){ // singular edge
+            edge_is_singular[e] = true;
+            Vector3 A = hullGeometry->inputVertexPositions[e.firstVertex()],
+                    B = hullGeometry->inputVertexPositions[e.secondVertex()];
+            edge_stable_normal[e] = point_to_segment_normal(G, A, B).normalize();
+        }
+    }
+}
+
+// pre-compute vertex gaussian curvatures
+void Forward3DSolver::compute_vertex_gaussian_curvatures(){
+    vertex_gaussian_curvature = VertexData<double>(*hullMesh, 0.);
+    for (Vertex v: hullMesh->vertices()){
+        vertex_gaussian_curvature[v] = gaussian_curvature(v, *hullGeometry);
+        // printf(" Gaussian Curvature at %d, is %f\n", v.getIndex(), vertex_gaussian_curvature[v]);
+    }
+}
+
+// whether the stable point can be reached or not
+void Forward3DSolver::compute_vertex_stabilizablity(){
+    vertex_is_stabilizable = VertexData<bool>(*hullMesh, false);
+    vertex_stable_normal = VertexData<Vector3>(*hullMesh);
+    for (Vertex v: hullMesh->vertices()){
+        if (vertex_is_stablizable(v))
+            vertex_is_stabilizable[v] = true;
+        vertex_stable_normal[v] = (hullGeometry->inputVertexPositions[v] - G).normalize();
+    }
+}
+
+
+// deterministically find the next rolling face 
+void Forward3DSolver::build_face_next_faces(){
+    face_next_face = FaceData<Face>(*hullMesh);
+    for (Face f: hullMesh->faces()){
+        initialize_state(Vertex(), Edge(), f, hullGeometry->faceNormal(f)); // assuming outward normals
+        next_state(); // could roll to an edge
+        while (curr_f.getIndex() == INVALID_IND){
+            next_state();
+        } // terminates when it gets to the next face
+        face_next_face[f] = curr_f;
+        // printf(" fnf %d -> %d\n", f.getIndex(), curr_f.getIndex());
+    }
+}
+
+void Forward3DSolver::build_face_last_faces(){
+    build_face_next_faces();
+    face_last_face = FaceData<Face>(*hullMesh);
+    for (Face f: hullMesh->faces()){
+        Face curr_f = f;
+        while (face_next_face[curr_f] != curr_f){
+            curr_f = face_next_face[curr_f];
+        } // terminates when it gets to the next face
+        face_last_face[f] = curr_f;
+    }
+}
+
+// just call all the pre-compute initializations; not face-last-face
+void Forward3DSolver::initialize_pre_computes(){
+    compute_vertex_stabilizablity();
+    compute_vertex_gaussian_curvatures();
+    compute_edge_stable_normals();
+    build_face_next_faces(); // 
+}

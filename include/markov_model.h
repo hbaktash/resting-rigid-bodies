@@ -23,7 +23,6 @@
 // #include "geometrycentral/surface/vertex_position_geometry.h"
 // #include "geometrycentral/surface/surface_point.h"
 #include "forward3D.h"
-#include "arc_algebra.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -57,7 +56,7 @@ class RollingMarkovModel {
         Forward3DSolver *forward_solver;
 
         // keeping G updated
-        Vector3 G;
+        // Vector3 G;
         // assuming convexity
         // "same" pointer as the one in forward solver; here for easier access
         ManifoldSurfaceMesh* mesh;
@@ -70,15 +69,6 @@ class RollingMarkovModel {
 
         // ---  one-time computable quantities ---
 
-        // whether the stable point can be reached or not
-        VertexData<bool> vertex_is_stabilizable;
-        VertexData<Vector3> vertex_stable_normal;
-        VertexData<double> vertex_gaussian_curvature;
-        // either reachable or un-reachable; inferable from _vertex_stabilizability_
-        // edge rolls to a face if singular; else rolls to a vertex
-        EdgeData<bool> edge_is_singular;
-        // is 0 , if the normal is unreachable, or doesnt fall on the edge (edge too short)
-        EdgeData<Vector3> edge_stable_normal;
         // linked list data structure for smaller SudoArcs; needed for Markov chain edge surgery
         HalfedgeData<SudoFace*> root_sudo_face; // null on the sink side, potent on the source side (aligned with flow dir); if both not null, then we got a stabilizable edge (edge singularity)
         
@@ -89,13 +79,11 @@ class RollingMarkovModel {
         HalfedgeData<bool> he_processed;
         bool surgery_is_done = false;
 
-        // pre-compute functions
-        void compute_vertex_stabilizablity();
-        void initiate_root_sudo_face(Halfedge he);
-        void compute_edge_singularity_and_init_source_dir();
-        void compute_edge_stable_normals();
         void initialize_pre_computes();
-        void compute_vertex_gaussian_curvatures();
+
+        // initialize sudo-face linked lists
+        void initiate_root_sudo_face(Halfedge he);
+        void init_root_sfs();
         
         // Split and surgery functions
         // handle single source HalfEdge/SudoEdge
@@ -113,8 +101,6 @@ class RollingMarkovModel {
         std::vector<double> sf_face_probs;
         std::vector<std::pair<Vertex, SudoFace*>> vertex_sf_pairs;
         std::vector<double> vertex_sf_probs;
-        // deterministic routes; face to next face
-        FaceData<Face> face_next_face; // might need to roll through a bunch of edges before getting to next face
         // transition matrix for the whole Markov Chain
         SparseMatrix<double> transition_matrix;
 
@@ -122,9 +108,7 @@ class RollingMarkovModel {
         void empty_prob_vectors();
         // sf to face pairs for non-trivial halfEdges
         void build_sf_face_pairs();
-        // forward simulate till u get to the next face
-        void build_face_next_face();
-
+        
         // for probability pair debugging
         void print_prob_pairs();
 
@@ -137,6 +121,4 @@ class RollingMarkovModel {
         // probabilistic routes; only local routes (size-2 chains)
         double vertex_to_edge_prob(Vertex v, Edge e);
         double edge_to_edge_prob(Edge e1, Edge e2);
-
-        
 };

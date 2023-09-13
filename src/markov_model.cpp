@@ -39,16 +39,14 @@ SudoFace::SudoFace(Halfedge host_he_, Vector3 normal_, SudoFace *next_sudo_face_
 
 RollingMarkovModel::RollingMarkovModel(Forward3DSolver *forward_solver_){
     forward_solver = forward_solver_;
-    G = forward_solver->G;
     mesh = forward_solver->hullMesh;
     geometry = forward_solver->hullGeometry;
 }
 
 RollingMarkovModel::RollingMarkovModel(ManifoldSurfaceMesh* mesh_, VertexPositionGeometry* geometry_, Vector3 G_){
-    G = G_;
     mesh = mesh_;
     geometry = geometry_;
-    forward_solver = new Forward3DSolver(mesh, geometry, G);
+    forward_solver = new Forward3DSolver(mesh, geometry, G_);
 }
 
 
@@ -78,7 +76,7 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
     SudoFace *src_sf2 = src_sf1->next_sudo_face,
              *dest_sf2= dest_sf1->next_sudo_face; 
     Vertex host_v = src_sf1->host_he.tipVertex(); // since src_sf is the source; already determined in initialization;
-    Vector3 source_normal = vertex_stable_normal[host_v];
+    Vector3 source_normal = forward_solver->vertex_stable_normal[host_v];
 
     // find all hit locations of the vector field
     Vector3 tail_intersection_normal_src = intersect_arc_ray_with_arc(source_normal, src_sf1->normal, dest_sf1->normal, dest_sf2->normal);
@@ -94,7 +92,7 @@ void RollingMarkovModel::flow_sf_to_sf(SudoFace* src_sf1, SudoFace* dest_sf1){
     
     Vertex v = dest_sf1->host_he.tailVertex();
     double total_src_angle = angle(src_sf1->normal, src_sf2->normal);
-    double vertex_patch_area = vertex_gaussian_curvature[v]; // already computed
+    double vertex_patch_area = forward_solver->vertex_gaussian_curvature[v]; // already computed
     printf("");
     // TODO: handle tail to tail cases; is it already handled???
     //       check splits and check probability pairs being generated
@@ -248,7 +246,7 @@ void RollingMarkovModel::flow_he_to_he(Halfedge src, Halfedge dest){
 void RollingMarkovModel::process_halfedge(Halfedge he){
     if (he_processed[he])
         return;
-    if (vertex_is_stabilizable[he.tailVertex()]) // No split needed. The edge is fully reachable from the stable tail vertex
+    if (forward_solver->vertex_is_stabilizable[he.tailVertex()]) // No split needed. The edge is fully reachable from the stable tail vertex
         return;
     // else
         // assert(forward_solver->next_rolling_vertex(he.edge()) == he.tipVertex()); // the HalfEdge aligns with the flow
@@ -258,7 +256,7 @@ void RollingMarkovModel::process_halfedge(Halfedge he){
     Vertex v = he.tailVertex();
     for (Halfedge src_he: v.incomingHalfedges()){
         // printf("    & checking possible src_he %d, %d,   singular: %d, has root sf %d \n", src_he.tailVertex().getIndex(), src_he.tipVertex().getIndex(), edge_is_singular[src_he.edge()], root_sudo_face[src_he] != nullptr);
-        if (root_sudo_face[src_he] != nullptr && !edge_is_singular[src_he.edge()]){ // src_he is a source in this vertex
+        if (root_sudo_face[src_he] != nullptr && !forward_solver->edge_is_singular[src_he.edge()]){ // src_he is a source in this vertex
             process_halfedge(src_he);
             printf("    * flowing from %d,%d  f, tf: %d,%d \n", src_he.tailVertex().getIndex(), 
                                                                  src_he.tipVertex().getIndex(),
@@ -285,52 +283,53 @@ void RollingMarkovModel::empty_prob_vectors(){
 void RollingMarkovModel::split_chain_edges_and_build_probability_pairs(){
     // clean up probability pair vectors
     empty_prob_vectors();
-
+    init_root_sfs();
     // DP to avoid spliting a HalfEdge twice
     he_processed = HalfedgeData<bool>(*mesh, false);
     // use singular edges as starting seeds the recursion
     printf("finding terminal seeds \n");
     for (Edge e: mesh->edges()){ 
-        if (edge_is_singular[e]){ // go back up from singular edges; split any edge if needed
+        Vertex v1 = e.firstVertex(), 
+               v2 = e.secondVertex();
+        Halfedge he = e.halfedge(),
+                 he_twin = e.halfedge().twin();
+        SudoFace *sf = root_sudo_face[he],
+                 *sf_twin = root_sudo_face[he_twin]; 
+        if (forward_solver->edge_is_singular[e]){ // go back up from singular edges; split any edge if needed
             printf("  -- at singular edge %d, %d \n", e.firstVertex().getIndex(), e.secondVertex().getIndex());
-            Vertex v1 = e.firstVertex(), 
-                   v2 = e.secondVertex();
-            Halfedge he = e.halfedge(),
-                     he_twin = e.halfedge().twin();
-            SudoFace *sf = root_sudo_face[he],
-                     *sf_twin = root_sudo_face[he_twin]; 
-            if (!vertex_is_stabilizable[v1])  // v1 is not a source/stable
+            if (!forward_solver->vertex_is_stabilizable[v1])  // v1 is not a source/stable
                 termilar_hes.push_back(he);
             else {
                 he_processed[he] = true;
-                
-                // assigning probabilities
-                // vertex -> edge
-                Vector3 v1_stable_normal = vertex_stable_normal[v1];
-                double v1f1f2_patch_area = triangle_patch_area_on_sphere(v1_stable_normal, 
-                                                                         geometry->faceNormal(he.face()),
-                                                                         geometry->faceNormal(he.twin().face()));
-                vertex_sf_pairs.push_back({v1, sf});
-                vertex_sf_probs.push_back(v1f1f2_patch_area/vertex_gaussian_curvature[v1]);
-                // printf("added v_sf pair: %d  %d,%d\n", v1.getIndex(), sf->host_he.tailVertex().getIndex(),
-                //                                                       sf->host_he.tipVertex().getIndex());
-                // printf("    patch area, vertex G_Curvature: %f , %f\n", v1f1f2_patch_area, vertex_gaussian_curvature[v1]);
             }
             
-            if (!vertex_is_stabilizable[v2]) // v2 is not a source/stable
+            if (!forward_solver->vertex_is_stabilizable[v2]) // v2 is not a source/stable
                 termilar_hes.push_back(he_twin);
             else {
 
                 he_processed[he_twin] = true;
                 // vertex -> edge
-                Vector3 v2_stable_normal = vertex_stable_normal[v2];
-                double v2f1f2_patch_area = triangle_patch_area_on_sphere(v2_stable_normal, 
-                                                                         geometry->faceNormal(he.face()),
-                                                                         geometry->faceNormal(he_twin.face()));
-                vertex_sf_pairs.push_back({v2, sf_twin});
-                vertex_sf_probs.push_back(v2f1f2_patch_area/vertex_gaussian_curvature[v2]);
             }
         }
+        // v1 side
+        if (forward_solver->vertex_is_stabilizable[v1]) {
+            Vector3 v1_stable_normal = forward_solver->vertex_stable_normal[v1];
+            double v1f1f2_patch_area = triangle_patch_area_on_sphere(v1_stable_normal, 
+                                                                        geometry->faceNormal(he.face()),
+                                                                        geometry->faceNormal(he.twin().face()));
+            vertex_sf_pairs.push_back({v1, sf});
+            vertex_sf_probs.push_back(v1f1f2_patch_area/forward_solver->vertex_gaussian_curvature[v1]);
+        }
+        // v2 side
+        if (forward_solver->vertex_is_stabilizable[v2]) {
+            Vector3 v2_stable_normal = forward_solver->vertex_stable_normal[v2];
+            double v2f1f2_patch_area = triangle_patch_area_on_sphere(v2_stable_normal, 
+                                                                        geometry->faceNormal(he.face()),
+                                                                        geometry->faceNormal(he_twin.face()));
+            vertex_sf_pairs.push_back({v2, sf_twin});
+            vertex_sf_probs.push_back(v2f1f2_patch_area/forward_solver->vertex_gaussian_curvature[v2]);
+        }
+        // printf("added v_sf pair: %d  %d,%d\n", v1.getIndex(), sf->host_he.tailVertex().getIndex(),
     }
     // Recursive DFS from every starting seed edge (singular edge)
     printf("processing halfedges\n");
@@ -343,10 +342,10 @@ void RollingMarkovModel::split_chain_edges_and_build_probability_pairs(){
 
 void RollingMarkovModel::build_sf_face_pairs(){
     for (Halfedge he: mesh->halfedges()){
-        if (edge_is_singular[he.edge()]){
+        if (forward_solver->edge_is_singular[he.edge()]){
             Face f1 = he.face(),
                  f2 = he.twin().face();
-            Vector3 stable_normal = edge_stable_normal[he.edge()];
+            Vector3 stable_normal = forward_solver->edge_stable_normal[he.edge()];
             SudoFace *curr_sf = root_sudo_face[he];
             if (curr_sf != nullptr){
                 while (curr_sf->next_sudo_face != curr_sf) {
@@ -364,16 +363,13 @@ void RollingMarkovModel::build_sf_face_pairs(){
     }
 }
 
-// whether the stable point can be reached or not
-void RollingMarkovModel::compute_vertex_stabilizablity(){
-    vertex_is_stabilizable = VertexData<bool>(*mesh, false);
-    vertex_stable_normal = VertexData<Vector3>(*mesh);
-    for (Vertex v: mesh->vertices()){
-        if (forward_solver->vertex_is_stablizable(v))
-            vertex_is_stabilizable[v] = true;
-        vertex_stable_normal[v] = (geometry->inputVertexPositions[v] - G).normalize();
-    }
+
+// initialize precomputes, and reset SudoFace indexing
+void RollingMarkovModel::initialize_pre_computes(){
+    SudoFace::counter = 0;
+    // forward_solver->initialize_pre_computes(); // will call this before making any models
 }
+
 
 // initialize 
 void RollingMarkovModel::initiate_root_sudo_face(Halfedge he){
@@ -390,20 +386,17 @@ void RollingMarkovModel::initiate_root_sudo_face(Halfedge he){
     root_sudo_face[he] = sf1;
 }
 
-// edge rolls to a face if singular; else rolls to a vertex 
-void RollingMarkovModel::compute_edge_singularity_and_init_source_dir(){
-    edge_is_singular = EdgeData<bool>(*mesh, false); // ~ is stable, by fwdSolver function names
-    // initial assignment of real faces as SudoFaces
+// initialize linked lists for sudoFaces
+void RollingMarkovModel::init_root_sfs(){
+    // assign real faces as SudoFaces
     root_sudo_face = HalfedgeData<SudoFace*>(*mesh, nullptr);
     for (Edge e: mesh->edges()){
-        Vertex next_vertex = forward_solver->next_rolling_vertex(e);
-        
-        if (next_vertex.getIndex() == INVALID_IND){ // singular edge
-            edge_is_singular[e] = true;
+        if (forward_solver->edge_is_singular[e]){ // singular edge
             initiate_root_sudo_face(e.halfedge());
             initiate_root_sudo_face(e.halfedge().twin());
         }
         else {
+            Vertex next_vertex = forward_solver->next_rolling_vertex(e);
             Halfedge vec_field_aligned_he = (e.firstVertex() == next_vertex) ? e.halfedge().twin() : e.halfedge();
             // so singular he is also aligned with the vector field
             initiate_root_sudo_face(vec_field_aligned_he);
@@ -412,39 +405,6 @@ void RollingMarkovModel::compute_edge_singularity_and_init_source_dir(){
     }
 }
 
-// is 0 if the normal is unreachable; and if non-singular: the normal doesnt fall on the edge (edge too short)
-void RollingMarkovModel::compute_edge_stable_normals(){
-    // edge_is_singular should be populated and initiated before
-    if (edge_is_singular.size() == 0) throw std::logic_error("edge_is_singular should be called before this.\n");
-    
-    Vector3 zero_vec({0.,0.,0.});
-    edge_stable_normal = EdgeData<Vector3>(*mesh, zero_vec);
-    for (Edge e: mesh->edges()){
-        if (edge_is_singular[e]){ // not cheking stabilizability ~= reachablility
-            Vector3 A = geometry->inputVertexPositions[e.firstVertex()],
-                    B = geometry->inputVertexPositions[e.secondVertex()];
-            edge_stable_normal[e] = point_to_segment_normal(G, A, B).normalize();
-        }
-    }
-}
-
-// just call all the pre-compute initializations
-void RollingMarkovModel::initialize_pre_computes(){
-    SudoFace::counter = 0;
-    compute_vertex_stabilizablity();
-    compute_vertex_gaussian_curvatures();
-    compute_edge_singularity_and_init_source_dir();
-    compute_edge_stable_normals();
-}
-
-// pre-compute vertex gaussian curvatures
-void RollingMarkovModel::compute_vertex_gaussian_curvatures(){
-    vertex_gaussian_curvature = VertexData<double>(*mesh, 0.);
-    for (Vertex v: mesh->vertices()){
-        vertex_gaussian_curvature[v] = gaussian_curvature(v, *geometry);
-        // printf(" Gaussian Curvature at %d, is %f\n", v.getIndex(), vertex_gaussian_curvature[v]);
-    }
-}
 
 void RollingMarkovModel::print_prob_pairs(){
     printf("--printing probability pairs--\n\n");
@@ -543,23 +503,6 @@ void RollingMarkovModel::build_transition_matrix(){
     // ** Careful when changing either functions ** 
     transition_matrix.setFromTriplets(tripletList.begin(), tripletList.end(),
                                       [] (const double &a,const double &b) {return std::max(a, b);});
-    // TODO: move this smwhere else?
-    build_face_next_face();
-}
-
-
-// deterministically find the next rolling face 
-void RollingMarkovModel::build_face_next_face(){
-    face_next_face = FaceData<Face>(*mesh);
-    for (Face f: mesh->faces()){
-        forward_solver->initialize_state(Vertex(), Edge(), f, geometry->faceNormal(f)); // assuming outward normals
-        forward_solver->next_state(); // could roll to an edge
-        while (forward_solver->curr_f.getIndex() == INVALID_IND){
-            forward_solver->next_state();
-        } // terminates when it gets to the next face
-        face_next_face[f] = forward_solver->curr_f;
-        printf(" fnf %d -> %d\n", f.getIndex(), forward_solver->curr_f.getIndex());
-    }
 }
 
 
@@ -569,32 +512,32 @@ void RollingMarkovModel::check_transition_matrix(){
     // printf(" Checking row sums: \n");
     size_t n = transition_matrix.cols();
     Vector<double> ones = Vector<double>::Ones(n);
-    // std::cout << " ** outgoing: \n" << (transition_matrix * ones).transpose() << "\n";
-    // std::cout << " ** incoming: \n" << ones.transpose() * transition_matrix << "\n";
+    std::cout << " ** outgoing: \n" << (transition_matrix * ones).transpose() << "\n";
+    std::cout << " ** incoming: \n" << ones.transpose() * transition_matrix << "\n";
 
     //check final distribution
-    Vector<double> initial_dist = vertex_gaussian_curvature.toVector();
+    Vector<double> initial_dist = forward_solver->vertex_gaussian_curvature.toVector();
     initial_dist.conservativeResize(n);
     std::fill(initial_dist.begin() + mesh->nVertices(), initial_dist.end(), 0.);
     Vector<double> curr_dist = Vector<double>(initial_dist).transpose(),
                    next_dist = initial_dist.transpose() * transition_matrix;
-    // printf("here %d ,%d \n", initial_dist.rows(), initial_dist.cols());
+    printf("here %d ,%d \n", initial_dist.rows(), initial_dist.cols());
     while ((curr_dist - next_dist).norm() > EPS){
         curr_dist = next_dist;
-        // printf(" next dist %d ,%d \n", next_dist.rows(), next_dist.cols());
+        printf(" next dist %d ,%d \n", next_dist.rows(), next_dist.cols());
         next_dist = next_dist.transpose() * transition_matrix;
     }
     // std::cout << "the final distribution: \n" << (next_dist.tail(mesh->nFaces())*(1./(4.*PI))).transpose() << "\n";
     Vector<double> face_dist = next_dist.tail(mesh->nFaces());
+    face_dist *= (1./(4.*PI));
+    printf("   -sum: %f\n", face_dist.sum());
+    forward_solver->build_face_last_faces();
     for (Face f: mesh->faces()){
-        if (face_dist(f.getIndex()) > 0.) {
-            Face curr_f = f;
-            while (face_next_face[curr_f] != curr_f){
-                face_dist.coeffRef(face_next_face[curr_f].getIndex()) += face_dist(curr_f.getIndex());
-                face_dist.coeffRef(curr_f.getIndex()) = 0.;
-                curr_f = face_next_face[curr_f];
-            }
+        if (forward_solver->face_next_face[f] != f){
+            face_dist.coeffRef(forward_solver->face_last_face[f].getIndex()) += face_dist(f.getIndex());
+            face_dist.coeffRef(f.getIndex()) = 0.;
         }
     }
-    std::cout << "the final distribution: \n" << (face_dist*(1./(4.*PI))).transpose() << "\n";
+    std::cout << "the final distribution: \n" << face_dist.transpose() << "\n";
+    printf("   -sum: %f\n", face_dist.sum());
 }
