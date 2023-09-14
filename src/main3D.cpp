@@ -151,12 +151,13 @@ void draw_stable_patches_on_gauss_map(){
     for (Edge e: forwardSolver.hullMesh->edges()){
         BoundaryNormal *tmp_bnd_normal = boundary_builder->edge_boundary_normals[e];
         if (tmp_bnd_normal != nullptr){
+          printf("here2\n");
           boundary_normals.push_back(tmp_bnd_normal->normal + gm_shift);
           for (BoundaryNormal *neigh_bnd_normal: tmp_bnd_normal->neighbors){
             glm::vec3 arc_color = glm::vec3({1.,0,0}); // default color
             Vector3 n1 = tmp_bnd_normal->normal,
                     n2 = neigh_bnd_normal->normal;
-            draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, arc_counter + forwardSolver.hullMesh->nEdges(), dummy_psMesh2, 1., arc_color);
+            draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, arc_counter + forwardSolver.hullMesh->nEdges(), dummy_psMesh_for_regions, 1., arc_color);
             arc_counter++;
           }
         }
@@ -623,8 +624,8 @@ void update_visuals_with_G(){
   initialize_boundary_builder();
   if (polyscope::hasSurfaceMesh("dummy mesh for gauss map arcs") && draw_boundary_patches)
     draw_stable_patches_on_gauss_map();
-  initiate_markov_model();
-  visualize_sudo_faces();
+  // initiate_markov_model();
+  // visualize_sudo_faces();
 }
 
 
@@ -814,6 +815,7 @@ void myCallback() {
 
   if (ImGui::Button("build and show region boundaries")) {
     initialize_boundary_builder();
+    printf(" - pre patch draw!\n");
     draw_stable_patches_on_gauss_map();
   }
   if (ImGui::Checkbox("draw boundary patches", &draw_boundary_patches)) draw_stable_patches_on_gauss_map();

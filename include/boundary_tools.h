@@ -58,11 +58,13 @@ class BoundaryBuilder {
         BoundaryBuilder(Forward3DSolver *forward_solver_);
 
         // containers
-        VertexData<BoundaryNormal*> vertex_boundary_normals;
-        EdgeData<BoundaryNormal*> edge_boundary_normals;
+        VertexData<BoundaryNormal*> vertex_boundary_normal;
+        EdgeData<std::vector<BoundaryNormal*>> edge_boundary_normals; // could have multiple on a non-singular edge
 
         // backtrack and boundary normals starting from singular edges leading to different stable faces 
         void build_boundary_normals();
 
+        // flow back from a edge with boundary normal; till u find a source
+        void flow_back_boundary_on_edge(Edge dest_e, BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex);
         
 };

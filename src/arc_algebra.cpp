@@ -84,14 +84,14 @@ double gaussian_curvature(Vertex v, VertexPositionGeometry &geometry){
     for (Halfedge he : v.outgoingHalfedges()) {
         Vertex v_next = he.tipVertex(),
                v_pre = he.prevOrbitFace().tailVertex();
-        printf(" Gaussing for pre,v,next: %d, %d, %d\n", v_pre.getIndex(), v.getIndex(), v_next.getIndex());
+        // printf(" Gaussing for pre,v,next: %d, %d, %d\n", v_pre.getIndex(), v.getIndex(), v_next.getIndex());
         Vector3 A = geometry.inputVertexPositions[v],
                 B = geometry.inputVertexPositions[v_pre],
                 C = geometry.inputVertexPositions[v_next];
         double q = dot(unit(B - A), unit(C - A));
         q = clamp(q, -1.0, 1.0);
         double angle = std::acos(q);
-        printf(" angle : %f\n", angle);
+        // printf(" angle : %f\n", angle);
         gaussianCurvature -= angle;
     }
     return gaussianCurvature;
