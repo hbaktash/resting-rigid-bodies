@@ -37,6 +37,7 @@ Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPosition
     hullMesh = inputMesh_;
     hullGeometry = inputGeo_;
     G = inputG_;
+    updated = false;
 }
 
 // initialize state holders
@@ -46,6 +47,18 @@ void Forward3DSolver::initialize_state(Vertex curr_v_, Edge curr_e_, Face curr_f
     curr_f = curr_f_;
     curr_g_vec = curr_g_vec_;
     stable_state = face_is_stable(curr_f); // null-ness is checked inside the function
+}
+
+
+//
+void Forward3DSolver::set_G(Vector3 new_G){
+    this->G = new_G;
+    updated = false;
+}
+
+//
+Vector3 Forward3DSolver::get_G(){
+    return G; 
 }
 
 // find initial contact and basically refresh the current state
@@ -89,6 +102,8 @@ void Forward3DSolver::compute_vertex_probabilities(){
 // stabilizable := the normal from G can touch the ground
 // stable := the normal from G falls withing the element
 bool Forward3DSolver::vertex_is_stablizable(Vertex v){
+    if (updated)
+        return vertex_is_stabilizable[v];
     Vector3 Gp = hullGeometry->inputVertexPositions[v] - G;
     double gp_norm = dot(Gp, Gp);
     for (Vertex other_v: hullMesh->vertices()){
@@ -103,6 +118,8 @@ bool Forward3DSolver::vertex_is_stablizable(Vertex v){
 
 
 Vertex Forward3DSolver::next_rolling_vertex(Edge e){
+    if (updated)
+        return edge_next_vertex[e];
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 p1 = hullGeometry->inputVertexPositions[v1], 
             p2 = hullGeometry->inputVertexPositions[v2];
@@ -112,6 +129,8 @@ Vertex Forward3DSolver::next_rolling_vertex(Edge e){
 }
 
 bool Forward3DSolver::edge_is_stable(Edge e){
+    if (updated)
+        return edge_next_vertex[e].getIndex() == INVALID_IND;
     return next_rolling_vertex(e).getIndex() == INVALID_IND;
 }
 
@@ -142,6 +161,8 @@ bool Forward3DSolver::edge_is_stablizable(Edge e){
 bool Forward3DSolver::face_is_stable(Face f){
     if (f.getIndex() == INVALID_IND)
         return false;
+    if (updated)
+        return face_next_face[f] == f;
     // need to check all the dihedral angles made on each edge
     // iterate over all edges of the face and check the dihedral angle
     Halfedge curr_he = f.halfedge(),
@@ -365,17 +386,17 @@ Face Forward3DSolver::final_touching_face(Vector3 initial_ori){
 
 // is 0 if the normal is unreachable; and if non-singular: the normal doesnt fall on the edge (edge too short)
 void Forward3DSolver::compute_edge_stable_normals(){
-    edge_is_singular = EdgeData<bool>(*hullMesh, false); // ~ is stable, by fwdSolver function names
+    edge_next_vertex = EdgeData<Vertex>(*hullMesh, Vertex()); 
     Vector3 zero_vec({0.,0.,0.});
     edge_stable_normal = EdgeData<Vector3>(*hullMesh, zero_vec);
     for (Edge e: hullMesh->edges()){
         Vertex next_vertex = next_rolling_vertex(e);
         if (next_vertex.getIndex() == INVALID_IND){ // singular edge
-            edge_is_singular[e] = true;
             Vector3 A = hullGeometry->inputVertexPositions[e.firstVertex()],
                     B = hullGeometry->inputVertexPositions[e.secondVertex()];
             edge_stable_normal[e] = point_to_segment_normal(G, A, B).normalize();
         }
+        edge_next_vertex[e] = next_vertex;
     }
 }
 
@@ -415,7 +436,8 @@ void Forward3DSolver::build_face_next_faces(){
 }
 
 void Forward3DSolver::build_face_last_faces(){
-    build_face_next_faces();
+    if (!updated)
+        build_face_next_faces();
     face_last_face = FaceData<Face>(*hullMesh);
     for (Face f: hullMesh->faces()){
         Face curr_f = f;
@@ -432,4 +454,5 @@ void Forward3DSolver::initialize_pre_computes(){
     compute_vertex_gaussian_curvatures();
     compute_edge_stable_normals();
     build_face_next_faces(); // 
+    updated = true;
 }

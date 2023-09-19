@@ -256,7 +256,7 @@ void RollingMarkovModel::process_halfedge(Halfedge he){
     Vertex v = he.tailVertex();
     for (Halfedge src_he: v.incomingHalfedges()){
         // printf("    & checking possible src_he %d, %d,   singular: %d, has root sf %d \n", src_he.tailVertex().getIndex(), src_he.tipVertex().getIndex(), edge_is_singular[src_he.edge()], root_sudo_face[src_he] != nullptr);
-        if (root_sudo_face[src_he] != nullptr && !forward_solver->edge_is_singular[src_he.edge()]){ // src_he is a source in this vertex
+        if (root_sudo_face[src_he] != nullptr && forward_solver->edge_next_vertex[src_he.edge()].getIndex() != INVALID_IND){ // src_he is a source in this vertex
             process_halfedge(src_he);
             printf("    * flowing from %d,%d  f, tf: %d,%d \n", src_he.tailVertex().getIndex(), 
                                                                  src_he.tipVertex().getIndex(),
@@ -295,7 +295,7 @@ void RollingMarkovModel::split_chain_edges_and_build_probability_pairs(){
                  he_twin = e.halfedge().twin();
         SudoFace *sf = root_sudo_face[he],
                  *sf_twin = root_sudo_face[he_twin]; 
-        if (forward_solver->edge_is_singular[e]){ // go back up from singular edges; split any edge if needed
+        if (forward_solver->edge_next_vertex[e].getIndex() == INVALID_IND){ // go back up from singular edges; split any edge if needed
             printf("  -- at singular edge %d, %d \n", e.firstVertex().getIndex(), e.secondVertex().getIndex());
             if (!forward_solver->vertex_is_stabilizable[v1])  // v1 is not a source/stable
                 termilar_hes.push_back(he);
@@ -342,7 +342,7 @@ void RollingMarkovModel::split_chain_edges_and_build_probability_pairs(){
 
 void RollingMarkovModel::build_sf_face_pairs(){
     for (Halfedge he: mesh->halfedges()){
-        if (forward_solver->edge_is_singular[he.edge()]){
+        if (forward_solver->edge_next_vertex[he.edge()].getIndex() == INVALID_IND){
             Face f1 = he.face(),
                  f2 = he.twin().face();
             Vector3 stable_normal = forward_solver->edge_stable_normal[he.edge()];
@@ -391,7 +391,7 @@ void RollingMarkovModel::init_root_sfs(){
     // assign real faces as SudoFaces
     root_sudo_face = HalfedgeData<SudoFace*>(*mesh, nullptr);
     for (Edge e: mesh->edges()){
-        if (forward_solver->edge_is_singular[e]){ // singular edge
+        if (forward_solver->edge_next_vertex[e].getIndex() == INVALID_IND){ // singular edge
             initiate_root_sudo_face(e.halfedge());
             initiate_root_sudo_face(e.halfedge().twin());
         }

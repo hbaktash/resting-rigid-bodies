@@ -65,6 +65,6 @@ class BoundaryBuilder {
         void build_boundary_normals();
 
         // flow back from a edge with boundary normal; till u find a source
-        void flow_back_boundary_on_edge(Edge dest_e, BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex);
+        void flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex);
         
 };

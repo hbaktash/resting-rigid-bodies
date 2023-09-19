@@ -31,10 +31,11 @@ Vector3 project_on_plane(Vector3 p, Vector3 offset, Vector3 normal);
 Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B);
 
 class Forward3DSolver {
-
-  public:
-    //input convex goemetry (a polyhedra) and center of mass
+  private:
     Vector3 G;
+  public:
+    bool updated;
+    //input convex goemetry (a polyhedra) and center of mass
     ManifoldSurfaceMesh* hullMesh;
     VertexPositionGeometry* hullGeometry;
 
@@ -47,15 +48,16 @@ class Forward3DSolver {
     // for later vector field display
     Vector3 initial_roll_dir;
 
-    // just gaussian curvature of a vertex
-    VertexData<double> vertex_probabilities;
-
     // for debugging purposes
     Vector3 tmp_test_vec;
 
     // constructors
     Forward3DSolver() {}
     Forward3DSolver(ManifoldSurfaceMesh* inputMesh, VertexPositionGeometry* inputGeo, Vector3 G);
+
+    // setter/getter for G
+    void set_G(Vector3 new_G);
+    Vector3 get_G();
 
     // initialize state
     void initialize_state(Vertex curr_v, Edge curr_e, Face curr_f, Vector3 curr_g_vec);
@@ -79,8 +81,10 @@ class Forward3DSolver {
     // stable normal of a vertex; even if not reachable
     VertexData<Vector3> vertex_stable_normal;
     VertexData<double> vertex_gaussian_curvature;
+    VertexData<double> vertex_probabilities;
     // edge rolls to a face if singular; else rolls to a vertex
     EdgeData<bool> edge_is_singular;
+    EdgeData<Vertex> edge_next_vertex;
     // is 0 , if the normal is unreachable, or doesnt fall on the edge (edge too short)
     EdgeData<Vector3> edge_stable_normal;
     // deterministic routes; face to next face

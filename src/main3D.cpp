@@ -107,7 +107,7 @@ bool color_arcs = false,
 float arc_curve_radi = 0.01;
 glm::vec3 patch_arc_fancy_color({0.9,0.1,0.1});
 
-int arcs_seg_count = 13,
+int arcs_seg_count = 12,
     arc_counter = 0;
 
 // raster image stuff
@@ -143,25 +143,39 @@ static const char* all_polygons_current_item_c_str = "tet";
 
 
 void draw_stable_patches_on_gauss_map(){
-  std::vector<Vector3> boundary_normals;
+  if (!forwardSolver.updated)
+    forwardSolver.initialize_pre_computes();
+  std::vector<Vector3> boundary_normals(BoundaryNormal::counter);
   std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
+  std::set<std::pair<size_t, size_t>> drawn_pairs;
   dummy_psMesh_for_regions = polyscope::registerSurfaceMesh("dummy mesh for patch arcs", geometry->inputVertexPositions, dummy_face);
   if (draw_boundary_patches){
     arc_counter = 0;
     for (Edge e: forwardSolver.hullMesh->edges()){
-        BoundaryNormal *tmp_bnd_normal = boundary_builder->edge_boundary_normals[e];
+      for (BoundaryNormal *tmp_bnd_normal: boundary_builder->edge_boundary_normals[e]){
         if (tmp_bnd_normal != nullptr){
-          printf("here2\n");
-          boundary_normals.push_back(tmp_bnd_normal->normal + gm_shift);
+          boundary_normals[tmp_bnd_normal->index] = tmp_bnd_normal->normal;// + gm_shift;
           for (BoundaryNormal *neigh_bnd_normal: tmp_bnd_normal->neighbors){
-            glm::vec3 arc_color = glm::vec3({1.,0,0}); // default color
-            Vector3 n1 = tmp_bnd_normal->normal,
-                    n2 = neigh_bnd_normal->normal;
-            draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, arc_counter + forwardSolver.hullMesh->nEdges(), dummy_psMesh_for_regions, 1., arc_color);
-            arc_counter++;
+            boundary_normals[neigh_bnd_normal->index] = neigh_bnd_normal->normal;
+            std::pair<size_t, size_t> tmp_pair = {tmp_bnd_normal->index, neigh_bnd_normal->index};
+            if (drawn_pairs.find(tmp_pair) == drawn_pairs.end()){
+              drawn_pairs.insert(tmp_pair);
+              printf("here!!! %d, %d \n", tmp_pair.first, tmp_pair.second);
+              arc_counter++;
+            }
           }
         }
+      }
     }
+    glm::vec3 arc_color = glm::vec3({1.,0,0}); // default color
+    std::vector<std::pair<size_t, size_t>> ind_pairs_vector;
+    // Using vector::assign
+    ind_pairs_vector.assign(drawn_pairs.begin(), drawn_pairs.end());
+    printf("edges: %d  poses: %d\n", ind_pairs_vector.size(), boundary_normals.size());
+    draw_arc_network_on_sphere(ind_pairs_vector, boundary_normals, 
+                              gm_shift, gm_radi, arcs_seg_count, 
+                              "region boundaries", dummy_psMesh_for_regions, 1., arc_color);
+              
   }
 }
 
@@ -169,10 +183,10 @@ void draw_stable_vertices_on_gauss_map(){
   std::vector<Vector3> stable_vertices, hidden_stable_vertices;
   for (Vertex v: forwardSolver.hullMesh->vertices()){
     if (forwardSolver.vertex_is_stablizable(v)){
-      stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G)+gm_shift);
+      stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.get_G())+gm_shift);
     }
     else {
-      hidden_stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.G)+gm_shift);
+      hidden_stable_vertices.push_back(normalize(forwardSolver.hullGeometry->inputVertexPositions[v] - forwardSolver.get_G())+gm_shift);
     }
   }
   stable_vertices_gm_pc = polyscope::registerPointCloud("stable Vertices Normals", stable_vertices);
@@ -333,7 +347,7 @@ void show_edge_equilibria_on_gauss_map(){
 
 // visualize center of mass
 void draw_G() {
-  std::vector<Vector3> G_position = {forwardSolver.G};
+  std::vector<Vector3> G_position = {forwardSolver.get_G()};
   if (polyscope::hasPointCloud("Center of Mass")){
     psG->updatePointPositions(G_position);
   }
@@ -602,26 +616,31 @@ void visualize_colored_polyhedra(){
 
 
 void update_visuals_with_G(){
-  forwardSolver.G = G;
+  forwardSolver.set_G(G);
   draw_G();
+  auto t1 = clock();
   forwardSolver.initialize_pre_computes();
+  printf("precomputes took %d\n", clock() - t1);
   // stuff on the polyhedra
-  visualize_edge_stability();
-  visualize_face_stability();
-  visualize_stable_vertices();
-  
-  // coloring stuff
+  t1 = clock();
+  // visualize_edge_stability();
+  // visualize_face_stability();
+  // visualize_stable_vertices();
+  // // coloring stuff
   recolor_faces = true;// so bad lol
   color_faces();
   visualize_colored_polyhedra();
-  // Gauss map stuff
-  if(color_arcs){
-    draw_edge_arcs_on_gauss_map();
-  }
+  // // Gauss map stuff
+  // if(color_arcs){
+  //   draw_edge_arcs_on_gauss_map();
+  // }
   draw_stable_vertices_on_gauss_map();
   show_edge_equilibria_on_gauss_map();
   draw_stable_face_normals_on_gauss_map();
+  printf("visuals took %d\n", clock() - t1);
+  t1 = clock();
   initialize_boundary_builder();
+  printf("boundary took %d\n", clock() - t1);
   if (polyscope::hasSurfaceMesh("dummy mesh for gauss map arcs") && draw_boundary_patches)
     draw_stable_patches_on_gauss_map();
   // initiate_markov_model();
