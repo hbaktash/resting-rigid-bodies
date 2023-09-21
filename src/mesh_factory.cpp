@@ -17,6 +17,7 @@
 *************************************************************************
 */
 #include "mesh_factory.h"
+#include "geometrycentral/surface/meshio.h"
 
 
 Vector3 spherical_to_xyz(double r, double phi, double theta){
@@ -31,6 +32,8 @@ std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionG
 generate_polyhedra(std::string poly_str){
     std::vector<std::vector<size_t>> faces;
     std::vector<Vector3> positions;
+    std::unique_ptr<ManifoldSurfaceMesh> mesh;
+    std::unique_ptr<VertexPositionGeometry> geometry;
     int n;
     if (std::strcmp(poly_str.c_str(), "tet") == 0){
       n = 4;
@@ -147,13 +150,17 @@ generate_polyhedra(std::string poly_str){
     }
     else if (std::strcmp(poly_str.c_str(), "rndbs 9-gon 1") == 0){
     }
+    else if (std::strcmp(poly_str.c_str(), "sphere") == 0){
+      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/sphere.obj");
+      return std::make_tuple(std::move(mesh), std::move(geometry));
+    }
     else {
       throw std::runtime_error("no valid string provided\n");
     }
     // std::unique_ptr<ManifoldSurfaceMesh> poly_triangulated;
-    std::unique_ptr<ManifoldSurfaceMesh> mesh;
+    
     mesh.reset(new ManifoldSurfaceMesh(faces));
-    std::unique_ptr<VertexPositionGeometry> geometry(new VertexPositionGeometry(*mesh));
+    geometry = std::unique_ptr<VertexPositionGeometry>(new VertexPositionGeometry(*mesh));
     for (Vertex v : mesh->vertices()) {
         // Use the low-level indexers here since we're constructing
         (*geometry).inputVertexPositions[v] = positions[v.getIndex()];

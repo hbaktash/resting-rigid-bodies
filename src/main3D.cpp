@@ -63,7 +63,7 @@ Forward3DSolver forwardSolver;
 polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, 
                        *dummy_psMesh2, *dummy_psMesh3,
                        *dummy_forward_vis,
-                       *coloredPsMesh;
+                       *coloredPsMesh, *gm_sphere_mesh;
 
 polyscope::PointCloud *psG, // point cloud with single G
                       *curr_state_pt, *curr_g_vec_gm_pt,
@@ -102,7 +102,9 @@ bool color_arcs = false,
      draw_unstable_edge_arcs = true,
      draw_stable_g_vec_for_unstable_edge_arcs = false,
      show_hidden_stable_vertex_normals = true;
-
+ManifoldSurfaceMesh* sphere_mesh;
+VertexPositionGeometry* sphere_geometry;
+  
 // arc stuff
 float arc_curve_radi = 0.01;
 glm::vec3 patch_arc_fancy_color({0.9,0.1,0.1});
@@ -259,14 +261,40 @@ void draw_edge_arcs_on_gauss_map(){
   }
 }
 
+void plot_height_function(){
+  VertexData<double> heigh_func(*sphere_mesh);
+  for (Vertex v: sphere_mesh->vertices()){
+    Vector3 pos = sphere_geometry->inputVertexPositions[v];
+    heigh_func[v] = (forwardSolver.height_function(pos.normalize()));
+  }
+  polyscope::SurfaceVertexScalarQuantity *height_func_vis = 
+              gm_sphere_mesh->addVertexScalarQuantity(" height function", heigh_func);
+  height_func_vis->setEnabled(true);
+  gm_sphere_mesh->setSmoothShade(true);
+}
+
 void visualize_gauss_map(){
   // just draw the sphere next to the main surface
-  std::vector<Vector3> sphere_pos = {gm_shift};
-  gauss_map_pc = polyscope::registerPointCloud("Gauss Map", sphere_pos);
-  gauss_map_pc->setPointColor({0.74,0.7,0.9});
-  gauss_map_pc->setPointRadius(gm_radi, false);
-  gauss_map_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
-
+  // std::vector<Vector3> sphere_pos = {gm_shift};
+  // gauss_map_pc = polyscope::registerPointCloud("Gauss Map", sphere_pos);
+  // gauss_map_pc->setPointColor({0.74,0.7,0.9});
+  // gauss_map_pc->setPointRadius(gm_radi, false);
+  // gauss_map_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
+  std::unique_ptr<VertexPositionGeometry> sphere_geometry_ptr;
+  std::tie(sphere_mesh_ptr, sphere_geometry_ptr) = generate_polyhedra("sphere");
+  sphere_mesh = sphere_mesh_ptr.release();
+  sphere_geometry = sphere_geometry_ptr.release();
+  printf("here!!\n");
+  VertexData<Vector3> shifted_poses(*sphere_mesh);
+  for (Vertex v: sphere_mesh->vertices()){
+    Vector3 pos = sphere_geometry->inputVertexPositions[v];
+    shifted_poses[v] = pos/(2.3*sqrt(pos.norm())) + gm_shift;
+  }
+  gm_sphere_mesh = polyscope::registerSurfaceMesh("gm_sphere_mesh", 
+                                                  shifted_poses, 
+                                                  sphere_mesh->getFaceVertexList());
+  plot_height_function();
   // point cloud for face normals
   std::vector<Vector3> face_normal_points, stable_face_normals;
   for (Face f: forwardSolver.hullMesh->faces()){
@@ -621,6 +649,7 @@ void update_visuals_with_G(){
   auto t1 = clock();
   forwardSolver.initialize_pre_computes();
   printf("precomputes took %d\n", clock() - t1);
+  plot_height_function();
   // stuff on the polyhedra
   t1 = clock();
   // visualize_edge_stability();

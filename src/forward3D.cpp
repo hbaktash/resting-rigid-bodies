@@ -61,6 +61,22 @@ Vector3 Forward3DSolver::get_G(){
     return G; 
 }
 
+
+// height from G to ground after contact
+double Forward3DSolver::height_function(Vector3 ground_normal){
+    Vertex contact_point = hullMesh->vertex(0);
+    double max_inner_product = 0.; // smth should be positive, if we choose a ref inside the convex hull
+    for (Vertex v: hullMesh->vertices()){
+        Vector3 pos = hullGeometry->inputVertexPositions[v];
+        Vector3 Gv = pos - G; // could use any point inside the convexHull (using G just just cause we have it).
+        if (dot(Gv, ground_normal) >= max_inner_product){
+            contact_point = v;
+            max_inner_product = dot(Gv, ground_normal);
+        }
+    }
+    return max_inner_product;
+}
+
 // find initial contact and basically refresh the current state
 void Forward3DSolver::find_contact(Vector3 initial_ori){
     // just find the max inner product with the g_vec 

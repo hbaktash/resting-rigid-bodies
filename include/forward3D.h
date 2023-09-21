@@ -61,6 +61,10 @@ class Forward3DSolver {
 
     // initialize state
     void initialize_state(Vertex curr_v, Edge curr_e, Face curr_f, Vector3 curr_g_vec);
+    
+    // heigh for a given normal that depends on contact point
+    double height_function(Vector3 ground_normal);
+    
     // find initial contact vertex
     void find_contact(Vector3 initial_ori);
 
