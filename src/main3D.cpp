@@ -261,6 +261,13 @@ void draw_edge_arcs_on_gauss_map(){
   }
 }
 
+//
+void plot_height_surface(){
+
+}
+
+
+//
 void plot_height_function(){
   VertexData<double> heigh_func(*sphere_mesh);
   for (Vertex v: sphere_mesh->vertices()){
@@ -285,7 +292,6 @@ void visualize_gauss_map(){
   std::tie(sphere_mesh_ptr, sphere_geometry_ptr) = generate_polyhedra("sphere");
   sphere_mesh = sphere_mesh_ptr.release();
   sphere_geometry = sphere_geometry_ptr.release();
-  printf("here!!\n");
   VertexData<Vector3> shifted_poses(*sphere_mesh);
   for (Vertex v: sphere_mesh->vertices()){
     Vector3 pos = sphere_geometry->inputVertexPositions[v];
