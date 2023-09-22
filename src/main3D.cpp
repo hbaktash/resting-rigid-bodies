@@ -63,7 +63,7 @@ Forward3DSolver forwardSolver;
 polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, 
                        *dummy_psMesh2, *dummy_psMesh3,
                        *dummy_forward_vis,
-                       *coloredPsMesh, *gm_sphere_mesh;
+                       *coloredPsMesh, *gm_sphere_mesh, *height_function_mesh;
 
 polyscope::PointCloud *psG, // point cloud with single G
                       *curr_state_pt, *curr_g_vec_gm_pt,
@@ -98,13 +98,14 @@ double gm_distance = 2.1,
        gm_radi = 1.0;
 Vector3 gm_shift({0., gm_distance, 0.}),
         colored_shift({gm_distance, gm_distance, 0.});
-bool color_arcs = false,
+bool color_arcs = false, gm_is_drawn = false,
      draw_unstable_edge_arcs = true,
      draw_stable_g_vec_for_unstable_edge_arcs = false,
      show_hidden_stable_vertex_normals = true;
 ManifoldSurfaceMesh* sphere_mesh;
 VertexPositionGeometry* sphere_geometry;
-  
+
+
 // arc stuff
 float arc_curve_radi = 0.01;
 glm::vec3 patch_arc_fancy_color({0.9,0.1,0.1});
@@ -135,7 +136,7 @@ polyscope::PointCloud *sudo_faces_pc;
 // boundary stuff
 BoundaryBuilder *boundary_builder;
 polyscope::PointCloud *boundary_normals_pc;
-polyscope::SurfaceMesh *dummy_psMesh_for_regions;
+polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
 bool draw_boundary_patches = false;
 
 // example choice
@@ -144,7 +145,7 @@ std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
 
-void draw_stable_patches_on_gauss_map(){
+void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
   if (!forwardSolver.updated)
     forwardSolver.initialize_pre_computes();
   std::vector<Vector3> boundary_normals(BoundaryNormal::counter);
@@ -156,9 +157,11 @@ void draw_stable_patches_on_gauss_map(){
     for (Edge e: forwardSolver.hullMesh->edges()){
       for (BoundaryNormal *tmp_bnd_normal: boundary_builder->edge_boundary_normals[e]){
         if (tmp_bnd_normal != nullptr){
-          boundary_normals[tmp_bnd_normal->index] = tmp_bnd_normal->normal;// + gm_shift;
+          Vector3 tmp_normal = tmp_bnd_normal->normal;
+          boundary_normals[tmp_bnd_normal->index] = tmp_normal; // + gm_shift;
           for (BoundaryNormal *neigh_bnd_normal: tmp_bnd_normal->neighbors){
-            boundary_normals[neigh_bnd_normal->index] = neigh_bnd_normal->normal;
+            Vector3 neigh_normal = neigh_bnd_normal->normal;
+            boundary_normals[neigh_bnd_normal->index] = neigh_normal;
             std::pair<size_t, size_t> tmp_pair = {tmp_bnd_normal->index, neigh_bnd_normal->index};
             if (drawn_pairs.find(tmp_pair) == drawn_pairs.end()){
               drawn_pairs.insert(tmp_pair);
@@ -173,11 +176,16 @@ void draw_stable_patches_on_gauss_map(){
     std::vector<std::pair<size_t, size_t>> ind_pairs_vector;
     // Using vector::assign
     ind_pairs_vector.assign(drawn_pairs.begin(), drawn_pairs.end());
-    printf("edges: %d  poses: %d\n", ind_pairs_vector.size(), boundary_normals.size());
+    // printf("edges: %d  poses: %d\n", ind_pairs_vector.size(), boundary_normals.size());
     draw_arc_network_on_sphere(ind_pairs_vector, boundary_normals, 
                               gm_shift, gm_radi, arcs_seg_count, 
                               "region boundaries", dummy_psMesh_for_regions, 1., arc_color);
-              
+    if (on_height_surface){
+      dummy_psMesh_for_height_surface = polyscope::registerSurfaceMesh("dummy mesh: height_surface regions", geometry->inputVertexPositions, dummy_face);
+      draw_arc_network_on_lifted_suface(ind_pairs_vector, boundary_normals, forwardSolver, 
+                              gm_shift, gm_radi, arcs_seg_count, 
+                              "region boundaries", dummy_psMesh_for_height_surface, arc_color);
+    }
   }
 }
 
@@ -263,21 +271,38 @@ void draw_edge_arcs_on_gauss_map(){
 
 //
 void plot_height_surface(){
-
+  VertexData<Vector3> lifted_poses(*sphere_mesh);
+  for (Vertex v: sphere_mesh->vertices()){
+    Vector3 pos = sphere_geometry->inputVertexPositions[v];
+    lifted_poses[v] = pos.normalize() + gm_shift;
+  }
+  gm_sphere_mesh = polyscope::registerSurfaceMesh("height surface_func", 
+                                                  lifted_poses, 
+                                                  sphere_mesh->getFaceVertexList());
 }
 
 
 //
 void plot_height_function(){
   VertexData<double> heigh_func(*sphere_mesh);
+  VertexData<Vector3> lifted_poses(*sphere_mesh);
   for (Vertex v: sphere_mesh->vertices()){
     Vector3 pos = sphere_geometry->inputVertexPositions[v];
-    heigh_func[v] = (forwardSolver.height_function(pos.normalize()));
+    double height = forwardSolver.height_function(pos.normalize());
+    heigh_func[v] = height;
+    lifted_poses[v] = sqrt(1.+ height) * pos.normalize() + gm_shift;
   }
   polyscope::SurfaceVertexScalarQuantity *height_func_vis = 
               gm_sphere_mesh->addVertexScalarQuantity(" height function", heigh_func);
   height_func_vis->setEnabled(true);
-  gm_sphere_mesh->setSmoothShade(true);
+
+  height_function_mesh = polyscope::registerSurfaceMesh("height surface_func", 
+                                                  lifted_poses, 
+                                                  sphere_mesh->getFaceVertexList());
+  height_function_mesh->setSmoothShade(true);
+  polyscope::SurfaceVertexScalarQuantity *height_func_vis_surface = 
+              height_function_mesh->addVertexScalarQuantity(" height function surface", heigh_func);
+  height_func_vis_surface->setEnabled(true);
 }
 
 void visualize_gauss_map(){
@@ -295,11 +320,14 @@ void visualize_gauss_map(){
   VertexData<Vector3> shifted_poses(*sphere_mesh);
   for (Vertex v: sphere_mesh->vertices()){
     Vector3 pos = sphere_geometry->inputVertexPositions[v];
-    shifted_poses[v] = pos/(2.3*sqrt(pos.norm())) + gm_shift;
+    shifted_poses[v] = pos.normalize() + gm_shift;
   }
   gm_sphere_mesh = polyscope::registerSurfaceMesh("gm_sphere_mesh", 
                                                   shifted_poses, 
                                                   sphere_mesh->getFaceVertexList());
+  gm_sphere_mesh->setSmoothShade(true);
+  gm_sphere_mesh->setSurfaceColor({0.74,0.7,0.9});
+  // surface and colormap
   plot_height_function();
   // point cloud for face normals
   std::vector<Vector3> face_normal_points, stable_face_normals;
@@ -323,6 +351,8 @@ void visualize_gauss_map(){
 
   // arcs for edge-normals set
   draw_edge_arcs_on_gauss_map();
+
+  gm_is_drawn = true;
 }
 
 
@@ -499,6 +529,7 @@ void generate_polyhedron_example(std::string poly_str){
     std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
     mesh = mesh_ptr.release();
     geometry = geometry_ptr.release();
+    gm_is_drawn = false;
 }
 
 // initialize Markov chain and do the pre-computes
@@ -655,7 +686,8 @@ void update_visuals_with_G(){
   auto t1 = clock();
   forwardSolver.initialize_pre_computes();
   printf("precomputes took %d\n", clock() - t1);
-  plot_height_function();
+  if (gm_is_drawn)
+    plot_height_function();
   // stuff on the polyhedra
   t1 = clock();
   // visualize_edge_stability();
@@ -677,7 +709,7 @@ void update_visuals_with_G(){
   initialize_boundary_builder();
   printf("boundary took %d\n", clock() - t1);
   if (polyscope::hasSurfaceMesh("dummy mesh for gauss map arcs") && draw_boundary_patches)
-    draw_stable_patches_on_gauss_map();
+    draw_stable_patches_on_gauss_map(gm_is_drawn);
   // initiate_markov_model();
   // visualize_sudo_faces();
 }

@@ -18,7 +18,6 @@
 */
 #include "visual_utils.h"
 
-
 void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind, polyscope::SurfaceMesh* hosting_psMesh, 
                         double radi_scale, glm::vec3 color, 
                         float arc_curve_radi, 
@@ -115,4 +114,59 @@ void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds
   psArcCurve->setRadius(arc_curve_radi * radi_scale, false);
   psArcCurve->setColor(color);
   psArcCurve->setEnabled(true);
+}
+
+
+void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> edge_inds_,
+                                std::vector<Vector3> positions_,
+                                Forward3DSolver &forward_solver,
+                                Vector3 center, double radius, size_t seg_count, std::string title, 
+                                polyscope::SurfaceMesh* hosting_psMesh, 
+                                glm::vec3 color, 
+                                float arc_curve_radi){
+  std::vector<std::array<size_t, 2>> edgeInds;
+  std::vector<Vector3> positions;
+
+  double sqrt_radi = sqrt(radius);
+
+  size_t tmp_ind = 0;
+  for (std::pair<size_t, size_t> pair: edge_inds_){
+    size_t i1 = pair.first, 
+           i2 = pair.second;
+    Vector3 p1 = positions_[i1],
+            p2 = positions_[i2];
+    // walk on p1-p2 segment
+    Vector3 curr_point = p1,
+            forward_vec = (p2-p1)/(double)seg_count;
+    Vector3 next_point = curr_point + forward_vec;
+    Vector3 curr_point_on_sphere = normalize(curr_point),// * sqrt_radi,// + center ,
+            next_point_on_sphere = normalize(next_point);// * sqrt_radi;// + center;
+    Vector3 curr_point_on_surface = 
+        center + 
+        curr_point_on_sphere * sqrt(radius + forward_solver.height_function(curr_point_on_sphere));
+    positions.push_back(curr_point_on_surface);
+    for (size_t i = 0; i < seg_count; i++){
+      // add to positions list
+      curr_point_on_sphere = normalize(curr_point),
+      next_point_on_sphere = normalize(next_point);
+      Vector3 next_point_on_surface = 
+        center + 
+        next_point_on_sphere * sqrt(radius + forward_solver.height_function(next_point_on_sphere));
+      positions.push_back(next_point_on_surface);
+      // add segment indices
+      edgeInds.push_back({tmp_ind, tmp_ind+1});
+      tmp_ind++;
+
+      // update points
+      curr_point = next_point;
+      next_point += forward_vec;
+    }
+    tmp_ind++;
+    // break;
+  }
+  printf(" in arc net: poses %d, edges %d\n", positions.size(), edgeInds.size());
+  polyscope::SurfaceGraphQuantity* psArcCurve = hosting_psMesh->addSurfaceGraphQuantity("Arc curves " + title, positions, edgeInds);
+  psArcCurve->setRadius(arc_curve_radi, false);
+  psArcCurve->setColor(color);
+  psArcCurve->setEnabled(true);  
 }

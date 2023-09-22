@@ -26,6 +26,8 @@
 #include "polyscope/surface_mesh.h"
 #include "polyscope/point_cloud.h"
 
+#include "forward3D.h"
+
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
@@ -44,4 +46,12 @@ void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds
                                 Vector3 center, double radius, size_t seg_count, std::string title, 
                                 polyscope::SurfaceMesh* hosting_psMesh, 
                                 double radi_scale = 1., glm::vec3 color = glm::vec3({-1., 0, 0}), 
+                                float arc_curve_radi = 0.01);
+
+void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> edge_inds_,
+                                std::vector<Vector3> positions_,
+                                Forward3DSolver &forward_solver,
+                                Vector3 center, double radius, size_t seg_count, std::string title, 
+                                polyscope::SurfaceMesh* hosting_psMesh, 
+                                glm::vec3 color = glm::vec3({-1., 0, 0}), 
                                 float arc_curve_radi = 0.01);
