@@ -61,7 +61,7 @@ Forward3DSolver forwardSolver;
 
 // Polyscope visualization handle, to quickly add data to the surface
 polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, 
-                       *dummy_psMesh2, *dummy_psMesh3,
+                       *dummy_psMesh2, *dummy_psMesh3, *dummy_psMesh4,
                        *dummy_forward_vis,
                        *coloredPsMesh, *gm_sphere_mesh, *height_function_mesh;
 
@@ -183,7 +183,7 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
     if (on_height_surface){
       dummy_psMesh_for_height_surface = polyscope::registerSurfaceMesh("dummy mesh: height_surface regions", geometry->inputVertexPositions, dummy_face);
       draw_arc_network_on_lifted_suface(ind_pairs_vector, boundary_normals, forwardSolver, 
-                              gm_shift, gm_radi, arcs_seg_count, 
+                              gm_shift, 0., arcs_seg_count, 
                               "region boundaries", dummy_psMesh_for_height_surface, arc_color);
     }
   }
@@ -238,34 +238,60 @@ void draw_edge_arcs_on_gauss_map(){
   std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
   //    dummy mesh to add curves to
   dummy_psMesh2 = polyscope::registerSurfaceMesh(
-      "dummy mesh for gauss map arcs",
+      "dummy mesh for saddle edge arcs",
       geometry->inputVertexPositions, dummy_face);
+  dummy_psMesh3 = polyscope::registerSurfaceMesh(
+      "dummy mesh for singular edge arcs",
+      geometry->inputVertexPositions, dummy_face);
+  dummy_psMesh4 = polyscope::registerSurfaceMesh(
+      "dummy mesh for non-singular edge arcs",
+      geometry->inputVertexPositions, dummy_face);
+  
   //    add arc per edge
+  std::vector<std::pair<size_t, size_t>> non_singular_edge_inds, stable_only_edge_inds ,both_edge_inds, all_edge_inds;
+  size_t nFaces = forwardSolver.hullMesh->nFaces();
+  std::vector<Vector3> positions(nFaces);
   for (Edge e: forwardSolver.hullMesh->edges()){
     Face f1 = e.halfedge().face(),
          f2 = e.halfedge().twin().face();
     Vector3 n1 = forwardSolver.hullGeometry->faceNormal(f1),
             n2 = forwardSolver.hullGeometry->faceNormal(f2);
+    positions[f1.getIndex()] = n1;
+    positions[f2.getIndex()] = n2;
     // draw with polyscope
     if (color_arcs) {
       glm::vec3 arc_color = glm::vec3({-1.,0,0}); // default color
       if (forwardSolver.edge_is_stable(e) && forwardSolver.edge_is_stablizable(e)){
+        both_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
         arc_color = both_edge_color;
-        draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2, 1., arc_color);
       }
       else if (forwardSolver.edge_is_stable(e)){
+        stable_only_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
         arc_color = stable_edge_color;
-        draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2, 1., arc_color);
       }
       else if (draw_unstable_edge_arcs) {
-        if (forwardSolver.edge_is_stablizable(e))
+        if (forwardSolver.edge_is_stablizable(e)){
+          non_singular_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
           arc_color = stabilizable_edge_color;
-        draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2, 1., arc_color);
+        }
+        all_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
       }
     } // else; draw all arcs with black
     else {
-      draw_arc_on_sphere(n1, n2, gm_shift, gm_radi, arcs_seg_count, e.getIndex(), dummy_psMesh2); // default color
+      all_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
     }
+  }
+  if (color_arcs){
+    draw_arc_network_on_sphere(both_edge_inds, positions, gm_shift, gm_radi, arcs_seg_count,
+                              "saddle edge arcs", dummy_psMesh2, 1., both_edge_color);
+    draw_arc_network_on_sphere(stable_only_edge_inds, positions, gm_shift, gm_radi, arcs_seg_count,
+                              "singular edge arcs", dummy_psMesh2, 1., stable_edge_color);
+    draw_arc_network_on_sphere(all_edge_inds, positions, gm_shift, gm_radi, arcs_seg_count,
+                              "non-singular edge arcs", dummy_psMesh2, 1., stabilizable_edge_color);
+  }
+  else {
+    draw_arc_network_on_sphere(all_edge_inds, positions, gm_shift, gm_radi, arcs_seg_count,
+                              "all edge arcs", dummy_psMesh2, 1., stabilizable_edge_color);
   }
 }
 
@@ -290,7 +316,7 @@ void plot_height_function(){
     Vector3 pos = sphere_geometry->inputVertexPositions[v];
     double height = forwardSolver.height_function(pos.normalize());
     heigh_func[v] = height;
-    lifted_poses[v] = sqrt(1.+ height) * pos.normalize() + gm_shift;
+    lifted_poses[v] = sqrt(height) * pos.normalize() + gm_shift; // 1. + height
   }
   polyscope::SurfaceVertexScalarQuantity *height_func_vis = 
               gm_sphere_mesh->addVertexScalarQuantity(" height function", heigh_func);
@@ -568,7 +594,6 @@ void initialize_boundary_builder(){
   boundary_builder = new BoundaryBuilder(&forwardSolver);
   boundary_builder->build_boundary_normals();
 }
-
 // visualize boundary
 
 
@@ -698,9 +723,9 @@ void update_visuals_with_G(){
   color_faces();
   visualize_colored_polyhedra();
   // // Gauss map stuff
-  // if(color_arcs){
-  //   draw_edge_arcs_on_gauss_map();
-  // }
+  if(color_arcs){
+    draw_edge_arcs_on_gauss_map();
+  }
   draw_stable_vertices_on_gauss_map();
   show_edge_equilibria_on_gauss_map();
   draw_stable_face_normals_on_gauss_map();
@@ -708,8 +733,10 @@ void update_visuals_with_G(){
   t1 = clock();
   initialize_boundary_builder();
   printf("boundary took %d\n", clock() - t1);
-  if (polyscope::hasSurfaceMesh("dummy mesh for gauss map arcs") && draw_boundary_patches)
+  t1 = clock();
+  if (draw_boundary_patches)
     draw_stable_patches_on_gauss_map(gm_is_drawn);
+  printf("boundary visuals took %d\n", clock() - t1);
   // initiate_markov_model();
   // visualize_sudo_faces();
 }
