@@ -138,12 +138,38 @@ BoundaryBuilder *boundary_builder;
 polyscope::PointCloud *boundary_normals_pc;
 polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
 bool draw_boundary_patches = false;
+bool test_guess = true;
+polyscope::PointCloud *test_pc;
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
+
+void draw_guess_pc(std::vector<Vector3> boundary_normals, Vector3 shift){
+  std::vector<Vector3> positions;
+  for (Vector3 bnd_normal: boundary_normals){
+    Vector3 pos_on_mesh;
+    double tmp_t = -1;
+    for (Face f: forwardSolver.hullMesh->faces()){
+      std::vector<Vector3> face_poses;
+      for (Vertex v: f.adjacentVertices())
+        face_poses.push_back(forwardSolver.hullGeometry->inputVertexPositions[v]);
+      tmp_t = ray_intersect(forwardSolver.get_G(), bnd_normal, face_poses);
+      if (tmp_t != -1)
+        break;
+    }
+    // on surface
+    positions.push_back(forwardSolver.get_G() + tmp_t * bnd_normal);
+    // easy case
+    // positions.push_back(bnd_normal + shift);
+  }
+  test_pc = polyscope::registerPointCloud("test point cloud", positions);
+  test_pc->setPointColor({1.,0.,0.});
+  test_pc->setEnabled(true);
+  test_pc->setPointRadius(face_normal_vertex_gm_radi * 1.1, false);
+}
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
   if (!forwardSolver.updated)
@@ -187,6 +213,8 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
                               "region boundaries", dummy_psMesh_for_height_surface, arc_color);
     }
   }
+  if (test_guess)
+    draw_guess_pc(boundary_normals, forwardSolver.get_G());
 }
 
 void draw_stable_vertices_on_gauss_map(){
@@ -932,7 +960,7 @@ void myCallback() {
     draw_stable_patches_on_gauss_map();
   }
   if (ImGui::Checkbox("draw boundary patches", &draw_boundary_patches)) draw_stable_patches_on_gauss_map();
-  
+  if (ImGui::Checkbox("test guess", &test_guess)) draw_stable_patches_on_gauss_map();
   if (ImGui::Button("show sudo faces")){
     initiate_markov_model();
     visualize_sudo_faces();

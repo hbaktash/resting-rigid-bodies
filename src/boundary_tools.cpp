@@ -42,7 +42,7 @@ BoundaryBuilder::BoundaryBuilder(Forward3DSolver *forward_solver_){
 
 void BoundaryBuilder::build_boundary_normals(){
     vertex_boundary_normal = VertexData<BoundaryNormal*>(*mesh, nullptr);
-    edge_boundary_normals = EdgeData<std::vector<BoundaryNormal*>>(*mesh);
+    edge_boundary_normals  = EdgeData<std::vector<BoundaryNormal*>>(*mesh);
     BoundaryNormal::counter = 0;
     // 
     std::vector<Edge> terminal_edges;

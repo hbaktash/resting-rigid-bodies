@@ -37,6 +37,10 @@ class BoundaryNormal {
         Vector3 normal;
         std::vector<BoundaryNormal*> neighbors;
 
+        // faces that this boundary contributes to
+        Face f1, f2;
+        double f1_angle, f2_angle; // per-face contribution
+
         // constructors
         BoundaryNormal(): index(counter++){}
         BoundaryNormal(Vector3 _normal);

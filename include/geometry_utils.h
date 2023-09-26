@@ -39,3 +39,7 @@ bool G_is_inside(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry, Ve
 Vector3 find_center_of_mass(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geometry);
 
 void center_and_normalize(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);
+
+
+double ray_intersect_triangle(Vector3 O, Vector3 r, Vector3 A, Vector3 B, Vector3 C);
+double ray_intersect(Vector3 O, Vector3 r, std::vector<Vector3> polygon);

@@ -81,3 +81,31 @@ void center_and_normalize(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geo
     }
 }
 
+double area(Vector3 A, Vector3 B, Vector3 C){
+    return 0.5*norm(cross(B-A, C-A));
+}
+
+double ray_intersect_triangle(Vector3 O, Vector3 v, Vector3 A, Vector3 B, Vector3 C){
+    Vector3 e1 = B - A,
+            e2 = C - A;
+    Vector3 n = cross(e1, e2);
+    double t = (dot(A,n) - dot(O,n))/dot(v,n);
+    if (t < 0)
+        return -1;
+
+    Vector3 P = O + t*v;
+    if (area(A,B,C) >= area(P,A,B) + area(P,A,C)+ area(P,C,B) - 1e-6)
+        return t;
+    else 
+        return -1;
+}
+
+double ray_intersect(Vector3 O, Vector3 v, std::vector<Vector3> polygon){
+    size_t n = polygon.size();
+    for (size_t i = 1; i < n; i ++){
+        double tmp_t = ray_intersect_triangle(O, v, polygon[0], polygon[i], polygon[(i+1)%n]) != -1;
+        if (tmp_t != -1)
+            return tmp_t;
+    }
+    return -1;
+}
