@@ -48,3 +48,6 @@ double triangle_patch_area_on_sphere(Vector3 A, Vector3 B, Vector3 C);
 
 // angle between two spherical arcs; <P1AP2
 double angle_on_sphere(Vector3 P1, Vector3 A, Vector3 P2);
+
+// angle between two spherical arcs; <P1AP2
+double angle_on_sphere(Vector3 P1, Vector3 A, Vector3 P2);

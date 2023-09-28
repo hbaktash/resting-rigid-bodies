@@ -37,9 +37,10 @@ class BoundaryNormal {
         Vector3 normal;
         std::vector<BoundaryNormal*> neighbors;
 
+        Vertex host_v;
+        Edge host_e;
         // faces that this boundary contributes to
-        Face f1, f2;
-        double f1_angle, f2_angle; // per-face contribution
+        Face f1, f2; // null for maxima's (vertices)
 
         // constructors
         BoundaryNormal(): index(counter++){}
@@ -64,11 +65,17 @@ class BoundaryBuilder {
         // containers
         VertexData<BoundaryNormal*> vertex_boundary_normal;
         EdgeData<std::vector<BoundaryNormal*>> edge_boundary_normals; // could have multiple on a non-singular edge
+        FaceData<std::vector<BoundaryNormal*>> face_attraction_boundary;  
+        FaceData<std::vector<std::tuple<BoundaryNormal*, BoundaryNormal*, double>>> face_chain_area;
+        FaceData<double> face_region_area;
 
         // backtrack and boundary normals starting from singular edges leading to different stable faces 
         void build_boundary_normals();
 
         // flow back from a edge with boundary normal; till u find a source
-        void flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex);
+        void flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
+                                        double f1_area_sign, Vector3 f1_normal, Vector3 f2_normal);
+
+        void print_area_of_boundary_loops();
         
 };

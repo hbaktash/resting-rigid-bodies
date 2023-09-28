@@ -100,7 +100,7 @@ double gaussian_curvature(Vertex v, VertexPositionGeometry &geometry){
 
 // A being in the middle
 double angle_on_sphere(Vector3 P1, Vector3 A, Vector3 P2){
-    Vector3 n1 = cross(A, P1),
+    Vector3 n1 = cross(P1, A),
             n2 = cross(A, P2);
     return angle(n1, n2);
 }

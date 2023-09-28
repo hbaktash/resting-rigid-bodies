@@ -168,7 +168,7 @@ void draw_guess_pc(std::vector<Vector3> boundary_normals, Vector3 shift){
   test_pc = polyscope::registerPointCloud("test point cloud", positions);
   test_pc->setPointColor({1.,0.,0.});
   test_pc->setEnabled(true);
-  test_pc->setPointRadius(face_normal_vertex_gm_radi * 1.1, false);
+  test_pc->setPointRadius(face_normal_vertex_gm_radi * 0.7, false);
 }
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
@@ -191,7 +191,7 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
             std::pair<size_t, size_t> tmp_pair = {tmp_bnd_normal->index, neigh_bnd_normal->index};
             if (drawn_pairs.find(tmp_pair) == drawn_pairs.end()){
               drawn_pairs.insert(tmp_pair);
-              printf("here!!! %d, %d \n", tmp_pair.first, tmp_pair.second);
+              // printf("here!!! %d, %d \n", tmp_pair.first, tmp_pair.second);
               arc_counter++;
             }
           }
@@ -473,7 +473,7 @@ void draw_G() {
     psG = polyscope::registerPointCloud("Center of Mass", G_position);
   // set some options
   psG->setPointColor({0., 0., 0.});
-  psG->setPointRadius(pt_cloud_radi_scale/2.);
+  psG->setPointRadius(pt_cloud_radi_scale, false);
   psG->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 }
 
@@ -497,7 +497,7 @@ void visualize_vertex_probabilities(){
     polyscope::PointCloud* psCloud = polyscope::registerPointCloud("v" + std::to_string(v.getIndex()), positions);
     // set some options
     psCloud->setPointColor({forwardSolver.vertex_probabilities[v], 1., 1.});
-    psCloud->setPointRadius(forwardSolver.vertex_probabilities[v] * pt_cloud_radi_scale);
+    psCloud->setPointRadius(forwardSolver.vertex_probabilities[v] * pt_cloud_radi_scale, false);
     psCloud->setPointRenderMode(polyscope::PointRenderMode::Sphere);
   }
 }
@@ -656,7 +656,7 @@ void visualize_contact(){
     std::vector<Vector3> curr_state_pos = {forwardSolver.hullGeometry->inputVertexPositions[forwardSolver.curr_v]}; // first and second should be the same since we just initialized.
     curr_state_pt = polyscope::registerPointCloud("current Vertex", curr_state_pos);
     curr_state_pt->setEnabled(true);
-    curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
+    curr_state_pt->setPointRadius(pt_cloud_radi_scale, false);
     
     // show gravity vec on Gauss Map
     std::vector<Vector3> curr_g_vec_pos = {forwardSolver.curr_g_vec + gm_shift}; // first and second should be the same since we just initialized.
@@ -760,6 +760,7 @@ void update_visuals_with_G(){
   printf("visuals took %d\n", clock() - t1);
   t1 = clock();
   initialize_boundary_builder();
+  boundary_builder->print_area_of_boundary_loops();
   printf("boundary took %d\n", clock() - t1);
   t1 = clock();
   if (draw_boundary_patches)

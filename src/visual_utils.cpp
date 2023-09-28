@@ -109,7 +109,7 @@ void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds
     tmp_ind++;
     // break;
   }
-  printf(" in arc net: poses %d, edges %d\n", positions.size(), edgeInds.size());
+  // printf(" in arc net: poses %d, edges %d\n", positions.size(), edgeInds.size());
   polyscope::SurfaceGraphQuantity* psArcCurve = hosting_psMesh->addSurfaceGraphQuantity("Arc curves " + title, positions, edgeInds);
   psArcCurve->setRadius(arc_curve_radi * radi_scale, false);
   psArcCurve->setColor(color);
