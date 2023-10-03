@@ -96,9 +96,16 @@ set(bullet_SRCS
   # add any other source files here
 )
 
-set(pstest_SRCS 
-  src/main_pstest.cpp
+set(inverse_SRCS 
+  src/main_inverse.cpp
+  src/arc_algebra.cpp
+  src/forward3D.cpp
   src/mesh_factory.cpp
+  src/geometry_utils.cpp
+  src/coloring.cpp
+  src/visual_utils.cpp
+  src/markov_model.cpp
+  src/boundary_tools.cpp
 	# add any other source files here
 )
 
@@ -122,11 +129,11 @@ target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/po
 target_link_libraries(polyhedra geometry-central polyscope)
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
-add_executable(pstest "${pstest_SRCS}")
-target_include_directories(pstest PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+add_executable(invDesign "${inverse_SRCS}")
+target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 # add the args.hxx project which we use for command line args
-target_include_directories(pstest PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_link_libraries(pstest geometry-central polyscope)
+target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+target_link_libraries(invDesign geometry-central polyscope)
 
 
 # Bullet stuff

@@ -102,17 +102,6 @@ bool recolor_faces = true,
      normalize_vecF = true;
 glm::vec3 vecF_color({0.1, 0.1, 0.1});
 
-// snail trail stuff
-bool show_snail_trail = true;
-polyscope::PointCloud *snail_trail_pc;
-polyscope::SurfaceMesh *dummy_ps_mesh_for_snail_trail;
-Vector3 old_g_vec, new_g_vec;
-int snail_trail_dummy_counter = 0;
-
-// Markov Chain stuff
-RollingMarkovModel *markov_model;
-polyscope::PointCloud *sudo_faces_pc;
-
 // boundary stuff
 BoundaryBuilder *boundary_builder;
 polyscope::PointCloud *boundary_normals_pc;
@@ -141,14 +130,9 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
     vis_utils.draw_guess_pc(boundary_normals);
 }
 
+//
 
 void visualize_gauss_map(){
-  // just draw the sphere next to the main surface
-  // std::vector<Vector3> sphere_pos = {vis_utils.center};
-  // gauss_map_pc = polyscope::registerPointCloud("Gauss Map", sphere_pos);
-  // gauss_map_pc->setPointColor({0.74,0.7,0.9});
-  // gauss_map_pc->setPointRadius(gm_radi, false);
-  // gauss_map_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
   std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
   std::unique_ptr<VertexPositionGeometry> sphere_geometry_ptr;
   std::tie(sphere_mesh_ptr, sphere_geometry_ptr) = generate_polyhedra("sphere");
@@ -179,16 +163,6 @@ void update_solver(){
 }
 
 
-void visualize_vertex_probabilities(){
-  forwardSolver->compute_vertex_probabilities();
-  polyscope::PointCloud* vertex_prob_cloud = polyscope::registerPointCloud("vertex probs", 
-            forwardSolver->hullGeometry->inputVertexPositions);
-    // set some options
-  vertex_prob_cloud->addScalarQuantity("initial prob", forwardSolver->vertex_probabilities.toVector());
-  vertex_prob_cloud->setPointRenderMode(polyscope::PointRenderMode::Sphere);
-}
-
-
 // generate simple examples
 void generate_polyhedron_example(std::string poly_str){
     // readManifoldSurfaceMesh()
@@ -196,37 +170,6 @@ void generate_polyhedron_example(std::string poly_str){
     mesh = mesh_ptr.release();
     geometry = geometry_ptr.release();
 }
-
-
-// initialize Markov chain and do the pre-computes
-void initiate_markov_model(){
-  markov_model = new RollingMarkovModel(forwardSolver);
-  markov_model->initialize_pre_computes();
-  markov_model->split_chain_edges_and_build_probability_pairs();
-  markov_model->print_prob_pairs();
-}
-
-
-// visualize 
-void visualize_sudo_faces(){
-  std::vector<Vector3> sf_positions;
-  size_t sf_count = 0;
-  for (Halfedge he: markov_model->mesh->halfedges()){
-    SudoFace *curr_sf = markov_model->root_sudo_face[he];
-    if (curr_sf != nullptr){
-      while (curr_sf->next_sudo_face != curr_sf){
-        sf_positions.push_back(curr_sf->normal + vis_utils.center);
-        sf_count++;
-        curr_sf = curr_sf->next_sudo_face;
-      }
-    }
-  }
-  polyscope::PointCloud* sudo_faces_pc = polyscope::registerPointCloud("sudo faces", sf_positions);
-  sudo_faces_pc->setEnabled(true);
-  sudo_faces_pc->setPointRadius(vis_utils.face_normal_vertex_gm_radi * 1.0, false);
-  sudo_faces_pc->setPointColor({0.,1.,1.});
-}
-
 
 // initialize boundary builder
 void initialize_boundary_builder(){
@@ -241,79 +184,6 @@ void color_faces_with_default(){
   FaceData<Vector3> face_colors(*forwardSolver->hullMesh, default_face_color);
   polyscope::SurfaceFaceColorQuantity *fColor = psInputMesh->addFaceColorQuantity("state vis color", face_colors);
   fColor->setEnabled(true);
-}
-
-
-// show current g vector
-void visualize_g_vec(){
-  std::vector<Vector3> the_g_vec = {forwardSolver->curr_g_vec};
-  polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
-  psG_vec->setEnabled(true);
-  psG_vec->setVectorRadius(curve_radi_scale * 1.);
-  psG_vec->setVectorLengthScale(0.2);
-  psG_vec->setVectorColor({0.8,0.1,0.1});
-}
-
-
-// visualize current touching element: Vertex/Edge/Face
-void visualize_contact(){
-  if (polyscope::hasPointCloud("current Vertex")) polyscope::removePointCloud("current Vertex");
-  dummy_forward_vis->removeQuantity("current contact edge"); // has a built-in existance checker
-  if (forwardSolver->curr_f.getIndex() == INVALID_IND) color_faces_with_default();
-  // add the other two
-  if (forwardSolver->curr_v.getIndex() != INVALID_IND) {
-    printf("at Vertex\n");
-    // show contact vertex on polyhedra
-    std::vector<Vector3> curr_state_pos = {forwardSolver->hullGeometry->inputVertexPositions[forwardSolver->curr_v]}; // first and second should be the same since we just initialized.
-    curr_state_pt = polyscope::registerPointCloud("current Vertex", curr_state_pos);
-    curr_state_pt->setEnabled(true);
-    curr_state_pt->setPointRadius(pt_cloud_radi_scale, false);
-    
-    // show gravity vec on Gauss Map
-    std::vector<Vector3> curr_g_vec_pos = {forwardSolver->curr_g_vec + vis_utils.center}; // first and second should be the same since we just initialized.
-    curr_g_vec_gm_pt = polyscope::registerPointCloud("current g vec", curr_g_vec_pos);
-    curr_g_vec_gm_pt->setEnabled(true);
-    curr_g_vec_gm_pt->setPointRadius(vis_utils.face_normal_vertex_gm_radi * 1.1, false);
-    curr_g_vec_gm_pt->setPointColor({0.,0.,0.});
-  }
-  else if (forwardSolver->curr_e.getIndex() != INVALID_IND){
-    printf("at Edge\n");
-    Vertex v1 = forwardSolver->curr_e.firstVertex(),
-           v2 = forwardSolver->curr_e.secondVertex();
-    Vector3 p1 = forwardSolver->hullGeometry->inputVertexPositions[v1],
-            p2 = forwardSolver->hullGeometry->inputVertexPositions[v2];
-    std::vector<std::array<size_t, 2>> edgeInds;
-    std::vector<Vector3> positions;
-    edgeInds.push_back({0, 1});
-    positions.push_back(p1); positions.push_back(p2);
-    curr_state_segment =  dummy_forward_vis->addSurfaceGraphQuantity("current contact edge", positions, edgeInds);
-    curr_state_segment->setRadius(curve_radi_scale/2.3);
-    curr_state_segment->setColor({0., 0., 1.});
-    curr_state_segment->setEnabled(true);
-  }
-  else if (forwardSolver->curr_f.getIndex() != INVALID_IND){
-    face_colors = FaceData<Vector3>(*forwardSolver->hullMesh, default_face_color);
-    face_colors[forwardSolver->curr_f] = curr_face_color;
-    polyscope::SurfaceFaceColorQuantity *fColor = psInputMesh->addFaceColorQuantity("state vis color", face_colors);
-    fColor->setEnabled(true);
-  }
-  else {
-    polyscope::warning("all elements are Invalid??\n");
-  }
-  // TODO: maybe add Snail trail?
-}
-
-
-void initialize_state_vis(){
-  // for later single segment curve addition (for stable edges)
-  std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
-  std::vector<Vector3> dummy_pos = {Vector3({0.,0.,0.})};
-  dummy_forward_vis = polyscope::registerSurfaceMesh("state check mesh", dummy_pos, dummy_face); // nothing matters in this line
-  // will add curves to this later
-  vis_utils.draw_G();
-  visualize_contact();
-  visualize_g_vec();
-  color_faces_with_default();
 }
 
 
@@ -490,30 +360,6 @@ void myCallback() {
   }
   
   // my simulation 
-  if (ImGui::Button("initialize g_vec") ||
-    ImGui::SliderFloat("initial g_vec theta", &g_vec_theta, 0., 2*PI)||
-    ImGui::SliderFloat("initial g_vec phi", &g_vec_phi, 0., 2*PI)) {
-    initial_g_vec = {cos(g_vec_phi)*sin(g_vec_theta), cos(g_vec_phi)*cos(g_vec_theta), sin(g_vec_phi)};
-    forwardSolver->find_contact(initial_g_vec);
-    initialize_state_vis();
-    // snail trail stuff
-    snail_trail_dummy_counter = 0;
-    std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
-    dummy_ps_mesh_for_snail_trail = polyscope::registerSurfaceMesh("dummy mesh snail trail", geometry->inputVertexPositions, dummy_face);
-  }
-  if (ImGui::Button("next state")){
-    old_g_vec = forwardSolver->curr_g_vec;
-    forwardSolver->next_state();
-    new_g_vec = forwardSolver->curr_g_vec;
-    visualize_g_vec();
-    visualize_contact();
-    if(show_snail_trail && norm(old_g_vec-new_g_vec) != 0.){ // proly dont have to use tol
-      draw_arc_on_sphere(old_g_vec, new_g_vec, vis_utils.center,
-                         vis_utils.gm_radi, vis_utils.arcs_seg_count, 200 + snail_trail_dummy_counter, 
-                         dummy_ps_mesh_for_snail_trail, 1.5);
-      snail_trail_dummy_counter++;
-    }
-  }
   if (ImGui::SliderInt("sample count", &sample_count, 1000, 1000000));
   if (ImGui::Button("build raster image")){
     color_faces();
@@ -536,14 +382,6 @@ void myCallback() {
   }
   if (ImGui::Checkbox("draw boundary patches", &draw_boundary_patches)) draw_stable_patches_on_gauss_map();
   if (ImGui::Checkbox("test guess", &test_guess)) draw_stable_patches_on_gauss_map();
-  if (ImGui::Button("show sudo faces")){
-    initiate_markov_model();
-    visualize_sudo_faces();
-  }
-  if (ImGui::Button("matrix debugg")){
-    markov_model->build_transition_matrix();
-    markov_model->check_transition_matrix();
-  }
 }
 
 

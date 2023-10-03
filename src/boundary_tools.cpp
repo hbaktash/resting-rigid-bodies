@@ -200,7 +200,7 @@ void BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
     face_region_area[bnd_normal->f2] += 
                 f2_sign_change * 
                     triangle_patch_area_on_sphere(f2_normal, bnd_normal->normal, next_normal);
-
+    // TODO: take care of when f1,f2 on the same side when starting from saddle 
 }
 
 void BoundaryBuilder::print_area_of_boundary_loops(){
