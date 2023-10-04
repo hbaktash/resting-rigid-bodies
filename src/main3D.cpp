@@ -135,7 +135,7 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
   if (draw_boundary_patches){
     boundary_normals = build_and_draw_stable_patches_on_gauss_map(boundary_builder, dummy_psMesh_for_regions,
                                                vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
-                                               dummy_psMesh_for_height_surface, on_height_surface);
+                                               on_height_surface);
   }
   if (test_guess)
     vis_utils.draw_guess_pc(boundary_normals);
@@ -476,7 +476,7 @@ void myCallback() {
   if (ImGui::Button("Show Gauss Map")){///face_normal_vertex_gm_radi
     visualize_gauss_map();
   }
-  if (ImGui::Checkbox("colored arcs (slows)", &color_arcs));
+  if (ImGui::Checkbox("colored arcs (slows)", &color_arcs)) vis_utils.color_arcs = color_arcs;
   if (ImGui::Checkbox("draw unstable edge arcs", &draw_unstable_edge_arcs)) {
     vis_utils.draw_unstable_edge_arcs = draw_unstable_edge_arcs;
     vis_utils.draw_edge_arcs_on_gauss_map();

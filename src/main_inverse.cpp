@@ -35,7 +35,7 @@
 #include "geometry_utils.h"
 #include "visual_utils.h"
 #include "markov_model.h"
-#include "boundary_tools.h"
+#include "inv_design.h"
 
 // #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 // #include <CGAL/Polyhedron_3.h>
@@ -66,26 +66,14 @@ VertexPositionGeometry* sphere_geometry;
         
 
 // Polyscope visualization handle, to quickly add data to the surface
-polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, 
-                       *dummy_psMesh2, *dummy_psMesh3, *dummy_psMesh4,
-                       *dummy_forward_vis,
-                       *coloredPsMesh, *gm_sphere_mesh, *height_function_mesh;
+polyscope::SurfaceMesh *psInputMesh;
 
-polyscope::PointCloud *psG, // point cloud with single G
-                      *curr_state_pt, *curr_g_vec_gm_pt,
-                      *stable_face_normals_pc, *edge_equilibria_pc, *stabilizable_edge_pc, *stable_edge_pc,
-                      *stable_vertices_gm_pc, *hidden_stable_vertices_gm_pc,
-                      *raster_pc;
-
-polyscope::SurfaceGraphQuantity* curr_state_segment;
+polyscope::PointCloud *raster_pc;
 
 float pt_cloud_radi_scale = 0.1,
-      curve_radi_scale = 0.1,
       G_r = 0.,
       G_theta = 0.,
-      G_phi = 0.,
-      g_vec_theta = 0.,
-      g_vec_phi = 0.;
+      G_phi = 0.;
 
 
 bool gm_is_drawn;
@@ -110,8 +98,14 @@ bool draw_boundary_patches = false;
 bool test_guess = true;
 polyscope::PointCloud *test_pc;
 
+
+// optimization stuff
+InverseSolver* inverseSolver;
+float step_size = 0.01;
+
+
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4")};
+std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tilted cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
@@ -124,7 +118,7 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
   if (draw_boundary_patches){
     boundary_normals = build_and_draw_stable_patches_on_gauss_map(boundary_builder, dummy_psMesh_for_regions,
                                                vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
-                                               dummy_psMesh_for_height_surface, on_height_surface);
+                                               on_height_surface);
   }
   if (test_guess)
     vis_utils.draw_guess_pc(boundary_normals);
@@ -148,10 +142,18 @@ void visualize_gauss_map(){
 }
 
 
+// initialize boundary builder
+void initialize_boundary_builder(){
+  boundary_builder = new BoundaryBuilder(forwardSolver);
+  boundary_builder->build_boundary_normals();
+}
 
 void update_solver(){
   //assuming convex input here
   forwardSolver = new Forward3DSolver(mesh, geometry, G);
+  forwardSolver->initialize_pre_computes();
+  initialize_boundary_builder();
+  inverseSolver = new InverseSolver(boundary_builder);
   vis_utils.forwardSolver = forwardSolver;
   // Register the mesh with polyscope
   psInputMesh = polyscope::registerSurfaceMesh(
@@ -171,11 +173,6 @@ void generate_polyhedron_example(std::string poly_str){
     geometry = geometry_ptr.release();
 }
 
-// initialize boundary builder
-void initialize_boundary_builder(){
-  boundary_builder = new BoundaryBuilder(forwardSolver);
-  boundary_builder->build_boundary_normals();
-}
 // visualize boundary
 
 
@@ -225,7 +222,8 @@ void update_visuals_with_G(){
   vis_utils.draw_stable_face_normals_on_gauss_map();
   printf("visuals took %d\n", clock() - t1);
   t1 = clock();
-  initialize_boundary_builder();
+  // initialize_boundary_builder();
+  boundary_builder->build_boundary_normals();
   boundary_builder->print_area_of_boundary_loops();
   printf("boundary took %d\n", clock() - t1);
   t1 = clock();
@@ -302,6 +300,13 @@ void build_raster_image(){
 }
 
 
+// inverse stuff
+void take_opt_G_step(){
+  inverseSolver->find_per_face_G_grads();
+  Vector3 G_grad = inverseSolver->find_total_g_grad();
+  G = G + step_size * G_grad;
+  update_visuals_with_G();
+}
 
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
@@ -346,7 +351,7 @@ void myCallback() {
   if (ImGui::Button("Show Gauss Map")){///face_normal_vertex_gm_radi
     visualize_gauss_map();
   }
-  if (ImGui::Checkbox("colored arcs (slows)", &color_arcs));
+  if (ImGui::Checkbox("colored arcs (slows)", &color_arcs)) vis_utils.color_arcs = color_arcs;
   if (ImGui::Checkbox("draw unstable edge arcs", &draw_unstable_edge_arcs)) {
     vis_utils.draw_unstable_edge_arcs = draw_unstable_edge_arcs;
     vis_utils.draw_edge_arcs_on_gauss_map();
@@ -382,6 +387,10 @@ void myCallback() {
   }
   if (ImGui::Checkbox("draw boundary patches", &draw_boundary_patches)) draw_stable_patches_on_gauss_map();
   if (ImGui::Checkbox("test guess", &test_guess)) draw_stable_patches_on_gauss_map();
+  if (ImGui::Button("take fair step (move G)")) {
+    take_opt_G_step();
+  }
+  if (ImGui::SliderFloat("step size", &step_size, 0., 0.10));
 }
 
 

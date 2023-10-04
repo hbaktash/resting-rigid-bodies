@@ -128,7 +128,6 @@ void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> ed
 std::vector<Vector3> build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
                                       polyscope::SurfaceMesh* hosting_psMesh,
                                       Vector3 center, double radius, size_t seg_count,
-                                      polyscope::SurfaceMesh* hosting_psMesh2,
                                       bool on_height_surface = false);
 
 

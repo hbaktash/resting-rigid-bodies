@@ -93,6 +93,7 @@ set(bullet_SRCS
   src/coloring.cpp
   src/visual_utils.cpp
   src/arc_algebra.cpp
+  src/boundary_tools.cpp
   # add any other source files here
 )
 
@@ -106,6 +107,7 @@ set(inverse_SRCS
   src/visual_utils.cpp
   src/markov_model.cpp
   src/boundary_tools.cpp
+  src/inv_design.cpp
 	# add any other source files here
 )
 

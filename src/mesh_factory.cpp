@@ -51,6 +51,47 @@ generate_polyhedra(std::string poly_str){
                     spherical_to_xyz(1., phi0, theta2),
                     spherical_to_xyz(1., phi1, theta3)};
     }
+    else if (std::strcmp(poly_str.c_str(), "cube") == 0){
+      
+      // bottom face
+      positions.push_back(Vector3({-1, -1, -1})/2.);
+      positions.push_back(Vector3({-1,  1, -1})/2.);
+      positions.push_back(Vector3({ 1,  1, -1})/2.);
+      positions.push_back(Vector3({ 1, -1, -1})/2.);
+      // top face
+      positions.push_back(Vector3({-1, -1,  1})/2.);
+      positions.push_back(Vector3({-1,  1,  1})/2.);
+      positions.push_back(Vector3({ 1,  1,  1})/2.);
+      positions.push_back(Vector3({ 1, -1,  1})/2.);
+      // v0 adjs
+      faces.push_back({0, 1, 2, 3});
+      faces.push_back({0, 4, 5, 1});
+      faces.push_back({0, 3, 7, 4});
+      // v6 adjs
+      faces.push_back({6, 5, 4, 7});
+      faces.push_back({6, 2, 1, 5});
+      faces.push_back({6, 7, 3, 2});
+    }
+    else if (std::strcmp(poly_str.c_str(), "tilted cube") == 0){
+      // bottom face
+      positions.push_back(Vector3({-1, -1, -1})/4.);
+      positions.push_back(Vector3({-1,  1, -1})/4.);
+      positions.push_back(Vector3({ 1,  1, -1})/4.);
+      positions.push_back(Vector3({ 1, -1, -1})/4.);
+      // top face
+      positions.push_back(Vector3({-1, -1,  1})/2.);
+      positions.push_back(Vector3({-1,  1,  1})/2.);
+      positions.push_back(Vector3({ 1,  1,  1})/2.);
+      positions.push_back(Vector3({ 1, -1,  1})/2.);
+      // v0 adjs
+      faces.push_back({0, 1, 2, 3});
+      faces.push_back({0, 4, 5, 1});
+      faces.push_back({0, 3, 7, 4});
+      // v6 adjs
+      faces.push_back({6, 5, 4, 7});
+      faces.push_back({6, 2, 1, 5});
+      faces.push_back({6, 7, 3, 2});
+    }
     else if (std::strcmp(poly_str.c_str(), "tet2") == 0){
       n = 4;
       faces = {{0, 1, 2},
@@ -136,15 +177,15 @@ generate_polyhedra(std::string poly_str){
       // tip vertex location
       positions.push_back(cylindrical_to_xyz(1., 0., 0.));
 
-      for (std::vector<size_t> f: faces){
-        for (size_t ind: f){
-          printf(" %d,", ind);
-        }
-        printf("\n");
-      }
-      for (Vector3 pos: positions){
-        std::cout << "pos: " << pos << "\n";
-      }
+      // for (std::vector<size_t> f: faces){
+      //   for (size_t ind: f){
+      //     printf(" %d,", ind);
+      //   }
+      //   printf("\n");
+      // }
+      // for (Vector3 pos: positions){
+      //   std::cout << "pos: " << pos << "\n";
+      // }
     }
     else if (std::strcmp(poly_str.c_str(), "rndbs 6-gon 1") == 0){
     }
