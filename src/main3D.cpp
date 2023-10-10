@@ -71,10 +71,7 @@ polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1,
                        *dummy_forward_vis,
                        *coloredPsMesh, *gm_sphere_mesh, *height_function_mesh;
 
-polyscope::PointCloud *psG, // point cloud with single G
-                      *curr_state_pt, *curr_g_vec_gm_pt,
-                      *stable_face_normals_pc, *edge_equilibria_pc, *stabilizable_edge_pc, *stable_edge_pc,
-                      *stable_vertices_gm_pc, *hidden_stable_vertices_gm_pc,
+polyscope::PointCloud *curr_state_pt, *curr_g_vec_gm_pt,
                       *raster_pc;
 
 polyscope::SurfaceGraphQuantity* curr_state_segment;
@@ -247,7 +244,7 @@ void color_faces_with_default(){
 // show current g vector
 void visualize_g_vec(){
   std::vector<Vector3> the_g_vec = {forwardSolver->curr_g_vec};
-  polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
+  polyscope::PointCloudVectorQuantity *psG_vec = vis_utils.psG->addVectorQuantity("g_vec", the_g_vec);
   psG_vec->setEnabled(true);
   psG_vec->setVectorRadius(curve_radi_scale * 1.);
   psG_vec->setVectorLengthScale(0.2);

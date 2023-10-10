@@ -101,7 +101,9 @@ polyscope::PointCloud *test_pc;
 
 // optimization stuff
 InverseSolver* inverseSolver;
-float step_size = 0.01;
+float step_size = 0.01,
+      step_size2 = 0.01,
+      step_size3 = 0.01;
 
 
 // example choice
@@ -308,6 +310,30 @@ void take_opt_G_step(){
   update_visuals_with_G();
 }
 
+
+void take_opt_vertices_step(){
+  inverseSolver->find_per_face_per_vertex_grads();
+  VertexData<Vector3> per_vertex_grads_grad = inverseSolver->find_per_vertex_total_grads();
+  VertexData<Vector3> new_poses(*forwardSolver->hullMesh);
+  for (Vertex v: forwardSolver->hullMesh->vertices()){
+    forwardSolver->hullGeometry->inputVertexPositions += step_size2 * per_vertex_grads_grad[v];
+  }
+  polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
+  update_visuals_with_G();
+}
+
+
+void take_opt_vertices_uni_mass_step(){
+  inverseSolver->find_per_face_per_vertex_grads();
+  VertexData<Vector3> per_vertex_grads_grad = inverseSolver->find_per_vertex_total_grads();
+  VertexData<Vector3> new_poses(*forwardSolver->hullMesh);
+  for (Vertex v: forwardSolver->hullMesh->vertices()){
+    forwardSolver->hullGeometry->inputVertexPositions += step_size2 * per_vertex_grads_grad[v];
+  }
+  polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
+  update_visuals_with_G();
+}
+
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
 // https://github.com/ocornut/imgui/blob/master/imgui.h
@@ -390,7 +416,19 @@ void myCallback() {
   if (ImGui::Button("take fair step (move G)")) {
     take_opt_G_step();
   }
+  if (ImGui::Button("FD (move G)")) {
+    inverseSolver->find_per_face_G_grads(true);
+  }
   if (ImGui::SliderFloat("step size", &step_size, 0., 0.10));
+  if (ImGui::Button("take fair step (move vertices)")) {
+    take_opt_vertices_step();
+  }
+  if (ImGui::SliderFloat("step size 2", &step_size2, 0., 0.10));
+
+  if (ImGui::Button("take fair step (joint gradient)")) {
+    take_opt_vertices_step();
+  }
+  if (ImGui::SliderFloat("step size 3", &step_size3, 0., 0.10));
 }
 
 
