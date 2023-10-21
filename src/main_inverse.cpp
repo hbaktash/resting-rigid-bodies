@@ -32,7 +32,7 @@
 #include "coloring.h"
 #include "forward3D.h"
 #include "mesh_factory.h"
-#include "geometry_utils.h"
+// #include "geometry_utils.h" //; in fwd solver 
 #include "visual_utils.h"
 #include "markov_model.h"
 #include "inv_design.h"
@@ -116,14 +116,14 @@ static const char* all_polygons_current_item_c_str = "tet";
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
   if (!forwardSolver->updated)
     forwardSolver->initialize_pre_computes();
-  std::vector<Vector3> boundary_normals;
+  // std::vector<Vector3> boundary_normals;
   if (draw_boundary_patches){
-    boundary_normals = build_and_draw_stable_patches_on_gauss_map(boundary_builder, dummy_psMesh_for_regions,
+    auto net_pair = build_and_draw_stable_patches_on_gauss_map(boundary_builder, dummy_psMesh_for_regions,
                                                vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
                                                on_height_surface);
+    if (test_guess)
+      vis_utils.draw_guess_pc(net_pair.first, net_pair.second);
   }
-  if (test_guess)
-    vis_utils.draw_guess_pc(boundary_normals);
 }
 
 //
@@ -304,7 +304,7 @@ void build_raster_image(){
 
 // inverse stuff
 void take_opt_G_step(){
-  inverseSolver->find_per_face_G_grads();
+  inverseSolver->find_d_pf_d_Gs();
   Vector3 G_grad = inverseSolver->find_total_g_grad();
   G = G + step_size * G_grad;
   update_visuals_with_G();
@@ -312,25 +312,34 @@ void take_opt_G_step(){
 
 
 void take_opt_vertices_step(){
-  inverseSolver->find_per_face_per_vertex_grads();
-  VertexData<Vector3> per_vertex_grads_grad = inverseSolver->find_per_vertex_total_grads();
+  inverseSolver->find_d_pf_dvs();
+  VertexData<Vector3> total_vertex_grads = inverseSolver->find_total_vertex_grads();
   VertexData<Vector3> new_poses(*forwardSolver->hullMesh);
   for (Vertex v: forwardSolver->hullMesh->vertices()){
-    forwardSolver->hullGeometry->inputVertexPositions += step_size2 * per_vertex_grads_grad[v];
+    forwardSolver->hullGeometry->inputVertexPositions[v] += step_size2 * total_vertex_grads[v];
   }
   polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
   update_visuals_with_G();
 }
 
 
-void take_opt_vertices_uni_mass_step(){
-  inverseSolver->find_per_face_per_vertex_grads();
-  VertexData<Vector3> per_vertex_grads_grad = inverseSolver->find_per_vertex_total_grads();
+void take_uni_mass_opt_vertices_step(){
+  forwardSolver->set_uniform_G();
+  forwardSolver->initialize_pre_computes();
+  inverseSolver->find_uni_mass_d_pf_dv();
+  VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads();
+  // translation 
+  // Vertex v0 = forwardSolver->hullMesh->vertex(0);
+  // for (Vertex v: forwardSolver->hullMesh->vertices())
+  //   total_uni_mass_vertex_grads[v] -= total_uni_mass_vertex_grads[v0];
   VertexData<Vector3> new_poses(*forwardSolver->hullMesh);
   for (Vertex v: forwardSolver->hullMesh->vertices()){
-    forwardSolver->hullGeometry->inputVertexPositions += step_size2 * per_vertex_grads_grad[v];
+    forwardSolver->hullGeometry->inputVertexPositions[v] += step_size3 * total_uni_mass_vertex_grads[v];
   }
   polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
+  forwardSolver->set_uniform_G();
+  // forwardSolver->initialize_pre_computes();
+  G = forwardSolver->get_G();
   update_visuals_with_G();
 }
 
@@ -371,7 +380,7 @@ void myCallback() {
     }
   }
   if (ImGui::Button("uniform mass G")){
-    G = find_center_of_mass(*mesh, *geometry);
+    G = find_center_of_mass(*mesh, *geometry).first;
     update_visuals_with_G();
   }
   if (ImGui::Button("Show Gauss Map")){///face_normal_vertex_gm_radi
@@ -417,18 +426,22 @@ void myCallback() {
     take_opt_G_step();
   }
   if (ImGui::Button("FD (move G)")) {
-    inverseSolver->find_per_face_G_grads(true);
+    inverseSolver->find_d_pf_d_Gs(true);
   }
   if (ImGui::SliderFloat("step size", &step_size, 0., 0.10));
+  
   if (ImGui::Button("take fair step (move vertices)")) {
     take_opt_vertices_step();
+  }
+  if (ImGui::Button("FD (move vertices)")) {
+    inverseSolver->find_d_pf_dvs(true);
   }
   if (ImGui::SliderFloat("step size 2", &step_size2, 0., 0.10));
 
   if (ImGui::Button("take fair step (joint gradient)")) {
-    take_opt_vertices_step();
+    take_uni_mass_opt_vertices_step();
   }
-  if (ImGui::SliderFloat("step size 3", &step_size3, 0., 0.10));
+  if (ImGui::SliderFloat("step size 3", &step_size3, 0., 1.0));
 }
 
 

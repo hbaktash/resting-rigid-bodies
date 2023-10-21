@@ -128,14 +128,14 @@ static const char* all_polygons_current_item_c_str = "tet";
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
   if (!forwardSolver->updated)
     forwardSolver->initialize_pre_computes();
-  std::vector<Vector3> boundary_normals;
+  // std::vector<Vector3> boundary_normals;
   if (draw_boundary_patches){
-    boundary_normals = build_and_draw_stable_patches_on_gauss_map(boundary_builder, dummy_psMesh_for_regions,
+    auto pair = build_and_draw_stable_patches_on_gauss_map(boundary_builder, dummy_psMesh_for_regions,
                                                vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
                                                on_height_surface);
+    if (test_guess)
+      vis_utils.draw_guess_pc(pair.first, pair.second);
   }
-  if (test_guess)
-    vis_utils.draw_guess_pc(boundary_normals);
 }
 
 
@@ -467,7 +467,7 @@ void myCallback() {
     }
   }
   if (ImGui::Button("uniform mass G")){
-    G = find_center_of_mass(*mesh, *geometry);
+    G = find_center_of_mass(*mesh, *geometry).first;
     update_visuals_with_G();
   }
   if (ImGui::Button("Show Gauss Map")){///face_normal_vertex_gm_radi

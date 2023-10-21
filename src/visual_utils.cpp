@@ -164,10 +164,11 @@ void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> ed
 }
 
 
-std::vector<Vector3> build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
-                                      polyscope::SurfaceMesh* hosting_psMesh,
-                                      Vector3 center, double radius, size_t seg_count,
-                                      bool on_height_surface){
+std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
+build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
+                                          polyscope::SurfaceMesh* hosting_psMesh,
+                                          Vector3 center, double radius, size_t seg_count,
+                                          bool on_height_surface){
   std::vector<Vector3> boundary_normals(BoundaryNormal::counter);
   std::set<std::pair<size_t, size_t>> drawn_pairs;
   for (Edge e: boundary_builder->mesh->edges()){
@@ -205,7 +206,7 @@ std::vector<Vector3> build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder*
                                       center, 0., seg_count, 
                                       "region boundaries ", hosting_psMesh2, arc_color);
   }
-  return boundary_normals;
+  return {ind_pairs_vector, boundary_normals};
 }
 
 
@@ -436,8 +437,10 @@ void VisualUtils::show_edge_equilibria_on_gauss_map(){
   }
 }
 
-void VisualUtils::draw_guess_pc(std::vector<Vector3> boundary_normals){
+void VisualUtils::draw_guess_pc(std::vector<std::pair<size_t, size_t>> neigh_inds, 
+                                std::vector<Vector3> boundary_normals){
   std::vector<Vector3> positions;
+  std::vector<std::array<size_t, 2>> edgeInds;
   for (Vector3 bnd_normal: boundary_normals){
     Vector3 pos_on_mesh;
     double tmp_t = -1;
@@ -458,6 +461,20 @@ void VisualUtils::draw_guess_pc(std::vector<Vector3> boundary_normals){
   test_pc->setPointColor({1.,0.,0.});
   test_pc->setEnabled(true);
   test_pc->setPointRadius(face_normal_vertex_gm_radi * 0.7, false);
+
+  std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
+  std::vector<Vector3> dummy_geo({Vector3::zero()});
+  polyscope::SurfaceMesh* dummy_psMesh = polyscope::registerSurfaceMesh(
+      "dummy mesh for stable regions on polyhedra", dummy_geo, dummy_face);
+  std::vector<std::array<size_t, 2>> edge_inds;
+  for (std::pair<size_t, size_t> p1: neigh_inds)
+    edge_inds.push_back({p1.first, p1.second});
+  polyscope::SurfaceGraphQuantity* stable_graph = 
+        dummy_psMesh->addSurfaceGraphQuantity("stable regions on polyhedra", positions, edge_inds);
+  stable_graph->setRadius(stable_edge_radi, true);
+  stable_graph->setColor(stable_edge_color);
+  stable_graph->setEnabled(true);
+  
 }
 
 

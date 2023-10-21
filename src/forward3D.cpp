@@ -36,6 +36,8 @@ Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPosition
                              Vector3 inputG_){
     hullMesh = inputMesh_;
     hullGeometry = inputGeo_;
+    inputMesh = inputMesh_;
+    inputGeometry = inputGeo_;
     G = inputG_;
     updated = false;
 }
@@ -56,6 +58,11 @@ void Forward3DSolver::set_G(Vector3 new_G){
     updated = false;
 }
 
+void Forward3DSolver::set_uniform_G(){
+    std::pair<Vector3, double> G_V_pair = find_center_of_mass(*inputMesh, *inputGeometry);
+    set_G(G_V_pair.first);
+    volume = G_V_pair.second;
+}
 //
 Vector3 Forward3DSolver::get_G(){
     return G; 

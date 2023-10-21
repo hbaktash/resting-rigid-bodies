@@ -87,7 +87,7 @@ class VisualUtils{
         void draw_stable_face_normals_on_gauss_map();
         void plot_height_function();
         void draw_gauss_map();
-        void draw_guess_pc(std::vector<Vector3> boundary_normals);
+        void draw_guess_pc(std::vector<std::pair<size_t, size_t>> edge_inds, std::vector<Vector3> boundary_normals);
         void show_edge_equilibria_on_gauss_map();
         void draw_G();
 
@@ -125,7 +125,8 @@ void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> ed
                                        glm::vec3 color = glm::vec3({-1., 0, 0}), 
                                        float arc_curve_radi = 0.01);
 
-std::vector<Vector3> build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
+std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
+    build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
                                       polyscope::SurfaceMesh* hosting_psMesh,
                                       Vector3 center, double radius, size_t seg_count,
                                       bool on_height_surface = false);

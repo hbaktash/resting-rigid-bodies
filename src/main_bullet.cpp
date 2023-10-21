@@ -111,7 +111,7 @@ void initalize_mesh_and_env(std::string poly_str){
   mesh = mesh_ptr.release(); 
   geometry = geometry_ptr.release();
   center_and_normalize(mesh, geometry);
-  G = find_center_of_mass(*mesh, *geometry);
+  G = find_center_of_mass(*mesh, *geometry).first;
 
   // physics env stuff
   my_env = new PhysicsEnv();
@@ -294,7 +294,7 @@ int main(int argc, char* argv[])
   mesh = mesh_ptr.release(); 
   geometry = geometry_ptr.release();
   center_and_normalize(mesh, geometry);
-  G = find_center_of_mass(*mesh, *geometry);
+  G = find_center_of_mass(*mesh, *geometry).first;
 
   my_env = new PhysicsEnv();
   my_env->init_physics();

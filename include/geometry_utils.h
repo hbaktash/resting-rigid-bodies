@@ -35,8 +35,8 @@ convex_hull(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geome
 bool G_is_inside(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry, Vector3 G);
 
 
-// assumes uniform mass density; TODO how to handle non-uniform?
-Vector3 find_center_of_mass(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geometry);
+// assumes uniform mass density
+std::pair<Vector3, double> find_center_of_mass(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geometry);
 
 void center_and_normalize(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);
 

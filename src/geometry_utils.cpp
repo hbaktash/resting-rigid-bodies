@@ -37,7 +37,7 @@ bool G_is_inside(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry, Ve
     return true;
 }
 
-Vector3 find_center_of_mass(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry){
+std::pair<Vector3, double> find_center_of_mass(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry){
     Vector3 O({0.,0.,0.}); // could be anywhere
     Vector3 G({0.,0.,0.});
     double total_volume = 0.;
@@ -58,7 +58,9 @@ Vector3 find_center_of_mass(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &g
             next_he = next_he.next();
         }
     }
-    return G/total_volume;
+    if (total_volume < 0)
+        throw std::logic_error("total vol < 0; proly bad normal orientation\n");
+    return {G/total_volume, total_volume};
 }
 
 

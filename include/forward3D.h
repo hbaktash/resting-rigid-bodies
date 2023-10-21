@@ -19,6 +19,7 @@
 #pragma once
 
 #include "arc_algebra.h"
+#include "geometry_utils.h"
 // #include "geometrycentral/surface/manifold_surface_mesh.h"
 // #include "geometrycentral/surface/vertex_position_geometry.h"
 // #include "geometrycentral/surface/surface_point.h"
@@ -35,7 +36,12 @@ class Forward3DSolver {
     Vector3 G;
   public:
     bool updated;
-    //input convex goemetry (a polyhedra) and center of mass
+
+    double volume;
+    // input goemetry
+    ManifoldSurfaceMesh* inputMesh;
+    VertexPositionGeometry* inputGeometry;
+    // convex hull of input goemetry (a polyhedra) and center of mass
     ManifoldSurfaceMesh* hullMesh;
     VertexPositionGeometry* hullGeometry;
 
@@ -53,10 +59,12 @@ class Forward3DSolver {
 
     // constructors
     Forward3DSolver() {}
+    // TODO; make constructor for non_convex input
     Forward3DSolver(ManifoldSurfaceMesh* inputMesh, VertexPositionGeometry* inputGeo, Vector3 G);
 
     // setter/getter for G
     void set_G(Vector3 new_G);
+    void set_uniform_G();
     Vector3 get_G();
 
     // initialize state

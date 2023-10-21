@@ -53,17 +53,28 @@ class InverseSolver{
         void set_fair_distribution();
 
         // gradient computation; assuming regularity
+        // note: pf = face region area
         // G grad; vertices frozen
-        FaceData<Vector3> per_face_G_gradient;
-        void find_per_face_G_grads(bool check_FD = false);
+        FaceData<Vector3> d_pf_d_G;
+        void find_d_pf_d_Gs(bool check_FD = false);
+        // accumulate over all faces
         Vector3 find_total_g_grad();
         // vertex grad; G frozen
-        FaceData<VertexData<Vector3>> per_face_per_vertex_gradient;
-        void find_per_face_per_vertex_grads(bool check_FD = false);
-        VertexData<Vector3> find_per_vertex_total_grads();
-        // G is dependent of Geometry; uniform mass
-        FaceData<VertexData<Vector3>> per_face_per_vertex_uni_mass_gradient;
-        void find_per_face_per_vertex_uni_mass_grads();
-        VertexData<Vector3> find_per_vertex_uni_mass_total_grads();
+        FaceData<VertexData<Vector3>> d_pf_dv;
+        void find_d_pf_dvs(bool check_FD = false);
+        // accumulate over all faces
+        VertexData<Vector3> find_total_vertex_grads();
+        
+
+        // Uniform mass; G is dependent of Geometry
+        // DG/dv
+        VertexData<DenseMatrix<double>> dG_dv;
+        void find_dG_dvs();
+        // dp_f/dv
+        FaceData<VertexData<Vector3>> uni_mass_d_pf_dv;
+        // after chain and product rule
+        void find_uni_mass_d_pf_dv(bool check_FD = false);
+        // accumulate over all faces
+        VertexData<Vector3> find_uni_mass_total_vertex_grads();
         
 };
