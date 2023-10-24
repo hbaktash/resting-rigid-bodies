@@ -300,9 +300,11 @@ void VisualUtils::draw_stable_vertices_on_gauss_map(){
 
 
 void VisualUtils::draw_stable_face_normals_on_gauss_map(){
-  std::vector<Vector3> stable_face_normals;
+  
+  std::vector<Vector3> stable_face_normals, face_normal_points;
   for (Face f: forwardSolver->hullMesh->faces()){
     Vector3 normal_pos_on_gm = forwardSolver->hullGeometry->faceNormal(f) + center;
+    face_normal_points.push_back(normal_pos_on_gm);
     if (forwardSolver->face_is_stable(f)){
       stable_face_normals.push_back(normal_pos_on_gm);
     }
@@ -311,6 +313,11 @@ void VisualUtils::draw_stable_face_normals_on_gauss_map(){
   stable_face_normals_pc->setPointRadius(face_normal_vertex_gm_radi*1.1, false);
   stable_face_normals_pc->setPointColor({0.9,0.1,0.1});
   stable_face_normals_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere); 
+
+  polyscope::PointCloud* face_normals_pc = polyscope::registerPointCloud("Face Normals", face_normal_points);
+  face_normals_pc->setPointRadius(face_normal_vertex_gm_radi, false);
+  face_normals_pc->setPointColor({0.9,0.9,0.9});
+  face_normals_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 }
 
 
@@ -357,22 +364,9 @@ void VisualUtils::draw_gauss_map(){
   gm_sphere_mesh->setSmoothShade(true);
   gm_sphere_mesh->setSurfaceColor({0.74,0.7,0.9});
   // surface and colormap
-  plot_height_function();
-  // point cloud for face normals
-  std::vector<Vector3> face_normal_points, stable_face_normals;
-  for (Face f: forwardSolver->hullMesh->faces()) {
-    Vector3 normal_pos_on_gm = forwardSolver->hullGeometry->faceNormal(f) + center;
-    face_normal_points.push_back(normal_pos_on_gm);
-    if (forwardSolver->face_is_stable(f)){
-      stable_face_normals.push_back(normal_pos_on_gm);
-    }
-  }
-  polyscope::PointCloud* face_normals_pc = polyscope::registerPointCloud("Face Normals", face_normal_points);
-  face_normals_pc->setPointRadius(face_normal_vertex_gm_radi, false);
-  face_normals_pc->setPointColor({0.9,0.9,0.9});
-  face_normals_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  plot_height_function();  
   
-  // stable (red) face normals on Gauss map
+  // face normals on Gauss map
   draw_stable_face_normals_on_gauss_map();
 
   // point cloud for stable vertices
@@ -459,7 +453,7 @@ void VisualUtils::draw_guess_pc(std::vector<std::pair<size_t, size_t>> neigh_ind
   }
   polyscope::PointCloud* test_pc = polyscope::registerPointCloud("test point cloud", positions);
   test_pc->setPointColor({1.,0.,0.});
-  test_pc->setEnabled(true);
+  // test_pc->setEnabled(true);
   test_pc->setPointRadius(face_normal_vertex_gm_radi * 0.7, false);
 
   std::vector<std::vector<size_t>> dummy_face{{0,0,0}};

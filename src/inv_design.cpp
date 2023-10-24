@@ -212,7 +212,9 @@ void InverseSolver::find_dG_dvs(){
     // for (Vertex v: forwardSolver->hullMesh->vertices())
     //     dG_dv[v] = zmat;
     for (Face f: forwardSolver->hullMesh->faces()){
-        double face_area = forwardSolver->inputGeometry->faceArea(f);
+        // double face_area = forwardSolver->inputGeometry->faceArea(f);
+        double face_area = polygonal_face_area(f, *forwardSolver->hullGeometry);
+
         Vector3 face_normal = forwardSolver->inputGeometry->faceNormal(f); // assuming outward normals
         size_t face_degree = f.degree();
         // assuming polygon faces here; TODO; check things

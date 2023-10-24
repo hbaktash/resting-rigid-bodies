@@ -27,6 +27,7 @@ using namespace geometrycentral::surface;
 
 double signed_volume(Vector3 A, Vector3 B, Vector3 C, Vector3 D);
 
+double polygonal_face_area(Face f, VertexPositionGeometry &geometry);
 
 std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
 convex_hull(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geometry);

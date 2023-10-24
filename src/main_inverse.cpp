@@ -107,7 +107,7 @@ float step_size = 0.01,
 
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tilted cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
@@ -367,7 +367,7 @@ void myCallback() {
     vis_utils.draw_G();
   }
   
-  if (ImGui::SliderFloat("G radi scale", &G_r, -3., 3.)||
+  if (ImGui::SliderFloat("G radi scale", &G_r, -1., 1.)||
       ImGui::SliderFloat("G theta", &G_theta, 0., 2*PI)||
       ImGui::SliderFloat("G phi", &G_phi, 0., 2*PI)) {
     G = {cos(G_phi)*sin(G_theta)*G_r, cos(G_phi)*cos(G_theta)*G_r, sin(G_phi)*G_r};

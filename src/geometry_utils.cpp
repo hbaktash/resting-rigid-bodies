@@ -23,6 +23,23 @@ double signed_volume(Vector3 a, Vector3 b, Vector3 c, Vector3 d){
     return (1.0/6.0)*dot(cross(b-a,c-a),d-a);
 }
 
+double polygonal_face_area(Face f, VertexPositionGeometry &geometry){
+    Halfedge first_he = f.halfedge();
+    Vertex v0 = first_he.tailVertex(),
+           v1 = first_he.tipVertex();
+    Vector3 p0 = geometry.inputVertexPositions[v0],
+            p1 = geometry.inputVertexPositions[v1];
+    double area = 0.;
+    for (Halfedge he: f.adjacentHalfedges()){
+        if(he != first_he && he.tipVertex() != v0){
+            Vertex v2 = he.tipVertex();
+            Vector3 p2 = geometry.inputVertexPositions[v2];
+            area += 0.5 * norm(cross(p1 - p0, p2 - p0));
+        }
+    }
+    return area;
+}
+
 // check if G is inside the polyehdra (positive mass)
 bool G_is_inside(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry, Vector3 G){
     return true;
