@@ -28,6 +28,17 @@ Vector3 cylindrical_to_xyz(double h, double r, double theta){
   return Vector3({r*cos(theta), h, r*sin(theta)});
 }
 
+// for oloid; reindex to avoid duplicate vertices (otherwise, mesh will have a boundary)
+int idx( int i, int n ) {
+   if( i > 0 )
+      i--;
+
+   if( i == n*4-2 )
+      i--;
+
+   return i;
+}
+
 std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
 generate_polyhedra(std::string poly_str){
     std::vector<std::vector<size_t>> faces;
@@ -203,7 +214,83 @@ generate_polyhedra(std::string poly_str){
       //   std::cout << "pos: " << pos << "\n";
       // }
     }
-    else if (std::strcmp(poly_str.c_str(), "rndbs 6-gon 1") == 0){
+    else if (std::strcmp(poly_str.c_str(), "oloid") == 0){
+      int nPolygons = 25;
+      int N = nPolygons/4 + 1;
+
+      // output vertices
+      for( int i = 0; i < N; i++ ) {
+        const double pi = 3.141592653589793;
+        double s = (double) i / (double) (N-1);
+        double t = (2.*pi/3.) * ( 3.*s - 2.*pow( s, 1.5 ) ); // reparameterize to get more uniform spacing
+
+        // circular arc 1
+        double ax = sin(t);
+        double ay = -cos(t);
+        double az = 0.;
+
+        // circular arc 2
+        double bx = 0.;
+        double by = 1./(1.+cos(t));
+        double bz = sqrt(1.+2.*cos(t))/(1.+cos(t));
+
+        // construct each arc using two separate pieces (for symmetry)
+        positions.push_back(Vector3({ax,ay,az}));
+        if(i > 0) positions.push_back(Vector3({-ax,ay,az}));
+        positions.push_back(Vector3({bx,by,bz}));
+        if(i < N - 1) positions.push_back(Vector3({bx,by,-bz}));
+        //               out << "v " <<  ax << " " << ay << " " <<  az << endl;
+        // if( i  >  0  ) out << "v " << -ax << " " << ay << " " <<  az << endl; // omit duplicate vertex
+        //               out << "v " <<  bx << " " << by << " " <<  bz << endl;
+        // if( i != N-1 ) out << "v " <<  bx << " " << by << " " << -bz << endl; // omit duplicate vertex
+      }
+
+      // output quads, as pairwise connections between each of two pieces on two arcs
+      for( int i = 0; i < N-1; i++ ) {
+        size_t v0, v1, v2, v3;
+        size_t j = i+1;
+
+        v0 = idx( j*4+0, N );
+        v1 = idx( j*4+2, N );
+        v2 = idx( i*4+2, N );
+        v3 = idx( i*4+0, N );
+        faces.push_back({v0, v1, v2, v3});
+        // out << "f " << v0 << " " << v1 << " " << v2 << " " << v3 << endl;
+
+        v0 = idx( i*4+0, N );
+        v1 = idx( i*4+3, N );
+        v2 = idx( j*4+3, N );
+        v3 = idx( j*4+0, N );
+        faces.push_back({v0, v1, v2, v3});
+        // out << "f " << v0 << " " << v1 << " " << v2 << " " << v3 << endl;
+
+        v0 = idx( i*4+1, N );
+        v1 = idx( i*4+2, N );
+        v2 = idx( j*4+2, N );
+        v3 = idx( j*4+1, N );
+        faces.push_back({v0, v1, v2, v3});
+        // out << "f " << v0 << " " << v1 << " " << v2 << " " << v3 << endl;
+
+        v0 = idx( j*4+1, N );
+        v1 = idx( j*4+3, N );
+        v2 = idx( i*4+3, N );
+        v3 = idx( i*4+1, N );          
+        faces.push_back({v0, v1, v2, v3});
+        // out << "f " << v0 << " " << v1 << " " << v2 << " " << v3 << endl;
+      }
+      for (std::vector<size_t> f: faces){
+        for (size_t ind: f){
+          printf(" %d,", ind);
+        }
+        printf("\n");
+      }
+      for (Vector3 pos: positions){
+        std::cout << "pos: " << pos << "\n";
+      }
+    }
+    else if (std::strcmp(poly_str.c_str(), "gomboc") == 0){
+      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/gomboc.obj");
+      return std::make_tuple(std::move(mesh), std::move(geometry));
     }
     else if (std::strcmp(poly_str.c_str(), "rndbs 9-gon 1") == 0){
     }

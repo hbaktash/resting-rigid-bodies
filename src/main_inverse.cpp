@@ -107,10 +107,9 @@ float step_size = 0.01,
 
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
-
 
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
@@ -126,7 +125,6 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
   }
 }
 
-//
 
 void visualize_gauss_map(){
   std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
@@ -173,6 +171,7 @@ void generate_polyhedron_example(std::string poly_str){
     std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
     mesh = mesh_ptr.release();
     geometry = geometry_ptr.release();
+    center_and_normalize(mesh, geometry);
 }
 
 // visualize boundary
