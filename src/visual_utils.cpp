@@ -27,9 +27,11 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius,
                         double radi_scale, glm::vec3 color, 
                         float arc_curve_radi){
 // p1, p2 just represent normal vectors
-  if (norm(p1) > 1.01 || norm(p2) > 1.01)
-    polyscope::warning("wtf? p1, p2 norm larger than 1");
-  
+  if (norm(p1) > 1.01)
+    polyscope::warning("wtf? p1 norm larger than 1");
+  if (norm(p2) > 1.01)
+    polyscope::warning("wtf? p2 norm larger than 1");
+
   std::vector<std::array<size_t, 2>> edgeInds;
   std::vector<Vector3> positions;
   double sqrt_radi = sqrt(radius);
@@ -572,6 +574,7 @@ void VisualUtils::visualize_colored_polyhedra(FaceData<Vector3> face_colors){
   for (Vertex v: forwardSolver->hullMesh->vertices()){
     shifted_positions[v] = forwardSolver->hullGeometry->inputVertexPositions[v] + colored_shift;
   }
+  printf("hull faces: %d color size: %d \n", forwardSolver->hullMesh->nFaces(), face_colors.size());
   polyscope::SurfaceMesh* coloredPsMesh = polyscope::registerSurfaceMesh("colored polyhedra", shifted_positions, forwardSolver->hullMesh->getFaceVertexList());
   // generate random colors and color the faces
   polyscope::SurfaceFaceColorQuantity *faceQnty = coloredPsMesh->addFaceColorQuantity("random face colors", face_colors);

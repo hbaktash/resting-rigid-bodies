@@ -76,9 +76,9 @@ polyscope::PointCloud *curr_state_pt, *curr_g_vec_gm_pt,
 
 polyscope::SurfaceGraphQuantity* curr_state_segment;
 
-float pt_cloud_radi_scale = 0.1,
-      curve_radi_scale = 0.1,
-      G_r = 0.,
+float pt_cloud_radi_scale = 0.01,
+      curve_radi_scale = 0.002,
+      G_r = 0.158,
       G_theta = 0.,
       G_phi = 0.,
       g_vec_theta = 0.,
@@ -119,7 +119,7 @@ bool test_guess = true;
 polyscope::PointCloud *test_pc;
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4")};
+std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("gomboc")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
@@ -187,11 +187,22 @@ void visualize_vertex_probabilities(){
 
 
 // generate simple examples
-void generate_polyhedron_example(std::string poly_str){
+void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
     // readManifoldSurfaceMesh()
     std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
     mesh = mesh_ptr.release();
     geometry = geometry_ptr.release();
+    center_and_normalize(mesh, geometry);
+    if (triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0) {
+      for (Face f: mesh->faces())
+        mesh->triangulate(f);
+      for (Edge e: mesh->edges()){
+        double dihedangle= geometry->edgeDihedralAngle(e);
+        if (dihedangle > PI)
+          printf(" edge %d dihedral is large by %f\n", e.getIndex(), dihedangle - PI);
+      }
+      mesh->compress();
+    }
 }
 
 
@@ -246,7 +257,7 @@ void visualize_g_vec(){
   std::vector<Vector3> the_g_vec = {forwardSolver->curr_g_vec};
   polyscope::PointCloudVectorQuantity *psG_vec = vis_utils.psG->addVectorQuantity("g_vec", the_g_vec);
   psG_vec->setEnabled(true);
-  psG_vec->setVectorRadius(curve_radi_scale * 1.);
+  psG_vec->setVectorRadius(curve_radi_scale * 1., false);
   psG_vec->setVectorLengthScale(0.2);
   psG_vec->setVectorColor({0.8,0.1,0.1});
 }
@@ -259,7 +270,7 @@ void visualize_contact(){
   if (forwardSolver->curr_f.getIndex() == INVALID_IND) color_faces_with_default();
   // add the other two
   if (forwardSolver->curr_v.getIndex() != INVALID_IND) {
-    printf("at Vertex\n");
+    printf("at Vertex vis\n");
     // show contact vertex on polyhedra
     std::vector<Vector3> curr_state_pos = {forwardSolver->hullGeometry->inputVertexPositions[forwardSolver->curr_v]}; // first and second should be the same since we just initialized.
     curr_state_pt = polyscope::registerPointCloud("current Vertex", curr_state_pos);
@@ -274,7 +285,7 @@ void visualize_contact(){
     curr_g_vec_gm_pt->setPointColor({0.,0.,0.});
   }
   else if (forwardSolver->curr_e.getIndex() != INVALID_IND){
-    printf("at Edge\n");
+    printf("at Edge vis\n");
     Vertex v1 = forwardSolver->curr_e.firstVertex(),
            v2 = forwardSolver->curr_e.secondVertex();
     Vector3 p1 = forwardSolver->hullGeometry->inputVertexPositions[v1],
@@ -454,7 +465,7 @@ void myCallback() {
     vis_utils.draw_G();
   }
   
-  if (ImGui::SliderFloat("G radi scale", &G_r, -3., 3.)||
+  if (ImGui::SliderFloat("G radi scale", &G_r, -1., 1.)||
       ImGui::SliderFloat("G theta", &G_theta, 0., 2*PI)||
       ImGui::SliderFloat("G phi", &G_phi, 0., 2*PI)) {
     G = {cos(G_phi)*sin(G_theta)*G_r, cos(G_phi)*cos(G_theta)*G_r, sin(G_phi)*G_r};
@@ -472,6 +483,8 @@ void myCallback() {
   }
   if (ImGui::Button("Show Gauss Map")){///face_normal_vertex_gm_radi
     visualize_gauss_map();
+    geometry->requireFaceNormals();
+    psInputMesh->addFaceVectorQuantity("normals ", geometry->faceNormals * -1.)->setEnabled(true);
   }
   if (ImGui::Checkbox("colored arcs (slows)", &color_arcs)) vis_utils.color_arcs = color_arcs;
   if (ImGui::Checkbox("draw unstable edge arcs", &draw_unstable_edge_arcs)) {
@@ -491,16 +504,17 @@ void myCallback() {
     ImGui::SliderFloat("initial g_vec theta", &g_vec_theta, 0., 2*PI)||
     ImGui::SliderFloat("initial g_vec phi", &g_vec_phi, 0., 2*PI)) {
     initial_g_vec = {cos(g_vec_phi)*sin(g_vec_theta), cos(g_vec_phi)*cos(g_vec_theta), sin(g_vec_phi)};
+    initial_g_vec = geometry->faceNormal(mesh->face(1942));
     forwardSolver->find_contact(initial_g_vec);
     initialize_state_vis();
     // snail trail stuff
     snail_trail_dummy_counter = 0;
     std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
     dummy_ps_mesh_for_snail_trail = polyscope::registerSurfaceMesh("dummy mesh snail trail", geometry->inputVertexPositions, dummy_face);
+    old_g_vec = forwardSolver->curr_g_vec;
   }
   if (ImGui::Button("next state")){
-    old_g_vec = forwardSolver->curr_g_vec;
-    forwardSolver->next_state();
+    forwardSolver->next_state(true);
     new_g_vec = forwardSolver->curr_g_vec;
     visualize_g_vec();
     visualize_contact();
@@ -510,6 +524,7 @@ void myCallback() {
                          dummy_ps_mesh_for_snail_trail, 1.5);
       snail_trail_dummy_counter++;
     }
+    old_g_vec = new_g_vec;
   }
   if (ImGui::SliderInt("sample count", &sample_count, 1000, 1000000));
   if (ImGui::Button("build raster image")){

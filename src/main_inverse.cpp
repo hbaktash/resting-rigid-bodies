@@ -162,16 +162,22 @@ void update_solver(){
       polyscopePermutations(*mesh));
   psInputMesh->setTransparency(0.75);
   vis_utils.draw_G();
+  // psInputMesh->addFaceVectorQuantity("normals", geometry->faceNormals);
 }
 
 
 // generate simple examples
-void generate_polyhedron_example(std::string poly_str){
+void generate_polyhedron_example(std::string poly_str, bool triangulate=false){
     // readManifoldSurfaceMesh()
     std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
     mesh = mesh_ptr.release();
     geometry = geometry_ptr.release();
     center_and_normalize(mesh, geometry);
+    if (triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0) {
+      for (Face f: mesh->faces())
+        mesh->triangulate(f);
+    }
+    mesh->compress();
 }
 
 // visualize boundary
@@ -187,6 +193,7 @@ void color_faces_with_default(){
 
 void color_faces(){
   if (recolor_faces){
+    printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
     face_colors = generate_random_colors(forwardSolver->hullMesh);
     for (Face f: forwardSolver->hullMesh->faces()){
       if (!forwardSolver->face_is_stable(f))
@@ -224,13 +231,14 @@ void update_visuals_with_G(){
   printf("visuals took %d\n", clock() - t1);
   t1 = clock();
   // initialize_boundary_builder();
-  boundary_builder->build_boundary_normals();
-  boundary_builder->print_area_of_boundary_loops();
-  printf("boundary took %d\n", clock() - t1);
-  t1 = clock();
-  if (draw_boundary_patches)
-    draw_stable_patches_on_gauss_map(gm_is_drawn);
-  printf("boundary visuals took %d\n", clock() - t1);
+  // printf("building boundaries \n");
+  // boundary_builder->build_boundary_normals();
+  // boundary_builder->print_area_of_boundary_loops();
+  // printf("boundary took %d\n", clock() - t1);
+  // t1 = clock();
+  // if (draw_boundary_patches)
+  //   draw_stable_patches_on_gauss_map(gm_is_drawn);
+  // printf("boundary visuals took %d\n", clock() - t1);
   // initiate_markov_model();
   // visualize_sudo_faces();
 }

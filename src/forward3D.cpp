@@ -241,17 +241,17 @@ void Forward3DSolver::vertex_to_next(Vertex v){
     // computing next g_vec
     Vector3 unit_next_pp = (p - best_p2_proj).normalize();
     Vector3 next_g_vec = Gp - unit_next_pp * dot(unit_next_pp, Gp); 
-    curr_g_vec = next_g_vec;
+    curr_g_vec = next_g_vec.normalize();
 }
 
 
 void Forward3DSolver::edge_to_next(Edge e){
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 p1 = hullGeometry->inputVertexPositions[v1], p2 = hullGeometry->inputVertexPositions[v2];
-    if (dot(G - p1, p2-p1) <= 0){ // if the Gp1p2 angle is wide
+    if (dot(G - p1, p2-p1) < 0){ // if the Gp1p2 angle is wide
         vertex_to_next(v1); // rolls to the v1 vertex
     }
-    else if (dot(G - p2, p1-p2) <= 0){ // if the Gp2p1 angle is wide
+    else if (dot(G - p2, p1-p2) < 0){ // if the Gp2p1 angle is wide
         vertex_to_next(v2); // rolls to the v2 vertex
     }
     else { // rolls to a neighboring face
@@ -346,7 +346,7 @@ void Forward3DSolver::face_to_next(Face f){
 }
 
 
-void Forward3DSolver::next_state(){
+void Forward3DSolver::next_state(bool verbose){
     if (stable_state){
         // printf(" &&&& already at a stable state! &&&&\n");
         return;
@@ -355,7 +355,10 @@ void Forward3DSolver::next_state(){
     // printf("test for bool addition %d\n", status_check);
     assert(status_check <= 1); // either not initiated (0) or only one valid (1)
     if (curr_v.getIndex() != INVALID_IND){
-        // printf(" STATUS: at vertex %d\n", curr_v.getIndex());
+        if (verbose){
+            printf(" STATUS: at vertex %d\n", curr_v.getIndex());
+            std::cout << "         curr gvec " << curr_g_vec << "\n";
+        }
         Vertex old_v = curr_v;
         vertex_to_next(curr_v);
         if (curr_v == old_v){
@@ -365,7 +368,10 @@ void Forward3DSolver::next_state(){
         }
     }
     else if (curr_e.getIndex() != INVALID_IND){
-        // printf(" STATUS: at edge %d: %d, %d\n", curr_e.getIndex(), curr_e.firstVertex().getIndex(), curr_e.secondVertex().getIndex());
+        if (verbose){
+            printf(" STATUS: at edge %d: %d, %d\n", curr_e.getIndex(), curr_e.firstVertex().getIndex(), curr_e.secondVertex().getIndex());
+            std::cout << "         curr gvec " << curr_g_vec << "\n";
+        }
         Edge old_e = curr_e;
         edge_to_next(curr_e);
         if (curr_e == old_e){
@@ -377,7 +383,10 @@ void Forward3DSolver::next_state(){
     else if (curr_f.getIndex() != INVALID_IND){
         Face old_f = Face(curr_f); // TODO: do I have to do this?
         Halfedge he = curr_f.halfedge();
-        // printf(" STATUS: at face %d: %d, %d, %d, ..\n", old_f.getIndex(), he.tailVertex().getIndex(), he.tipVertex().getIndex(), he.next().tipVertex().getIndex());
+        if (verbose){
+            printf(" STATUS: at face %d: %d, %d, %d, ..\n", old_f.getIndex(), he.tailVertex().getIndex(), he.tipVertex().getIndex(), he.next().tipVertex().getIndex());
+            std::cout << "         curr gvec " << curr_g_vec << "\n";
+        }
         face_to_next(curr_f);
         if (curr_f == old_f){
             stable_state = true;
@@ -448,10 +457,25 @@ void Forward3DSolver::compute_vertex_stabilizablity(){
 void Forward3DSolver::build_face_next_faces(){
     face_next_face = FaceData<Face>(*hullMesh);
     for (Face f: hullMesh->faces()){
+        // printf("at face %d\n", f.getIndex());
         initialize_state(Vertex(), Edge(), f, hullGeometry->faceNormal(f)); // assuming outward normals
-        next_state(); // could roll to an edge
+        bool verbose = f.getIndex() == 1942; //= false; //
+        next_state(verbose); // could roll to an edge
+        size_t count = 0;
         while (curr_f.getIndex() == INVALID_IND){
-            next_state();
+            count++;
+            if (count > hullMesh->nVertices()){
+                printf("at face %d\n", f.getIndex());
+                FaceData<Vector3> dbface_colors(*hullMesh, Vector3({0.,0.,0.}));
+                dbface_colors[f.getIndex()] = hullGeometry->faceNormal(f) * 3;
+                polyscope::getSurfaceMesh("input mesh")->addFaceVectorQuantity("debugg vis color "+std::to_string(f.getIndex()), dbface_colors)->setEnabled(true);
+                curr_f = f;
+                printf(" too many iters! \n");
+                break;
+                // throw std::logic_error(" too many iters! \n");
+
+            }
+            next_state(verbose);
         } // terminates when it gets to the next face
         face_next_face[f] = curr_f;
         // printf(" fnf %d -> %d\n", f.getIndex(), curr_f.getIndex());
@@ -461,21 +485,35 @@ void Forward3DSolver::build_face_next_faces(){
 void Forward3DSolver::build_face_last_faces(){
     if (!updated)
         build_face_next_faces();
-    face_last_face = FaceData<Face>(*hullMesh);
+    face_last_face = FaceData<Face>(*hullMesh, Face());
+    printf(" building face-last-faces\n");
     for (Face f: hullMesh->faces()){
-        Face curr_f = f;
-        while (face_next_face[curr_f] != curr_f){
-            curr_f = face_next_face[curr_f];
+        if (face_last_face[f].getIndex() == INVALID_IND)
+         continue;
+        printf(" at face %d\n", f.getIndex());
+        Face temp_f = f;
+        std::vector<Face> faces_history;
+        faces_history.push_back(temp_f);
+        while (face_next_face[temp_f] != temp_f){
+            temp_f = face_next_face[temp_f];
+            faces_history.push_back(temp_f);
         } // terminates when it gets to the next face
-        face_last_face[f] = curr_f;
+        for (Face stored_f: faces_history)
+            face_last_face[stored_f] = temp_f;
     }
 }
 
 // just call all the pre-compute initializations; not face-last-face
 void Forward3DSolver::initialize_pre_computes(){
+    printf("precomputes:\n");
+    printf("  vertex stability:\n");
     compute_vertex_stabilizablity();
+    printf("  vertex gauss curvature:\n");
     compute_vertex_gaussian_curvatures();
+    printf("  edge stability:\n");
     compute_edge_stable_normals();
+    printf("  building face next faces:\n");
     build_face_next_faces(); // 
+    printf("done!\n");
     updated = true;
 }

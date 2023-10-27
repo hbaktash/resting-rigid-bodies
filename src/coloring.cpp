@@ -20,7 +20,8 @@
 
 
 FaceData<Vector3> generate_random_colors(ManifoldSurfaceMesh *mesh){
-  FaceData<Vector3> face_colors(*mesh);
+  FaceData<Vector3> face_colors(*mesh, Vector3({0.,0.,0.}));
+  printf("mesh size %d, fcolor size: %d\n",mesh->nFaces(), face_colors.size());
   // fingers crossed for a prime enough vector
   Vector3 holy_vec({exp(1.), PI, 1});
   holy_vec = holy_vec.normalize();

@@ -46,9 +46,9 @@ class VisualUtils{
         float stable_edge_radi = 0.007,
               stablizable_edge_radi = 0.009,
               both_edge_radi = 0.013,
-              pt_cloud_stablizable_radi = 0.03,
-              face_normal_vertex_gm_radi = 0.03,
-              pt_cloud_radi_scale = 0.1;
+              pt_cloud_stablizable_radi = 0.003,
+              face_normal_vertex_gm_radi = 0.003,
+              pt_cloud_radi_scale = 0.003;
 
         
         glm::vec3 stable_edge_color = glm::vec3({0.2, 0.3, 0.3}),
@@ -70,7 +70,7 @@ class VisualUtils{
              show_hidden_stable_vertex_normals = true;
 
         // arc stuff
-        float arc_curve_radi = 0.01;
+        float arc_curve_radi = 0.0005;
         glm::vec3 patch_arc_fancy_color = glm::vec3({0.9,0.1,0.1});
 
         int arcs_seg_count = 12,
@@ -107,7 +107,7 @@ class VisualUtils{
 // draw an arc connecting two points on the sphere; for Gauss map purposes
 void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind, polyscope::SurfaceMesh* hosting_psMesh, 
                         double radi_scale = 1., glm::vec3 color = glm::vec3({-1., 0, 0}), 
-                        float arc_curve_radi = 0.01);
+                        float arc_curve_radi = 0.001);
 
 
 void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds_,
@@ -115,7 +115,7 @@ void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds
                                 Vector3 center, double radius, size_t seg_count, std::string title, 
                                 polyscope::SurfaceMesh* hosting_psMesh, 
                                 double radi_scale = 1., glm::vec3 color = glm::vec3({-1., 0, 0}), 
-                                float arc_curve_radi = 0.01);
+                                float arc_curve_radi = 0.001);
 
 void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> edge_inds_,
                                        std::vector<Vector3> positions_,
@@ -123,7 +123,7 @@ void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> ed
                                        Vector3 center, double radius, size_t seg_count, std::string title, 
                                        polyscope::SurfaceMesh* hosting_psMesh, 
                                        glm::vec3 color = glm::vec3({-1., 0, 0}), 
-                                       float arc_curve_radi = 0.01);
+                                       float arc_curve_radi = 0.001);
 
 std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
     build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 

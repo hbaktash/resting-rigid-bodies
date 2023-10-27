@@ -289,6 +289,7 @@ generate_polyhedra(std::string poly_str){
       }
     }
     else if (std::strcmp(poly_str.c_str(), "gomboc") == 0){
+      // std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/gomboc2.stl");
       std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/gomboc.obj");
       return std::make_tuple(std::move(mesh), std::move(geometry));
     }

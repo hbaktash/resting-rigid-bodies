@@ -50,7 +50,9 @@ void BoundaryBuilder::build_boundary_normals(){
     // 
     std::vector<Edge> terminal_edges;
     // 
+    printf("  buidling face-last-face\n");
     forward_solver->build_face_last_faces(); // calls face next face within
+    printf("  finding terminal edges \n");
     for (Edge e: mesh->edges()){
         if (forward_solver->edge_next_vertex[e].getIndex() == INVALID_IND){
             Face f1 = e.halfedge().face(),
@@ -75,6 +77,7 @@ void BoundaryBuilder::build_boundary_normals(){
     face_attraction_boundary = FaceData<std::vector<BoundaryNormal*>>(*mesh);
     face_region_area = FaceData<double>(*mesh, 0.);
     // back-flow them all..
+    printf("  back-flowing terminal edges \n");
     for (Edge e: terminal_edges){
         // printf("- starting at terminal edge: %d\n", e.getIndex());
         assert(edge_boundary_normals[e].size() == 1);

@@ -20,6 +20,9 @@
 
 #include "arc_algebra.h"
 #include "geometry_utils.h"
+
+#include "polyscope/polyscope.h"
+#include "polyscope/surface_mesh.h"
 // #include "geometrycentral/surface/manifold_surface_mesh.h"
 // #include "geometrycentral/surface/vertex_position_geometry.h"
 // #include "geometrycentral/surface/surface_point.h"
@@ -121,7 +124,7 @@ class Forward3DSolver {
     void face_to_next(Face f);
     
     // rigid simulation
-    void next_state();
+    void next_state(bool verbose = false);
     
     // // empirical sampling
     Face final_touching_face(Vector3 initial_ori);
