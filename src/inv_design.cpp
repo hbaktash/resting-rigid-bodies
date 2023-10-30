@@ -63,6 +63,19 @@ void InverseSolver::set_fair_distribution() {
                                          1./(double)forwardSolver->hullMesh->nFaces());
 }
 
+void InverseSolver::set_fair_distribution_for_sink_faces(){
+    size_t count = 0;
+    goal_area = FaceData<double>(*forwardSolver->hullMesh, 0.);
+    for (Face f: forwardSolver->hullMesh->faces()){
+        if (flow_structure[f] == f) // f is sink
+            count++;
+    }
+    for (Face f: forwardSolver->hullMesh->faces()){
+        if (flow_structure[f] == f)
+            goal_area[f] = 1./(double)count;
+    }
+}
+
 void InverseSolver::find_d_pf_d_Gs(bool check_FD){
     Vector3 zero_vec = Vector3::zero();
     Vector3 G = forwardSolver->get_G();
@@ -259,13 +272,22 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool check_FD){
 }
 
 //
-VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(){
+VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_flow_structure){
     Vector3 zvec = Vector3::zero();
     VertexData<Vector3> uni_mass_total_vertex_grads(*forwardSolver->hullMesh, zvec);
+    if (with_flow_structure)
+        set_fair_distribution_for_sink_faces();
     for (Face f: forwardSolver->hullMesh->faces()){
         for (Vertex v: f.adjacentVertices()){
-            uni_mass_total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
-                                         (goal_area[f] - boundaryBuilder->face_region_area[f]);
+            if (with_flow_structure) {
+                Face last_sink_face = flow_structure[f];
+                uni_mass_total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
+                                            (goal_area[last_sink_face] - boundaryBuilder->face_region_area[last_sink_face]);
+            }
+            else {
+                uni_mass_total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
+                                            (goal_area[f] - boundaryBuilder->face_region_area[f]);
+            }
         }
     }
     return uni_mass_total_vertex_grads;

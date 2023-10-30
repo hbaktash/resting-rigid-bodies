@@ -32,7 +32,6 @@
 #include "coloring.h"
 #include "forward3D.h"
 #include "mesh_factory.h"
-#include "geometry_utils.h"
 #include "visual_utils.h"
 #include "markov_model.h"
 #include "boundary_tools.h"
@@ -85,7 +84,8 @@ float pt_cloud_radi_scale = 0.01,
       g_vec_phi = 0.;
 
 
-bool gm_is_drawn;
+bool gm_is_drawn = false,
+     height_function_extras = false;
 bool color_arcs = false,
      draw_unstable_edge_arcs = true,
      show_hidden_stable_vertex_normals = false;
@@ -119,20 +119,20 @@ bool test_guess = true;
 polyscope::PointCloud *test_pc;
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("gomboc")};
+std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc"), std::string("bunny"), std::string("bunnylp")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
 
 
-void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
+void draw_stable_patches_on_gauss_map(){
   if (!forwardSolver->updated)
     forwardSolver->initialize_pre_computes();
   // std::vector<Vector3> boundary_normals;
   if (draw_boundary_patches){
     auto pair = build_and_draw_stable_patches_on_gauss_map(boundary_builder, dummy_psMesh_for_regions,
                                                vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
-                                               on_height_surface);
+                                               height_function_extras && gm_is_drawn);
     if (test_guess)
       vis_utils.draw_guess_pc(pair.first, pair.second);
   }
@@ -185,24 +185,12 @@ void visualize_vertex_probabilities(){
   vertex_prob_cloud->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 }
 
-
-// generate simple examples
 void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
     // readManifoldSurfaceMesh()
-    std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
-    mesh = mesh_ptr.release();
-    geometry = geometry_ptr.release();
-    center_and_normalize(mesh, geometry);
-    if (triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0) {
-      for (Face f: mesh->faces())
-        mesh->triangulate(f);
-      for (Edge e: mesh->edges()){
-        double dihedangle= geometry->edgeDihedralAngle(e);
-        if (dihedangle > PI)
-          printf(" edge %d dihedral is large by %f\n", e.getIndex(), dihedangle - PI);
-      }
-      mesh->compress();
-    }
+  std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
+  mesh = mesh_ptr.release();
+  geometry = geometry_ptr.release();
+  preprocess_mesh(mesh, geometry, triangulate );//|| std::strcmp(poly_str.c_str(), "gomboc") == 0
 }
 
 
@@ -231,7 +219,7 @@ void visualize_sudo_faces(){
   }
   polyscope::PointCloud* sudo_faces_pc = polyscope::registerPointCloud("sudo faces", sf_positions);
   sudo_faces_pc->setEnabled(true);
-  sudo_faces_pc->setPointRadius(vis_utils.face_normal_vertex_gm_radi * 1.0, false);
+  sudo_faces_pc->setPointRadius(vis_utils.gm_pt_radi * 1.0, false);
   sudo_faces_pc->setPointColor({0.,1.,1.});
 }
 
@@ -281,7 +269,7 @@ void visualize_contact(){
     std::vector<Vector3> curr_g_vec_pos = {forwardSolver->curr_g_vec + vis_utils.center}; // first and second should be the same since we just initialized.
     curr_g_vec_gm_pt = polyscope::registerPointCloud("current g vec", curr_g_vec_pos);
     curr_g_vec_gm_pt->setEnabled(true);
-    curr_g_vec_gm_pt->setPointRadius(vis_utils.face_normal_vertex_gm_radi * 1.1, false);
+    curr_g_vec_gm_pt->setPointRadius(vis_utils.gm_pt_radi * 1.1, false);
     curr_g_vec_gm_pt->setPointColor({0.,0.,0.});
   }
   else if (forwardSolver->curr_e.getIndex() != INVALID_IND){
@@ -368,7 +356,7 @@ void update_visuals_with_G(){
   printf("boundary took %d\n", clock() - t1);
   t1 = clock();
   if (draw_boundary_patches)
-    draw_stable_patches_on_gauss_map(gm_is_drawn);
+    draw_stable_patches_on_gauss_map();
   printf("boundary visuals took %d\n", clock() - t1);
   // initiate_markov_model();
   // visualize_sudo_faces();
@@ -483,8 +471,11 @@ void myCallback() {
   }
   if (ImGui::Button("Show Gauss Map")){///face_normal_vertex_gm_radi
     visualize_gauss_map();
-    geometry->requireFaceNormals();
-    psInputMesh->addFaceVectorQuantity("normals ", geometry->faceNormals * -1.)->setEnabled(true);
+    // geometry->requireFaceNormals();
+    FaceData<Vector3> selected_normals(*mesh, Vector3::zero());
+    selected_normals[mesh->face(566)] = geometry->faceNormal(mesh->face(566));
+    selected_normals[mesh->face(3975)] = geometry->faceNormal(mesh->face(3975));
+    psInputMesh->addFaceVectorQuantity("selected normals ", selected_normals)->setEnabled(true);
   }
   if (ImGui::Checkbox("colored arcs (slows)", &color_arcs)) vis_utils.color_arcs = color_arcs;
   if (ImGui::Checkbox("draw unstable edge arcs", &draw_unstable_edge_arcs)) {
@@ -495,16 +486,14 @@ void myCallback() {
     vis_utils.show_hidden_stable_vertex_normals = show_hidden_stable_vertex_normals;
     vis_utils.draw_stable_vertices_on_gauss_map();
   }
-  if (ImGui::Button("Draw patches")){
-    draw_stable_patches_on_gauss_map();
-  }
+  if (ImGui::Checkbox("height function extras", &height_function_extras));
   
   // my simulation 
   if (ImGui::Button("initialize g_vec") ||
     ImGui::SliderFloat("initial g_vec theta", &g_vec_theta, 0., 2*PI)||
     ImGui::SliderFloat("initial g_vec phi", &g_vec_phi, 0., 2*PI)) {
     initial_g_vec = {cos(g_vec_phi)*sin(g_vec_theta), cos(g_vec_phi)*cos(g_vec_theta), sin(g_vec_phi)};
-    initial_g_vec = geometry->faceNormal(mesh->face(1942));
+    // initial_g_vec = geometry->faceNormal(mesh->face(1942));
     forwardSolver->find_contact(initial_g_vec);
     initialize_state_vis();
     // snail trail stuff

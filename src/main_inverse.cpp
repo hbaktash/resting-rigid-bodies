@@ -96,6 +96,8 @@ polyscope::PointCloud *boundary_normals_pc;
 polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
 bool draw_boundary_patches = false;
 bool test_guess = true;
+bool structured_opt = false;
+
 polyscope::PointCloud *test_pc;
 
 
@@ -107,7 +109,7 @@ float step_size = 0.01,
 
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc"), std::string("bunny"), std::string("bunnylp")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
@@ -166,21 +168,13 @@ void update_solver(){
 }
 
 
-// generate simple examples
-void generate_polyhedron_example(std::string poly_str, bool triangulate=false){
+void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
     // readManifoldSurfaceMesh()
-    std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
-    mesh = mesh_ptr.release();
-    geometry = geometry_ptr.release();
-    center_and_normalize(mesh, geometry);
-    if (triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0) {
-      for (Face f: mesh->faces())
-        mesh->triangulate(f);
-    }
-    mesh->compress();
+  std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
+  mesh = mesh_ptr.release();
+  geometry = geometry_ptr.release();
+  preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0);
 }
-
-// visualize boundary
 
 
 // color input polyhedra with default
@@ -230,15 +224,15 @@ void update_visuals_with_G(){
   vis_utils.draw_stable_face_normals_on_gauss_map();
   printf("visuals took %d\n", clock() - t1);
   t1 = clock();
-  // initialize_boundary_builder();
-  // printf("building boundaries \n");
-  // boundary_builder->build_boundary_normals();
-  // boundary_builder->print_area_of_boundary_loops();
-  // printf("boundary took %d\n", clock() - t1);
-  // t1 = clock();
-  // if (draw_boundary_patches)
-  //   draw_stable_patches_on_gauss_map(gm_is_drawn);
-  // printf("boundary visuals took %d\n", clock() - t1);
+  initialize_boundary_builder();
+  printf("building boundaries \n");
+  boundary_builder->build_boundary_normals();
+  boundary_builder->print_area_of_boundary_loops();
+  printf("boundary took %d\n", clock() - t1);
+  t1 = clock();
+  if (draw_boundary_patches)
+    draw_stable_patches_on_gauss_map(gm_is_drawn);
+  printf("boundary visuals took %d\n", clock() - t1);
   // initiate_markov_model();
   // visualize_sudo_faces();
 }
@@ -334,7 +328,11 @@ void take_uni_mass_opt_vertices_step(){
   forwardSolver->set_uniform_G();
   forwardSolver->initialize_pre_computes();
   inverseSolver->find_uni_mass_d_pf_dv();
-  VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads();
+  if (structured_opt){
+    boundary_builder->build_boundary_normals();
+    inverseSolver->flow_structure = forwardSolver->face_last_face;
+  }
+  VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt);
   // translation 
   // Vertex v0 = forwardSolver->hullMesh->vertex(0);
   // for (Vertex v: forwardSolver->hullMesh->vertices())
@@ -449,6 +447,8 @@ void myCallback() {
     take_uni_mass_opt_vertices_step();
   }
   if (ImGui::SliderFloat("step size 3", &step_size3, 0., 1.0));
+  if (ImGui::Checkbox("structured opt", &structured_opt));
+  
 }
 
 

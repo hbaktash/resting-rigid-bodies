@@ -84,6 +84,7 @@ double Forward3DSolver::height_function(Vector3 ground_normal){
     return max_inner_product;
 }
 
+
 // find initial contact and basically refresh the current state
 void Forward3DSolver::find_contact(Vector3 initial_ori){
     // just find the max inner product with the g_vec 
@@ -459,22 +460,22 @@ void Forward3DSolver::build_face_next_faces(){
     for (Face f: hullMesh->faces()){
         // printf("at face %d\n", f.getIndex());
         initialize_state(Vertex(), Edge(), f, hullGeometry->faceNormal(f)); // assuming outward normals
-        bool verbose = f.getIndex() == 1942; //= false; //
+        bool verbose = false; //f.getIndex() == 1942; //
         next_state(verbose); // could roll to an edge
         size_t count = 0;
         while (curr_f.getIndex() == INVALID_IND){
             count++;
-            if (count > hullMesh->nVertices()){
-                printf("at face %d\n", f.getIndex());
-                FaceData<Vector3> dbface_colors(*hullMesh, Vector3({0.,0.,0.}));
-                dbface_colors[f.getIndex()] = hullGeometry->faceNormal(f) * 3;
-                polyscope::getSurfaceMesh("input mesh")->addFaceVectorQuantity("debugg vis color "+std::to_string(f.getIndex()), dbface_colors)->setEnabled(true);
-                curr_f = f;
-                printf(" too many iters! \n");
-                break;
-                // throw std::logic_error(" too many iters! \n");
-
-            }
+            // TODO; debug Gomboc case
+            // if (count > hullMesh->nVertices()){
+            //     printf("at face %d\n", f.getIndex());
+            //     FaceData<Vector3> dbface_colors(*hullMesh, Vector3({0.,0.,0.}));
+            //     dbface_colors[f.getIndex()] = hullGeometry->faceNormal(f) * 3;
+            //     polyscope::getSurfaceMesh("input mesh")->addFaceVectorQuantity("debugg vis color "+std::to_string(f.getIndex()), dbface_colors)->setEnabled(true);
+            //     curr_f = f;
+            //     printf(" too many iters! \n");
+            //     break;
+            //     // throw std::logic_error(" too many iters! \n");
+            // }
             next_state(verbose);
         } // terminates when it gets to the next face
         face_next_face[f] = curr_f;
@@ -486,11 +487,11 @@ void Forward3DSolver::build_face_last_faces(){
     if (!updated)
         build_face_next_faces();
     face_last_face = FaceData<Face>(*hullMesh, Face());
-    printf(" building face-last-faces\n");
+    // printf(" building face-last-faces\n");
     for (Face f: hullMesh->faces()){
-        if (face_last_face[f].getIndex() == INVALID_IND)
+        if (face_last_face[f].getIndex() != INVALID_IND)
          continue;
-        printf(" at face %d\n", f.getIndex());
+        // printf(" at face %d\n", f.getIndex());
         Face temp_f = f;
         std::vector<Face> faces_history;
         faces_history.push_back(temp_f);

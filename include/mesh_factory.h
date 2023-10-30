@@ -21,6 +21,8 @@
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
 
+#include "geometry_utils.h"
+
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
@@ -29,3 +31,6 @@ Vector3 cylindrical_to_xyz(double h, double r, double theta);
 
 std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
 generate_polyhedra(std::string poly_str);
+
+void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
+                     bool triangulate = false);

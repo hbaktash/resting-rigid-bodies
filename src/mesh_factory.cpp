@@ -288,6 +288,14 @@ generate_polyhedra(std::string poly_str){
         std::cout << "pos: " << pos << "\n";
       }
     }
+    else if (std::strcmp(poly_str.c_str(), "bunny") == 0){
+      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/bunny-convhull.obj");
+      return std::make_tuple(std::move(mesh), std::move(geometry));
+    }
+    else if (std::strcmp(poly_str.c_str(), "bunnylp") == 0){
+      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/bunny-lp-convhull.obj");
+      return std::make_tuple(std::move(mesh), std::move(geometry));
+    }
     else if (std::strcmp(poly_str.c_str(), "gomboc") == 0){
       // std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/gomboc2.stl");
       std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/gomboc.obj");
@@ -311,4 +319,22 @@ generate_polyhedra(std::string poly_str){
         (*geometry).inputVertexPositions[v] = positions[v.getIndex()];
     }
     return std::make_tuple(std::move(mesh), std::move(geometry));
+}
+
+
+
+// generate simple examples
+void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, bool triangulate){
+  // readManifoldSurfaceMesh()
+  center_and_normalize(mesh, geometry);
+  if (triangulate) {
+    for (Face f: mesh->faces())
+      mesh->triangulate(f);
+    mesh->compress();
+  }
+  for (Edge e: mesh->edges()){
+    double dihedangle= geometry->edgeDihedralAngle(e);
+    if (dihedangle > PI)
+      printf(" edge %d dihedral is large by %f\n", e.getIndex(), dihedangle - PI);
+  }
 }

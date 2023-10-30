@@ -51,6 +51,7 @@ class InverseSolver{
 
         // distribution goals
         void set_fair_distribution();
+        void set_fair_distribution_for_sink_faces();
 
         // gradient computation; assuming regularity
         // note: pf = face region area
@@ -75,6 +76,7 @@ class InverseSolver{
         // after chain and product rule
         void find_uni_mass_d_pf_dv(bool check_FD = false);
         // accumulate over all faces
-        VertexData<Vector3> find_uni_mass_total_vertex_grads();
+        FaceData<Face> flow_structure;
+        VertexData<Vector3> find_uni_mass_total_vertex_grads(bool with_flow_structure = false);
         
 };

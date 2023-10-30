@@ -209,7 +209,10 @@ void BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
 void BoundaryBuilder::print_area_of_boundary_loops(){
     printf(" Face probs:\n");
     for (Face f: mesh->faces()){
-        face_region_area[f] /= (4.*PI);
+        if (face_region_area[f] > 0){
+            face_region_area[f] /= (4.*PI);
+            printf(" f %d: %f\n", f.getIndex(), face_region_area[f]);
+        }
     }
-    std::cout << face_region_area.toVector().transpose()<< "\n";
+    // std::cout << face_region_area.toVector().transpose()<< "\n";
 }
