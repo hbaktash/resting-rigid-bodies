@@ -23,6 +23,37 @@ double signed_volume(Vector3 a, Vector3 b, Vector3 c, Vector3 d){
     return (1.0/6.0)*dot(cross(b-a,c-a),d-a);
 }
 
+
+double area(Vector3 A, Vector3 B, Vector3 C){
+    return 0.5*norm(cross(B-A, C-A));
+}
+
+double ray_intersect_triangle(Vector3 O, Vector3 v, Vector3 A, Vector3 B, Vector3 C){
+    Vector3 e1 = B - A,
+            e2 = C - A;
+    Vector3 n = cross(e1, e2);
+    if (dot(v,n) < 1e-8) return -1;
+    double t = (dot(A - O,n))/dot(v,n);
+    if (t < 0)
+        return -1;
+
+    Vector3 P = O + t*v;
+    if (area(A,B,C) >= area(P,A,B) + area(P,A,C)+ area(P,C,B) - 1e-6)
+        return t;
+    else 
+        return -1;
+}
+
+double ray_intersect(Vector3 O, Vector3 v, std::vector<Vector3> polygon){
+    size_t n = polygon.size();
+    for (size_t i = 1; i < n; i++){
+        double tmp_t = ray_intersect_triangle(O, v, polygon[0], polygon[i], polygon[(i+1)%n]);
+        if (tmp_t != -1)
+            return tmp_t;
+    }
+    return -1;
+}
+
 double polygonal_face_area(Face f, VertexPositionGeometry &geometry){
     Halfedge first_he = f.halfedge();
     Vertex v0 = first_he.tailVertex(),
@@ -100,32 +131,52 @@ void center_and_normalize(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geo
     }
 }
 
-double area(Vector3 A, Vector3 B, Vector3 C){
-    return 0.5*norm(cross(B-A, C-A));
-}
-
-double ray_intersect_triangle(Vector3 O, Vector3 v, Vector3 A, Vector3 B, Vector3 C){
-    Vector3 e1 = B - A,
-            e2 = C - A;
-    Vector3 n = cross(e1, e2);
-    if (dot(v,n) < 1e-8) return -1;
-    double t = (dot(A - O,n))/dot(v,n);
-    if (t < 0)
-        return -1;
-
-    Vector3 P = O + t*v;
-    if (area(A,B,C) >= area(P,A,B) + area(P,A,C)+ area(P,C,B) - 1e-6)
-        return t;
-    else 
-        return -1;
-}
-
-double ray_intersect(Vector3 O, Vector3 v, std::vector<Vector3> polygon){
-    size_t n = polygon.size();
-    for (size_t i = 1; i < n; i++){
-        double tmp_t = ray_intersect_triangle(O, v, polygon[0], polygon[i], polygon[(i+1)%n]);
-        if (tmp_t != -1)
-            return tmp_t;
+bool check_hollow_tet_vertex(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, Vertex v){
+    if (v.degree() > 3) return false;
+    if (v.degree() < 3) throw std::logic_error("what the fuck?\n");
+    size_t count = 0;
+    for (Edge e: v.adjacentEdges()){
+        double dihedangle = geometry->edgeDihedralAngle(e);
+        if (dihedangle < 0.)
+            count++;
     }
-    return -1;
+    return count == 3;
+}
+
+bool check_convexity_and_repair(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry){
+    // mesh->removeVertex()
+    // NOTE: has to be triangle mesh, Manifold, no degree 1 vertex
+    size_t e_count = 0, trials = 0;
+    printf("$$$$$ here\n");
+    while (e_count < mesh->nEdges() - 1){
+        e_count = 0;
+        for (Edge e: mesh->edges()){ // TODO: how to handle this?
+            double dihedangle = geometry->edgeDihedralAngle(e);
+            // double normals_dot = dot(geometry->faceNormal(e.halfedge().face()), // assuming outward normals
+                                    //  geometry->faceNormal(e.halfedge().twin().face()));
+            if (dihedangle < 0.){
+                printf("$$$$$ here for edge %d angle %f, $$$$\n", e.getIndex(), dihedangle);
+                // return;
+                if (check_hollow_tet_vertex(mesh, geometry, e.firstVertex())){
+                    printf("got a vertex!\n");
+                    Face new_face = mesh->removeVertex(e.firstVertex());
+                    mesh->compress();
+                    break; // since edges get removed
+                }
+                else if (check_hollow_tet_vertex(mesh, geometry, e.secondVertex())){
+                    printf("got a vertex!\n");
+                    Face new_face = mesh->removeVertex(e.secondVertex());
+                    mesh->compress();
+                    break; // since edges get removed
+                }
+                else {
+                    mesh->flip(e);
+                    mesh->compress();
+                }
+            }
+            else e_count++;
+        }
+        trials++;
+    }
+    return trials > 1;
 }

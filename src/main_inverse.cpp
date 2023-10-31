@@ -96,7 +96,9 @@ polyscope::PointCloud *boundary_normals_pc;
 polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
 bool draw_boundary_patches = false;
 bool test_guess = true;
-bool structured_opt = false;
+bool structured_opt = false,
+     always_update_structure = false,
+     first_time = false;
 
 polyscope::PointCloud *test_pc;
 
@@ -174,6 +176,7 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
   mesh = mesh_ptr.release();
   geometry = geometry_ptr.release();
   preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0);
+  first_time = true;
 }
 
 
@@ -197,21 +200,32 @@ void color_faces(){
   }
 }
 
+void update_solver_and_boundaries(){
+  auto t1 = clock();
+  forwardSolver->set_G(G);
+  printf("fwd3D precomputes \n");
+  forwardSolver->initialize_pre_computes();
+  printf("building boundary normals \n");
+  boundary_builder->build_boundary_normals();
+  boundary_builder->print_area_of_boundary_loops();
+  printf("precomputes took %d\n", clock() - t1);
+}
+
 
 void update_visuals_with_G(){
-  forwardSolver->set_G(G);
+  update_solver_and_boundaries();
+  
   vis_utils.draw_G();
-  auto t1 = clock();
-  forwardSolver->initialize_pre_computes();
-  printf("precomputes took %d\n", clock() - t1);
   if (gm_is_drawn)
     vis_utils.plot_height_function();
+  
   // stuff on the polyhedra
-  t1 = clock();
+  auto t1 = clock();
   // visualize_edge_stability();
   // visualize_face_stability();
   // visualize_stable_vertices();
-  // // coloring stuff
+  
+  // coloring stuff
   recolor_faces = true;// so bad lol
   color_faces();
   vis_utils.visualize_colored_polyhedra(face_colors);
@@ -222,12 +236,9 @@ void update_visuals_with_G(){
   vis_utils.draw_stable_vertices_on_gauss_map();
   vis_utils.show_edge_equilibria_on_gauss_map();
   vis_utils.draw_stable_face_normals_on_gauss_map();
-  printf("visuals took %d\n", clock() - t1);
+  printf("GM visuals took %d\n", clock() - t1);
   t1 = clock();
-  initialize_boundary_builder();
-  printf("building boundaries \n");
-  boundary_builder->build_boundary_normals();
-  boundary_builder->print_area_of_boundary_loops();
+  // initialize_boundary_builder();
   printf("boundary took %d\n", clock() - t1);
   t1 = clock();
   if (draw_boundary_patches)
@@ -323,6 +334,9 @@ void take_opt_vertices_step(){
   update_visuals_with_G();
 }
 
+void check_fix_convexity(){
+
+}
 
 void take_uni_mass_opt_vertices_step(){
   forwardSolver->set_uniform_G();
@@ -330,7 +344,11 @@ void take_uni_mass_opt_vertices_step(){
   inverseSolver->find_uni_mass_d_pf_dv();
   if (structured_opt){
     boundary_builder->build_boundary_normals();
-    inverseSolver->flow_structure = forwardSolver->face_last_face;
+    boundary_builder->print_area_of_boundary_loops();
+    if (first_time || always_update_structure){
+      inverseSolver->flow_structure = forwardSolver->face_last_face;
+      first_time = false;
+    }
   }
   VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt);
   // translation 
@@ -338,13 +356,18 @@ void take_uni_mass_opt_vertices_step(){
   // for (Vertex v: forwardSolver->hullMesh->vertices())
   //   total_uni_mass_vertex_grads[v] -= total_uni_mass_vertex_grads[v0];
   VertexData<Vector3> new_poses(*forwardSolver->hullMesh);
-  for (Vertex v: forwardSolver->hullMesh->vertices()){
-    forwardSolver->hullGeometry->inputVertexPositions[v] += step_size3 * total_uni_mass_vertex_grads[v];
+  forwardSolver->hullGeometry->inputVertexPositions += step_size3 * total_uni_mass_vertex_grads;
+  // costly
+  if (check_convexity_and_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry)){
+    polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
+                                                 forwardSolver->hullMesh->getFaceVertexList());
   }
-  polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
+  else 
+    polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
   forwardSolver->set_uniform_G();
   // forwardSolver->initialize_pre_computes();
   G = forwardSolver->get_G();
+  printf("updating stuff\n");
   update_visuals_with_G();
 }
 
@@ -448,6 +471,7 @@ void myCallback() {
   }
   if (ImGui::SliderFloat("step size 3", &step_size3, 0., 1.0));
   if (ImGui::Checkbox("structured opt", &structured_opt));
+  if (ImGui::Checkbox("update structured at every step", &always_update_structure));
   
 }
 

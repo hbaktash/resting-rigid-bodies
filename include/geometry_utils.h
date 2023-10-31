@@ -27,6 +27,9 @@ using namespace geometrycentral::surface;
 
 double signed_volume(Vector3 A, Vector3 B, Vector3 C, Vector3 D);
 
+double ray_intersect_triangle(Vector3 O, Vector3 r, Vector3 A, Vector3 B, Vector3 C);
+double ray_intersect(Vector3 O, Vector3 r, std::vector<Vector3> polygon);
+
 double polygonal_face_area(Face f, VertexPositionGeometry &geometry);
 
 std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
@@ -41,6 +44,5 @@ std::pair<Vector3, double> find_center_of_mass(ManifoldSurfaceMesh &input_mesh, 
 
 void center_and_normalize(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);
 
-
-double ray_intersect_triangle(Vector3 O, Vector3 r, Vector3 A, Vector3 B, Vector3 C);
-double ray_intersect(Vector3 O, Vector3 r, std::vector<Vector3> polygon);
+bool check_hollow_tet_vertex(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, Vertex v);
+bool check_convexity_and_repair(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);

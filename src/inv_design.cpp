@@ -198,6 +198,8 @@ VertexData<Vector3> InverseSolver::find_total_vertex_grads() {
     VertexData<Vector3> per_vertex_total_grads(*forwardSolver->hullMesh, zvec);
     for (Face f: forwardSolver->hullMesh->faces()){
         for (Vertex v: f.adjacentVertices()){
+            printf("   at f %d, area: %f goal area: %f \n", f.getIndex(), boundaryBuilder->face_region_area[f],
+                                                                                     goal_area[f]);
             per_vertex_total_grads[v] += d_pf_dv[f][v] * 
                                          (goal_area[f] - boundaryBuilder->face_region_area[f]);
         }
@@ -283,6 +285,9 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
                 Face last_sink_face = flow_structure[f];
                 uni_mass_total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
                                             (goal_area[last_sink_face] - boundaryBuilder->face_region_area[last_sink_face]);
+                printf("   finding total grad for f %d v %d  area: %f goal area: %f \n", f.getIndex(), v.getIndex(), 
+                                                                                        boundaryBuilder->face_region_area[last_sink_face],
+                                                                                        goal_area[last_sink_face]);
             }
             else {
                 uni_mass_total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 

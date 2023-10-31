@@ -484,6 +484,7 @@ void Forward3DSolver::build_face_next_faces(){
 }
 
 void Forward3DSolver::build_face_last_faces(){
+    ///
     if (!updated)
         build_face_next_faces();
     face_last_face = FaceData<Face>(*hullMesh, Face());
@@ -499,22 +500,24 @@ void Forward3DSolver::build_face_last_faces(){
             temp_f = face_next_face[temp_f];
             faces_history.push_back(temp_f);
         } // terminates when it gets to the next face
-        for (Face stored_f: faces_history)
+        for (Face stored_f: faces_history) {
             face_last_face[stored_f] = temp_f;
+            // printf("face %d lf %d\n", stored_f.getIndex(), temp_f.getIndex());
+        }
     }
 }
 
 // just call all the pre-compute initializations; not face-last-face
 void Forward3DSolver::initialize_pre_computes(){
-    printf("precomputes:\n");
-    printf("  vertex stability:\n");
+    // printf("precomputes:\n");
+    // printf("  vertex stability:\n");
     compute_vertex_stabilizablity();
-    printf("  vertex gauss curvature:\n");
+    // printf("  vertex gauss curvature:\n");
     compute_vertex_gaussian_curvatures();
-    printf("  edge stability:\n");
+    // printf("  edge stability:\n");
     compute_edge_stable_normals();
-    printf("  building face next faces:\n");
+    // printf("  building face next faces:\n");
     build_face_next_faces(); // 
-    printf("done!\n");
+    // printf("done!\n");
     updated = true;
 }
