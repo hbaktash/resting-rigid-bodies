@@ -77,7 +77,7 @@ float pt_cloud_radi_scale = 0.1,
 
 
 bool gm_is_drawn;
-bool color_arcs = false,
+bool color_arcs = true,
      draw_unstable_edge_arcs = true,
      show_hidden_stable_vertex_normals = false;
 
@@ -213,7 +213,6 @@ void update_solver_and_boundaries(){
 
 
 void update_visuals_with_G(){
-  update_solver_and_boundaries();
   
   vis_utils.draw_G();
   if (gm_is_drawn)
@@ -319,6 +318,7 @@ void take_opt_G_step(){
   inverseSolver->find_d_pf_d_Gs();
   Vector3 G_grad = inverseSolver->find_total_g_grad();
   G = G + step_size * G_grad;
+  update_solver_and_boundaries();
   update_visuals_with_G();
 }
 
@@ -331,6 +331,7 @@ void take_opt_vertices_step(){
     forwardSolver->hullGeometry->inputVertexPositions[v] += step_size2 * total_vertex_grads[v];
   }
   polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
+  update_solver_and_boundaries();
   update_visuals_with_G();
 }
 
@@ -357,18 +358,37 @@ void take_uni_mass_opt_vertices_step(){
   //   total_uni_mass_vertex_grads[v] -= total_uni_mass_vertex_grads[v0];
   VertexData<Vector3> new_poses(*forwardSolver->hullMesh);
   forwardSolver->hullGeometry->inputVertexPositions += step_size3 * total_uni_mass_vertex_grads;
+  // DEBUG
+  
+  polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
+                                             forwardSolver->hullMesh->getFaceVertexList());
+  // 
   // costly
-  if (check_convexity_and_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry)){
-    polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                                 forwardSolver->hullMesh->getFaceVertexList());
-  }
-  else 
-    polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
-  forwardSolver->set_uniform_G();
+  // polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
+  //                                                forwardSolver->hullMesh->getFaceVertexList());
+  // if (check_convexity_and_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry)){
+  //   polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
+  //                                                forwardSolver->hullMesh->getFaceVertexList());
+  // }
+  // else 
+  //   polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
+  // forwardSolver->set_uniform_G();
+  // // forwardSolver->initialize_pre_computes();
+  // G = forwardSolver->get_G();
+  // // WJFASJFJAFKAKFAKLF
+  // // printf("updating stuff\n");
+  // forwardSolver->set_G(G);
+  // printf("fwd3D precomputes \n");
   // forwardSolver->initialize_pre_computes();
-  G = forwardSolver->get_G();
-  printf("updating stuff\n");
-  update_visuals_with_G();
+  // // update_solver_and_boundaries();
+  // update_visuals_with_G();
+
+  //DEBUG
+  FaceData<Vector3> debugg_normals(*forwardSolver->hullMesh, Vector3({0.,0.,0.}));
+  debugg_normals[105] = forwardSolver->hullGeometry->faceNormal(forwardSolver->hullMesh->face(105)) * 3;
+  debugg_normals[812] = forwardSolver->hullGeometry->faceNormal(forwardSolver->hullMesh->face(812)) * 3;
+  polyscope::getSurfaceMesh("input mesh")->addFaceVectorQuantity("debugg vis normals ", debugg_normals)->setEnabled(true);
+  
 }
 
 // A user-defined callback, for creating control panels (etc)
@@ -400,6 +420,7 @@ void myCallback() {
       ImGui::SliderFloat("G phi", &G_phi, 0., 2*PI)) {
     G = {cos(G_phi)*sin(G_theta)*G_r, cos(G_phi)*cos(G_theta)*G_r, sin(G_phi)*G_r};
     if (G_is_inside(*forwardSolver->hullMesh, *forwardSolver->hullGeometry, G)){
+      update_solver_and_boundaries();
       update_visuals_with_G();
       if (real_time_raster){
         color_faces();
@@ -409,6 +430,7 @@ void myCallback() {
   }
   if (ImGui::Button("uniform mass G")){
     G = find_center_of_mass(*mesh, *geometry).first;
+    update_solver_and_boundaries();
     update_visuals_with_G();
   }
   if (ImGui::Button("Show Gauss Map")){///face_normal_vertex_gm_radi
@@ -472,7 +494,26 @@ void myCallback() {
   if (ImGui::SliderFloat("step size 3", &step_size3, 0., 1.0));
   if (ImGui::Checkbox("structured opt", &structured_opt));
   if (ImGui::Checkbox("update structured at every step", &always_update_structure));
-  
+  if (ImGui::Button("simplify")) {
+    polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
+                                             forwardSolver->hullMesh->getFaceVertexList());
+    Edge e = single_convexity_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry);
+    polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
+                                             forwardSolver->hullMesh->getFaceVertexList());
+    if (e.getIndex() != INVALID_IND){
+      Vertex v1 = e.firstVertex(),
+             v2 = e.secondVertex(),
+             v3 = e.halfedge().next().tipVertex(),
+             v4 = e.halfedge().twin().next().tipVertex();
+      std::vector<std::vector<size_t>> ff({{0, 1, 2}, {0,1,3}});
+      std::vector<Vector3> possss({forwardSolver->hullGeometry->inputVertexPositions[v1],
+                                                   forwardSolver->hullGeometry->inputVertexPositions[v2],
+                                                   forwardSolver->hullGeometry->inputVertexPositions[v3],
+                                                   forwardSolver->hullGeometry->inputVertexPositions[v4]});
+      polyscope::registerSurfaceMesh("temp mesh", possss,
+                                             ff);  
+    }
+  }
 }
 
 

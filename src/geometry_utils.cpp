@@ -19,6 +19,9 @@
 
 #include "geometry_utils.h"
 
+#include "polyscope/polyscope.h"
+#include "polyscope/surface_mesh.h"
+
 double signed_volume(Vector3 a, Vector3 b, Vector3 c, Vector3 d){
     return (1.0/6.0)*dot(cross(b-a,c-a),d-a);
 }
@@ -132,12 +135,14 @@ void center_and_normalize(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geo
 }
 
 bool check_hollow_tet_vertex(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, Vertex v){
+    printf("      at v %d deg: %d\n", v.getIndex(), v.degree());
     if (v.degree() > 3) return false;
     if (v.degree() < 3) throw std::logic_error("what the fuck?\n");
     size_t count = 0;
     for (Edge e: v.adjacentEdges()){
         double dihedangle = geometry->edgeDihedralAngle(e);
-        if (dihedangle < 0.)
+        printf("      at v %d diherdal angle: %f\n", v.getIndex(), dihedangle);
+        if (dihedangle < 0. || dihedangle > PI - 1e-4)
             count++;
     }
     return count == 3;
@@ -155,28 +160,84 @@ bool check_convexity_and_repair(ManifoldSurfaceMesh* mesh, VertexPositionGeometr
             // double normals_dot = dot(geometry->faceNormal(e.halfedge().face()), // assuming outward normals
                                     //  geometry->faceNormal(e.halfedge().twin().face()));
             if (dihedangle < 0.){
-                printf("$$$$$ here for edge %d angle %f, $$$$\n", e.getIndex(), dihedangle);
-                // return;
+                printf("$$$$$ here for edge %d: %d, %d angle %f, $$$$\n", e.getIndex(), e.firstVertex().getIndex(), e.secondVertex().getIndex(), dihedangle);
                 if (check_hollow_tet_vertex(mesh, geometry, e.firstVertex())){
-                    printf("got a vertex!\n");
+                    printf("got a vertex! %d\n", e.firstVertex().getIndex());
                     Face new_face = mesh->removeVertex(e.firstVertex());
                     mesh->compress();
                     break; // since edges get removed
                 }
                 else if (check_hollow_tet_vertex(mesh, geometry, e.secondVertex())){
-                    printf("got a vertex!\n");
+                    printf("got a vertex! %d\n", e.secondVertex().getIndex());
                     Face new_face = mesh->removeVertex(e.secondVertex());
                     mesh->compress();
                     break; // since edges get removed
                 }
                 else {
                     mesh->flip(e);
-                    mesh->compress();
+                    // mesh->compress();
+                    // break;
                 }
             }
             else e_count++;
         }
+        // mesh->compress();
         trials++;
     }
     return trials > 1;
+}
+
+
+Edge single_convexity_repair(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry){
+    // mesh->removeVertex()
+    // NOTE: has to be triangle mesh, Manifold, no degree 1 vertex
+    size_t e_count = 0;
+    printf("$$$$$ here\n");
+    // while (e_count < mesh->nEdges() - 1){
+    e_count = 0;
+    for (Edge e: mesh->edges()){ // TODO: how to handle this?
+        double dihedangle = geometry->edgeDihedralAngle(e);
+        // double normals_dot = dot(geometry->faceNormal(e.halfedge().face()), // assuming outward normals
+                                //  geometry->faceNormal(e.halfedge().twin().face()));
+        if (dihedangle < 0. || dihedangle > PI - 1e-4){
+            printf("$$$$$ here for edge %d: %d, %d angle %f, $$$$\n", e.getIndex(), e.firstVertex().getIndex(), e.secondVertex().getIndex(), dihedangle);
+            printf("$$$$$ diherdal angle: %f\n", dihedangle);
+            if (check_hollow_tet_vertex(mesh, geometry, e.firstVertex())){
+                printf("got a vertex! %d\n", e.firstVertex().getIndex());
+                Face new_face = mesh->removeVertex(e.firstVertex());
+                mesh->compress();
+                // break; // since edges get removed
+            }
+            else if (check_hollow_tet_vertex(mesh, geometry, e.secondVertex())){
+                printf("got a vertex! %d\n", e.secondVertex().getIndex());
+                Face new_face = mesh->removeVertex(e.secondVertex());
+                mesh->compress();
+                // break; // since edges get removed
+            }
+            else {
+                if (e.getIndex() != INVALID_IND){
+                    Vertex v1 = e.firstVertex(),
+                            v2 = e.secondVertex(),
+                            v3 = e.halfedge().next().tipVertex(),
+                            v4 = e.halfedge().twin().next().tipVertex();
+                    std::vector<std::vector<size_t>> ff({{0, 1, 2}, {0,1,3}});
+                    std::vector<Vector3> possss({geometry->inputVertexPositions[v1],
+                                                 geometry->inputVertexPositions[v2],
+                                                 geometry->inputVertexPositions[v3],
+                                                 geometry->inputVertexPositions[v4]});
+                    polyscope::registerSurfaceMesh("temp old mesh", possss,
+                                             ff);  
+                }
+                mesh->flip(e);
+                mesh->compress();
+                //DEBUG
+                return e;
+                // break;
+            }
+            return Edge();
+        }
+        else e_count++;
+    }
+        // mesh->compress();
+    // }
 }

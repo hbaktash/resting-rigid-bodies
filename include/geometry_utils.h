@@ -46,3 +46,5 @@ void center_and_normalize(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometr
 
 bool check_hollow_tet_vertex(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, Vertex v);
 bool check_convexity_and_repair(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);
+
+Edge single_convexity_repair(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);

@@ -460,7 +460,7 @@ void Forward3DSolver::build_face_next_faces(){
     for (Face f: hullMesh->faces()){
         // printf("at face %d\n", f.getIndex());
         initialize_state(Vertex(), Edge(), f, hullGeometry->faceNormal(f)); // assuming outward normals
-        bool verbose = false; //f.getIndex() == 1942; //
+        bool verbose = f.getIndex() == 812 || f.getIndex() == 105; //false; //
         next_state(verbose); // could roll to an edge
         size_t count = 0;
         while (curr_f.getIndex() == INVALID_IND){
@@ -478,6 +478,8 @@ void Forward3DSolver::build_face_next_faces(){
             // }
             next_state(verbose);
         } // terminates when it gets to the next face
+        if (verbose)
+            printf(" last stable face was %d\n", curr_f.getIndex());
         face_next_face[f] = curr_f;
         // printf(" fnf %d -> %d\n", f.getIndex(), curr_f.getIndex());
     }
@@ -492,32 +494,33 @@ void Forward3DSolver::build_face_last_faces(){
     for (Face f: hullMesh->faces()){
         if (face_last_face[f].getIndex() != INVALID_IND)
          continue;
-        // printf(" at face %d\n", f.getIndex());
+        printf(" at face %d\n", f.getIndex());
         Face temp_f = f;
         std::vector<Face> faces_history;
         faces_history.push_back(temp_f);
         while (face_next_face[temp_f] != temp_f){
             temp_f = face_next_face[temp_f];
+            // printf(" next face is %d\n", temp_f.getIndex());
             faces_history.push_back(temp_f);
         } // terminates when it gets to the next face
         for (Face stored_f: faces_history) {
             face_last_face[stored_f] = temp_f;
-            // printf("face %d lf %d\n", stored_f.getIndex(), temp_f.getIndex());
         }
+        printf(" ++ final face %d \n", temp_f.getIndex());
     }
 }
 
 // just call all the pre-compute initializations; not face-last-face
 void Forward3DSolver::initialize_pre_computes(){
-    // printf("precomputes:\n");
-    // printf("  vertex stability:\n");
+    printf("precomputes:\n");
+    printf("  vertex stability:\n");
     compute_vertex_stabilizablity();
-    // printf("  vertex gauss curvature:\n");
+    printf("  vertex gauss curvature:\n");
     compute_vertex_gaussian_curvatures();
-    // printf("  edge stability:\n");
+    printf("  edge stability:\n");
     compute_edge_stable_normals();
-    // printf("  building face next faces:\n");
+    printf("  building face next faces:\n");
     build_face_next_faces(); // 
-    // printf("done!\n");
+    printf("done!\n");
     updated = true;
 }
