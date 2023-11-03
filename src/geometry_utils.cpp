@@ -175,8 +175,8 @@ bool check_convexity_and_repair(ManifoldSurfaceMesh* mesh, VertexPositionGeometr
                 }
                 else {
                     mesh->flip(e);
-                    // mesh->compress();
-                    // break;
+                    mesh->compress();
+                    break;
                 }
             }
             else e_count++;

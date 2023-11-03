@@ -360,34 +360,34 @@ void take_uni_mass_opt_vertices_step(){
   forwardSolver->hullGeometry->inputVertexPositions += step_size3 * total_uni_mass_vertex_grads;
   // DEBUG
   
-  polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                             forwardSolver->hullMesh->getFaceVertexList());
-  // 
-  // costly
   // polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
-  //                                                forwardSolver->hullMesh->getFaceVertexList());
-  // if (check_convexity_and_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry)){
-  //   polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
-  //                                                forwardSolver->hullMesh->getFaceVertexList());
-  // }
-  // else 
-  //   polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
-  // forwardSolver->set_uniform_G();
-  // // forwardSolver->initialize_pre_computes();
-  // G = forwardSolver->get_G();
+  //                                            forwardSolver->hullMesh->getFaceVertexList());
+
+  // costly
+  polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
+                                                 forwardSolver->hullMesh->getFaceVertexList());
+  if (check_convexity_and_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry)){
+    polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
+                                                 forwardSolver->hullMesh->getFaceVertexList());
+  }
+  else 
+    polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
+  forwardSolver->set_uniform_G();
+  forwardSolver->initialize_pre_computes();
+  G = forwardSolver->get_G();
   // // WJFASJFJAFKAKFAKLF
   // // printf("updating stuff\n");
   // forwardSolver->set_G(G);
   // printf("fwd3D precomputes \n");
   // forwardSolver->initialize_pre_computes();
-  // // update_solver_and_boundaries();
-  // update_visuals_with_G();
+  update_solver_and_boundaries();
+  update_visuals_with_G();
 
   //DEBUG
-  FaceData<Vector3> debugg_normals(*forwardSolver->hullMesh, Vector3({0.,0.,0.}));
-  debugg_normals[105] = forwardSolver->hullGeometry->faceNormal(forwardSolver->hullMesh->face(105)) * 3;
-  debugg_normals[812] = forwardSolver->hullGeometry->faceNormal(forwardSolver->hullMesh->face(812)) * 3;
-  polyscope::getSurfaceMesh("input mesh")->addFaceVectorQuantity("debugg vis normals ", debugg_normals)->setEnabled(true);
+  // FaceData<Vector3> debugg_normals(*forwardSolver->hullMesh, Vector3({0.,0.,0.}));
+  // debugg_normals[105] = forwardSolver->hullGeometry->faceNormal(forwardSolver->hullMesh->face(105)) * 3;
+  // debugg_normals[812] = forwardSolver->hullGeometry->faceNormal(forwardSolver->hullMesh->face(812)) * 3;
+  // polyscope::getSurfaceMesh("input mesh")->addFaceVectorQuantity("debugg vis normals ", debugg_normals)->setEnabled(true);
   
 }
 
