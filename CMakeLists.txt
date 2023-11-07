@@ -61,6 +61,7 @@ endif()
 # == Deps
 add_subdirectory(deps/geometry-central)
 add_subdirectory(deps/polyscope)
+add_subdirectory(deps/qhull)
 # add_subdirectory(deps/pymesh)
 # add_subdirectory(deps/bullet3)
 # == Build our project stuff
@@ -108,6 +109,7 @@ set(inverse_SRCS
   src/markov_model.cpp
   src/boundary_tools.cpp
   src/inv_design.cpp
+  src/convex_hull.cpp
 	# add any other source files here
 )
 
@@ -130,12 +132,18 @@ target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include
 target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 target_link_libraries(polyhedra geometry-central polyscope)
 
+
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
+# SET(qhull_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/build")
+# Find_Package(qhull)
 add_executable(invDesign "${inverse_SRCS}")
+# target_link_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
+# target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
+target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 # add the args.hxx project which we use for command line args
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_link_libraries(invDesign geometry-central polyscope)
+target_link_libraries(invDesign PUBLIC geometry-central polyscope qhullcpp qhullstatic_r qhull_r libqhull_r)
 
 
 # Bullet stuff
