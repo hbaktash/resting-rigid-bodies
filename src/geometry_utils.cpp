@@ -109,8 +109,13 @@ std::pair<Vector3, double> find_center_of_mass(ManifoldSurfaceMesh &mesh, Vertex
             next_he = next_he.next();
         }
     }
-    if (total_volume < 0)
+    if (total_volume < 0){
         throw std::logic_error("total vol < 0; proly bad normal orientation\n");
+        // total_volume *= -1.;
+        // for (Face f: mesh.faces())
+        //     mesh.invertOrientation(f);
+    }
+
     return {G/total_volume, total_volume};
 }
 

@@ -175,7 +175,7 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
   std::set<std::pair<size_t, size_t>> drawn_pairs;
   // printf("showing boundary patches\n");
   // printf("  building pairs\n ");
-  for (Edge e: boundary_builder->mesh->edges()){
+  for (Edge e: boundary_builder->forward_solver->hullMesh->edges()){
     for (BoundaryNormal *tmp_bnd_normal: boundary_builder->edge_boundary_normals[e]){
       if (tmp_bnd_normal != nullptr){
         Vector3 tmp_normal = tmp_bnd_normal->normal;
@@ -198,7 +198,7 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
   ind_pairs_vector.assign(drawn_pairs.begin(), drawn_pairs.end());
   std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
   hosting_psMesh = polyscope::registerSurfaceMesh("dummy mesh for GM patch arcs", 
-                                                  boundary_builder->geometry->inputVertexPositions, dummy_face);
+                                                  boundary_builder->forward_solver->hullGeometry->inputVertexPositions, dummy_face);
   // printf("  drawing the arc network on GM\n ");
   draw_arc_network_on_sphere(ind_pairs_vector, boundary_normals, 
                             center, radius, seg_count, 
@@ -206,7 +206,7 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
   if (on_height_surface){
     // printf("  drawing the arc network on height surface\n ");
     polyscope::SurfaceMesh* hosting_psMesh2 = polyscope::registerSurfaceMesh("dummy mesh: height_surface regions", 
-                                                     boundary_builder->geometry->inputVertexPositions, 
+                                                     boundary_builder->forward_solver->hullGeometry->inputVertexPositions, 
                                                      dummy_face);
     draw_arc_network_on_lifted_suface(ind_pairs_vector, boundary_normals, *boundary_builder->forward_solver, 
                                       center, 0., seg_count, 

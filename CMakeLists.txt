@@ -82,6 +82,7 @@ set(polyhedra_SRCS
   src/visual_utils.cpp
   src/markov_model.cpp
   src/boundary_tools.cpp
+  src/convex_hull.cpp
 	# add any other source files here
 )
 
@@ -95,6 +96,7 @@ set(bullet_SRCS
   src/visual_utils.cpp
   src/arc_algebra.cpp
   src/boundary_tools.cpp
+  src/convex_hull.cpp
   # add any other source files here
 )
 
@@ -127,10 +129,11 @@ target_link_libraries(polygons geometry-central polyscope)
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 add_executable(polyhedra "${polyhedra_SRCS}")
+target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
 target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 # add the args.hxx project which we use for command line args
 target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_link_libraries(polyhedra geometry-central polyscope)
+target_link_libraries(polyhedra PUBLIC geometry-central polyscope qhullcpp qhullstatic_r)
 
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
@@ -143,7 +146,7 @@ target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qh
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 # add the args.hxx project which we use for command line args
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_link_libraries(invDesign PUBLIC geometry-central polyscope qhullcpp qhullstatic_r qhull_r libqhull_r)
+target_link_libraries(invDesign PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
 
 
 # Bullet stuff
@@ -157,9 +160,10 @@ add_executable(bullet_sim "${bullet_SRCS}")
 target_include_directories(bullet_sim PUBLIC ${BULLET_INCLUDE_DIR})
 target_compile_definitions(bullet_sim PUBLIC ${BULLET_DEFINITIONS})
 target_link_directories(bullet_sim PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
 target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 # add the args.hxx project which we use for command line args
 target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 
-target_link_libraries(bullet_sim PUBLIC BulletDynamics BulletCollision LinearMath geometry-central polyscope)
+target_link_libraries(bullet_sim PUBLIC BulletDynamics BulletCollision LinearMath geometry-central polyscope qhullcpp qhullstatic_r)
 # target_link_libraries(bullet_sim )

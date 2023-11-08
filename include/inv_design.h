@@ -52,6 +52,9 @@ class InverseSolver{
         // distribution goals
         void set_fair_distribution();
         void set_fair_distribution_for_sink_faces();
+        // smarter distribution update
+        std::vector<Vector3> old_stable_normals;
+        void update_fair_distribution();
 
         // gradient computation; assuming regularity
         // note: pf = face region area

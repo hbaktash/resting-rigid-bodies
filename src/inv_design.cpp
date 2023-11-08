@@ -71,8 +71,30 @@ void InverseSolver::set_fair_distribution_for_sink_faces(){
             count++;
     }
     for (Face f: forwardSolver->hullMesh->faces()){
-        if (flow_structure[f] == f)
+        if (flow_structure[f] == f){
             goal_area[f] = 1./(double)count;
+            old_stable_normals.push_back(forwardSolver->hullGeometry->faceNormal(f));
+        }
+    }
+}
+
+void InverseSolver::update_fair_distribution(){
+    double normal_threshold = 0.05;
+    size_t old_count = old_stable_normals.size();
+    double goal_prob = 1./(double)old_count;
+    std::vector<Face> new_stable_faces;
+    for(Vector3 old_stable_normal: old_stable_normals){
+        double closest_normal_dist = 10.; // anything < 2 would work
+        Face closest_face = Face();
+        for (Face f: forwardSolver->hullMesh->faces()){
+            if (flow_structure[f] == f){
+                Vector3 f_normal = forwardSolver->hullGeometry->faceNormal(f);
+                if ((old_stable_normal - f_normal).norm() < closest_normal_dist){
+                    closest_face = f;
+                }
+            }
+        }
+        new_stable_faces.push_back(closest_face);
     }
 }
 

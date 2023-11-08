@@ -37,14 +37,14 @@ void BoundaryNormal::add_neighbor(BoundaryNormal* _neigh) {
 // constructor
 BoundaryBuilder::BoundaryBuilder(Forward3DSolver *forward_solver_){
     forward_solver = forward_solver_;
-    mesh = forward_solver->hullMesh;
-    geometry = forward_solver->hullGeometry;
+    // mesh = forward_solver->hullMesh;
+    // geometry = forward_solver->hullGeometry;
 }
 
 
 void BoundaryBuilder::build_boundary_normals(){
-    vertex_boundary_normal = VertexData<BoundaryNormal*>(*mesh, nullptr);
-    edge_boundary_normals  = EdgeData<std::vector<BoundaryNormal*>>(*mesh);
+    vertex_boundary_normal = VertexData<BoundaryNormal*>(*forward_solver->hullMesh, nullptr);
+    edge_boundary_normals  = EdgeData<std::vector<BoundaryNormal*>>(*forward_solver->hullMesh);
     
     BoundaryNormal::counter = 0;
     // 
@@ -53,7 +53,7 @@ void BoundaryBuilder::build_boundary_normals(){
     printf("  buidling face-last-face\n");
     forward_solver->build_face_last_faces(); // calls face next face within
     printf("  finding terminal edges \n");
-    for (Edge e: mesh->edges()){
+    for (Edge e: forward_solver->hullMesh->edges()){
         if (forward_solver->edge_next_vertex[e].getIndex() == INVALID_IND){
             Face f1 = e.halfedge().face(),
                  f2 = e.halfedge().twin().face();
@@ -74,8 +74,8 @@ void BoundaryBuilder::build_boundary_normals(){
     }
 
     // for quick assignment of face-boundary-loops
-    face_attraction_boundary = FaceData<std::vector<BoundaryNormal*>>(*mesh);
-    face_region_area = FaceData<double>(*mesh, 0.);
+    face_attraction_boundary = FaceData<std::vector<BoundaryNormal*>>(*forward_solver->hullMesh);
+    face_region_area = FaceData<double>(*forward_solver->hullMesh, 0.);
     // back-flow them all..
     printf("  back-flowing terminal edges \n");
     for (Edge e: terminal_edges){
@@ -84,11 +84,11 @@ void BoundaryBuilder::build_boundary_normals(){
         BoundaryNormal *bnd_normal = edge_boundary_normals[e].front();
         for (Vertex v: {e.firstVertex(), e.secondVertex()}){
             Vector3 tmp_normal = bnd_normal->normal,
-                    f1_normal = geometry->faceNormal(bnd_normal->f1),
-                    f2_normal = geometry->faceNormal(bnd_normal->f2),
+                    f1_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f1),
+                    f2_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f2),
                     v_normal = forward_solver->vertex_stable_normal[v];
-            // Vector3 imm_f1_normal = geometry->faceNormal(e.halfedge().face()), // immediate face neighbors
-            //         imm_f2_normal = geometry->faceNormal(e.halfedge().twin().face());
+            // Vector3 imm_f1_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().face()), // immediate face neighbors
+            //         imm_f2_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().twin().face());
             
             double f1_area_sign = dot(f1_normal, cross(v_normal, tmp_normal)) >= 0 ? 1. : -1.;
             if (forward_solver->vertex_is_stabilizable[v])
@@ -106,7 +106,7 @@ void BoundaryBuilder::build_boundary_normals(){
             }
         }
     }
-    for (Face f: mesh->faces()){
+    for (Face f: forward_solver->hullMesh->faces()){
         if (face_region_area[f] > 0)
             face_region_area[f] /= (4.*PI); // sum to one
     }}
@@ -151,8 +151,8 @@ void BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
             //     return; // this source edge is not a source for this boundary normal 
 
             Vector3 vertex_stable_normal = forward_solver->vertex_stable_normal[v],
-                    tmp_f1_normal = geometry->faceNormal(f1),
-                    tmp_f2_normal = geometry->faceNormal(f2);
+                    tmp_f1_normal = forward_solver->hullGeometry->faceNormal(f1),
+                    tmp_f2_normal = forward_solver->hullGeometry->faceNormal(f2);
             Vector3 e_bnd_normal = intersect_arc_ray_with_arc(vertex_stable_normal, bnd_normal->normal, 
                                                             tmp_f1_normal, tmp_f2_normal);
             // printf("at tmp_e %d, %d. side v %d. e: %d, %d \n", dest_e.firstVertex().getIndex(), dest_e.secondVertex().getIndex(), v.getIndex(), e.firstVertex().getIndex(), e.secondVertex().getIndex());
@@ -211,7 +211,7 @@ void BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
 
 void BoundaryBuilder::print_area_of_boundary_loops(){
     printf(" Face probs:\n");
-    for (Face f: mesh->faces()){
+    for (Face f: forward_solver->hullMesh->faces()){
         if (face_region_area[f] > 0){
             // face_region_area[f] /= (4.*PI);
             printf(" f %d: %f\n", f.getIndex(), face_region_area[f]);

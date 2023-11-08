@@ -68,6 +68,16 @@ Vector3 Forward3DSolver::get_G(){
     return G; 
 }
 
+void Forward3DSolver::update_convex_hull(){
+    printf(" -- updating convex hull -- \n");
+    std::unique_ptr<ManifoldSurfaceMesh> mesh_uptr;
+    std::unique_ptr<VertexPositionGeometry> geometry_uptr;
+    std::tie(mesh_uptr, geometry_uptr) = get_convex_hull(hullGeometry->inputVertexPositions);
+    hullMesh = mesh_uptr.release();
+    hullGeometry = geometry_uptr.release();
+    inputMesh = hullMesh;
+    inputGeometry = hullGeometry;
+}
 
 // height from G to ground after contact
 double Forward3DSolver::height_function(Vector3 ground_normal){
@@ -494,7 +504,7 @@ void Forward3DSolver::build_face_last_faces(){
     for (Face f: hullMesh->faces()){
         if (face_last_face[f].getIndex() != INVALID_IND)
          continue;
-        printf(" at face %d\n", f.getIndex());
+        // printf(" at face %d\n", f.getIndex());
         Face temp_f = f;
         std::vector<Face> faces_history;
         faces_history.push_back(temp_f);
@@ -506,7 +516,7 @@ void Forward3DSolver::build_face_last_faces(){
         for (Face stored_f: faces_history) {
             face_last_face[stored_f] = temp_f;
         }
-        printf(" ++ final face %d \n", temp_f.getIndex());
+        // printf(" ++ final face %d \n", temp_f.getIndex());
     }
 }
 

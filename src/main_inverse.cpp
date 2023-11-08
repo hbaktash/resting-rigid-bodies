@@ -112,8 +112,8 @@ float step_size = 0.01,
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc"), std::string("bunny"), std::string("bunnylp")};
-std::string all_polygons_current_item = "tet";
-static const char* all_polygons_current_item_c_str = "tet";
+std::string all_polygons_current_item = "sliced tet";
+static const char* all_polygons_current_item_c_str = "sliced tet";
 
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
@@ -217,7 +217,6 @@ void update_visuals_with_G(){
   vis_utils.draw_G();
   if (gm_is_drawn)
     vis_utils.plot_height_function();
-  
   // stuff on the polyhedra
   auto t1 = clock();
   // visualize_edge_stability();
@@ -343,7 +342,8 @@ void take_uni_mass_opt_vertices_step(){
   forwardSolver->set_uniform_G();
   forwardSolver->initialize_pre_computes();
   inverseSolver->find_uni_mass_d_pf_dv();
-  if (structured_opt){
+  printf(" uni mass derivatives found!\n");
+  if (structured_opt){ // if updating the flow structure
     boundary_builder->build_boundary_normals();
     boundary_builder->print_area_of_boundary_loops();
     if (first_time || always_update_structure){
@@ -351,11 +351,10 @@ void take_uni_mass_opt_vertices_step(){
       first_time = false;
     }
   }
+  printf(" finding total per vertex derivatives\n");
   VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt);
-  // translation 
-  // Vertex v0 = forwardSolver->hullMesh->vertex(0);
-  // for (Vertex v: forwardSolver->hullMesh->vertices())
-  //   total_uni_mass_vertex_grads[v] -= total_uni_mass_vertex_grads[v0];
+  printf(" total per vertex derivatives found!\n");
+
   VertexData<Vector3> new_poses(*forwardSolver->hullMesh);
   forwardSolver->hullGeometry->inputVertexPositions += step_size3 * total_uni_mass_vertex_grads;
   // DEBUG
@@ -364,24 +363,20 @@ void take_uni_mass_opt_vertices_step(){
   //                                            forwardSolver->hullMesh->getFaceVertexList());
 
   // costly
-  polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
+  polyscope::registerSurfaceMesh("pre-hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
                                                  forwardSolver->hullMesh->getFaceVertexList());
-  if (check_convexity_and_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry)){
-    polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                                 forwardSolver->hullMesh->getFaceVertexList());
-  }
-  else 
-    polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
+  forwardSolver->update_convex_hull();
+  polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
+                                               forwardSolver->hullMesh->getFaceVertexList());
   forwardSolver->set_uniform_G();
-  forwardSolver->initialize_pre_computes();
   G = forwardSolver->get_G();
+  update_solver_and_boundaries();
+  update_visuals_with_G();
   // // WJFASJFJAFKAKFAKLF
   // // printf("updating stuff\n");
   // forwardSolver->set_G(G);
   // printf("fwd3D precomputes \n");
   // forwardSolver->initialize_pre_computes();
-  update_solver_and_boundaries();
-  update_visuals_with_G();
 
   //DEBUG
   // FaceData<Vector3> debugg_normals(*forwardSolver->hullMesh, Vector3({0.,0.,0.}));
@@ -523,6 +518,7 @@ int main(int argc, char **argv) {
   generate_polyhedron_example(all_polygons_current_item);
   G = {0.,0,0};
   update_solver();
+  // convex_hull(forwardSolver->hullGeometry->inputVertexPositions);
   // build the solver
 
   // Initialize polyscope
@@ -536,6 +532,7 @@ int main(int argc, char **argv) {
   
   // Give control to the polyscope gui
   polyscope::show();
+  
 
   return EXIT_SUCCESS;
 }

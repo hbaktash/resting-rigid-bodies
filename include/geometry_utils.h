@@ -32,8 +32,8 @@ double ray_intersect(Vector3 O, Vector3 r, std::vector<Vector3> polygon);
 
 double polygonal_face_area(Face f, VertexPositionGeometry &geometry);
 
-std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
-convex_hull(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geometry);
+// std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
+// convex_hull(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geometry);
 
 
 bool G_is_inside(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry, Vector3 G);

@@ -20,6 +20,7 @@
 
 #include "arc_algebra.h"
 #include "geometry_utils.h"
+#include "convex_hull.h"
 
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
@@ -69,6 +70,9 @@ class Forward3DSolver {
     void set_G(Vector3 new_G);
     void set_uniform_G();
     Vector3 get_G();
+
+    // geometry updates
+    void update_convex_hull();
 
     // initialize state
     void initialize_state(Vertex curr_v, Edge curr_e, Face curr_f, Vector3 curr_g_vec);

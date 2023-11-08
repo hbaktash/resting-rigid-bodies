@@ -56,8 +56,8 @@ class BoundaryBuilder {
         Forward3DSolver* forward_solver;
         // assuming convexity
         // "same" pointer as the one in forward solver; here for easier access
-        ManifoldSurfaceMesh* mesh;
-        VertexPositionGeometry* geometry;
+        // ManifoldSurfaceMesh* mesh;
+        // VertexPositionGeometry* geometry;
         
         // constructor
         BoundaryBuilder(Forward3DSolver *forward_solver_);
