@@ -108,7 +108,7 @@ InverseSolver* inverseSolver;
 float step_size = 0.01,
       step_size2 = 0.01,
       step_size3 = 0.01;
-
+float stable_normal_update_thresh = -1;
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc"), std::string("bunny"), std::string("bunnylp")};
@@ -348,11 +348,13 @@ void take_uni_mass_opt_vertices_step(){
     boundary_builder->print_area_of_boundary_loops();
     if (first_time || always_update_structure){
       inverseSolver->flow_structure = forwardSolver->face_last_face;
+      if (first_time) stable_normal_update_thresh = -1.;
+      else stable_normal_update_thresh = 0.1;
       first_time = false;
     }
   }
   printf(" finding total per vertex derivatives\n");
-  VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt);
+  VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt, stable_normal_update_thresh);
   printf(" total per vertex derivatives found!\n");
 
   VertexData<Vector3> new_poses(*forwardSolver->hullMesh);
@@ -467,48 +469,55 @@ void myCallback() {
   }
   if (ImGui::Checkbox("draw boundary patches", &draw_boundary_patches)) draw_stable_patches_on_gauss_map();
   if (ImGui::Checkbox("test guess", &test_guess)) draw_stable_patches_on_gauss_map();
-  if (ImGui::Button("take fair step (move G)")) {
-    take_opt_G_step();
-  }
   if (ImGui::Button("FD (move G)")) {
     inverseSolver->find_d_pf_d_Gs(true);
   }
+  if (ImGui::Button("take fair step (move G)")) {
+    take_opt_G_step();
+  }
   if (ImGui::SliderFloat("step size", &step_size, 0., 0.10));
   
-  if (ImGui::Button("take fair step (move vertices)")) {
-    take_opt_vertices_step();
-  }
   if (ImGui::Button("FD (move vertices)")) {
     inverseSolver->find_d_pf_dvs(true);
   }
+  if (ImGui::Button("take fair step (move vertices)")) {
+    take_opt_vertices_step();
+  }
   if (ImGui::SliderFloat("step size 2", &step_size2, 0., 0.10));
 
+  if (ImGui::Button("joint gradient (FD)")) {
+    forwardSolver->set_uniform_G();
+    forwardSolver->initialize_pre_computes();
+    inverseSolver->find_uni_mass_d_pf_dv(true);
+  }
   if (ImGui::Button("take fair step (joint gradient)")) {
     take_uni_mass_opt_vertices_step();
   }
   if (ImGui::SliderFloat("step size 3", &step_size3, 0., 1.0));
   if (ImGui::Checkbox("structured opt", &structured_opt));
   if (ImGui::Checkbox("update structured at every step", &always_update_structure));
-  if (ImGui::Button("simplify")) {
-    polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                             forwardSolver->hullMesh->getFaceVertexList());
-    Edge e = single_convexity_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry);
-    polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                             forwardSolver->hullMesh->getFaceVertexList());
-    if (e.getIndex() != INVALID_IND){
-      Vertex v1 = e.firstVertex(),
-             v2 = e.secondVertex(),
-             v3 = e.halfedge().next().tipVertex(),
-             v4 = e.halfedge().twin().next().tipVertex();
-      std::vector<std::vector<size_t>> ff({{0, 1, 2}, {0,1,3}});
-      std::vector<Vector3> possss({forwardSolver->hullGeometry->inputVertexPositions[v1],
-                                                   forwardSolver->hullGeometry->inputVertexPositions[v2],
-                                                   forwardSolver->hullGeometry->inputVertexPositions[v3],
-                                                   forwardSolver->hullGeometry->inputVertexPositions[v4]});
-      polyscope::registerSurfaceMesh("temp mesh", possss,
-                                             ff);  
-    }
-  }
+  if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 1.0));
+  
+  // if (ImGui::Button("simplify")) {
+  //   polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
+  //                                            forwardSolver->hullMesh->getFaceVertexList());
+  //   Edge e = single_convexity_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry);
+  //   polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
+  //                                            forwardSolver->hullMesh->getFaceVertexList());
+  //   if (e.getIndex() != INVALID_IND){
+  //     Vertex v1 = e.firstVertex(),
+  //            v2 = e.secondVertex(),
+  //            v3 = e.halfedge().next().tipVertex(),
+  //            v4 = e.halfedge().twin().next().tipVertex();
+  //     std::vector<std::vector<size_t>> ff({{0, 1, 2}, {0,1,3}});
+  //     std::vector<Vector3> possss({forwardSolver->hullGeometry->inputVertexPositions[v1],
+  //                                                  forwardSolver->hullGeometry->inputVertexPositions[v2],
+  //                                                  forwardSolver->hullGeometry->inputVertexPositions[v3],
+  //                                                  forwardSolver->hullGeometry->inputVertexPositions[v4]});
+  //     polyscope::registerSurfaceMesh("temp mesh", possss,
+  //                                            ff);  
+  //   }
+  // }
 }
 
 

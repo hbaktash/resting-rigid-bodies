@@ -470,7 +470,7 @@ void Forward3DSolver::build_face_next_faces(){
     for (Face f: hullMesh->faces()){
         // printf("at face %d\n", f.getIndex());
         initialize_state(Vertex(), Edge(), f, hullGeometry->faceNormal(f)); // assuming outward normals
-        bool verbose = f.getIndex() == 812 || f.getIndex() == 105; //false; //
+        bool verbose = false; //f.getIndex() == 812 || f.getIndex() == 105; //
         next_state(verbose); // could roll to an edge
         size_t count = 0;
         while (curr_f.getIndex() == INVALID_IND){
@@ -522,15 +522,15 @@ void Forward3DSolver::build_face_last_faces(){
 
 // just call all the pre-compute initializations; not face-last-face
 void Forward3DSolver::initialize_pre_computes(){
-    printf("precomputes:\n");
-    printf("  vertex stability:\n");
+    // printf("precomputes:\n");
+    // printf("  vertex stability:\n");
     compute_vertex_stabilizablity();
-    printf("  vertex gauss curvature:\n");
+    // printf("  vertex gauss curvature:\n");
     compute_vertex_gaussian_curvatures();
-    printf("  edge stability:\n");
+    // printf("  edge stability:\n");
     compute_edge_stable_normals();
-    printf("  building face next faces:\n");
+    // printf("  building face next faces:\n");
     build_face_next_faces(); // 
-    printf("done!\n");
+    // printf("done!\n");
     updated = true;
 }

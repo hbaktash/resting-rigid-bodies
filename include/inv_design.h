@@ -44,7 +44,7 @@ class InverseSolver{
         Forward3DSolver* forwardSolver;
         BoundaryBuilder* boundaryBuilder;
 
-        FaceData<double> goal_area;
+        FaceData<double> goal_prob;
 
         InverseSolver(){}
         InverseSolver(BoundaryBuilder* boundaryBuilder);
@@ -54,32 +54,32 @@ class InverseSolver{
         void set_fair_distribution_for_sink_faces();
         // smarter distribution update
         std::vector<Vector3> old_stable_normals;
-        void update_fair_distribution();
+        void update_fair_distribution(double normal_threshold);
 
         // gradient computation; assuming regularity
         // note: pf = face region area
         // G grad; vertices frozen
-        FaceData<Vector3> d_pf_d_G;
+        FaceData<Vector3> d_pf_d_G;            // convex-hull related
         void find_d_pf_d_Gs(bool check_FD = false);
         // accumulate over all faces
         Vector3 find_total_g_grad();
         // vertex grad; G frozen
-        FaceData<VertexData<Vector3>> d_pf_dv;
-        void find_d_pf_dvs(bool check_FD = false);
+        FaceData<VertexData<Vector3>> d_pf_dv; // convex-hull related
+        void find_d_pf_dvs(bool check_FD = false); 
         // accumulate over all faces
         VertexData<Vector3> find_total_vertex_grads();
-        
 
         // Uniform mass; G is dependent of Geometry
         // DG/dv
-        VertexData<DenseMatrix<double>> dG_dv;
-        void find_dG_dvs();
+        VertexData<DenseMatrix<double>> dG_dv; // interior vertex related
+        void find_dG_dvs();                    
         // dp_f/dv
         FaceData<VertexData<Vector3>> uni_mass_d_pf_dv;
         // after chain and product rule
         void find_uni_mass_d_pf_dv(bool check_FD = false);
         // accumulate over all faces
         FaceData<Face> flow_structure;
-        VertexData<Vector3> find_uni_mass_total_vertex_grads(bool with_flow_structure = false);
+        VertexData<Vector3> find_uni_mass_total_vertex_grads(bool with_flow_structure = false,
+                                                             double stable_normal_update_thres = -1.);
         
 };

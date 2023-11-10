@@ -370,7 +370,7 @@ void VisualUtils::draw_gauss_map(){
   gm_sphere_mesh->setSmoothShade(true);
   gm_sphere_mesh->setSurfaceColor({0.74,0.7,0.9});
   // surface and colormap
-  plot_height_function();  
+  plot_height_function();
   
   // face normals on Gauss map
   draw_stable_face_normals_on_gauss_map();

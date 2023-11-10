@@ -50,9 +50,9 @@ void BoundaryBuilder::build_boundary_normals(){
     // 
     std::vector<Edge> terminal_edges;
     // 
-    printf("  buidling face-last-face\n");
+    // printf("  buidling face-last-face\n");
     forward_solver->build_face_last_faces(); // calls face next face within
-    printf("  finding terminal edges \n");
+    // printf("  finding terminal edges \n");
     for (Edge e: forward_solver->hullMesh->edges()){
         if (forward_solver->edge_next_vertex[e].getIndex() == INVALID_IND){
             Face f1 = e.halfedge().face(),
@@ -77,7 +77,7 @@ void BoundaryBuilder::build_boundary_normals(){
     face_attraction_boundary = FaceData<std::vector<BoundaryNormal*>>(*forward_solver->hullMesh);
     face_region_area = FaceData<double>(*forward_solver->hullMesh, 0.);
     // back-flow them all..
-    printf("  back-flowing terminal edges \n");
+    // printf("  back-flowing terminal edges \n");
     for (Edge e: terminal_edges){
         // printf("- starting at terminal edge: %d\n", e.getIndex());
         assert(edge_boundary_normals[e].size() == 1);
@@ -106,10 +106,11 @@ void BoundaryBuilder::build_boundary_normals(){
             }
         }
     }
-    for (Face f: forward_solver->hullMesh->faces()){
-        if (face_region_area[f] > 0)
-            face_region_area[f] /= (4.*PI); // sum to one
-    }}
+    // for (Face f: forward_solver->hullMesh->faces()){
+    //     if (face_region_area[f] > 0)
+    //         face_region_area[f] /= (4.*PI); // sum to one
+    // }
+}
 
 
 
@@ -214,7 +215,7 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
     for (Face f: forward_solver->hullMesh->faces()){
         if (face_region_area[f] > 0){
             // face_region_area[f] /= (4.*PI);
-            printf(" f %d: %f\n", f.getIndex(), face_region_area[f]);
+            printf(" f %d: %f\n", f.getIndex(), face_region_area[f]/(4*PI));
         }
     }
     // std::cout << face_region_area.toVector().transpose()<< "\n";
