@@ -288,11 +288,15 @@ generate_polyhedra(std::string poly_str){
         std::cout << "pos: " << pos << "\n";
       }
     }
-    else if (std::strcmp(poly_str.c_str(), "bunny") == 0){
+    else if (std::strcmp(poly_str.c_str(), "bunny-hull") == 0){
       std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/bunny-convhull.obj");
       return std::make_tuple(std::move(mesh), std::move(geometry));
     }
     else if (std::strcmp(poly_str.c_str(), "bunnylp") == 0){
+      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/bunny-lp.stl");
+      return std::make_tuple(std::move(mesh), std::move(geometry));
+    }
+    else if (std::strcmp(poly_str.c_str(), "bunnylp-hull") == 0){
       std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/bunny-lp-convhull.obj");
       return std::make_tuple(std::move(mesh), std::move(geometry));
     }

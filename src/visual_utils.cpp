@@ -568,7 +568,7 @@ void VisualUtils::visualize_face_stability(){
     else
       fColor[f.getIndex()] = {0.9, 0.9, 1.};
   }
-  polyscope::SurfaceMesh* psInputMesh = polyscope::getSurfaceMesh("input mesh");
+  polyscope::SurfaceMesh* psInputMesh = polyscope::getSurfaceMesh("hull mesh");
   polyscope::SurfaceFaceColorQuantity *faceQnty =  psInputMesh->addFaceColorQuantity("face stability", fColor);
   faceQnty->setEnabled(true);
 }
@@ -578,7 +578,7 @@ void VisualUtils::visualize_colored_polyhedra(FaceData<Vector3> face_colors){
   for (Vertex v: forwardSolver->hullMesh->vertices()){
     shifted_positions[v] = forwardSolver->hullGeometry->inputVertexPositions[v] + colored_shift;
   }
-  printf("hull faces: %d color size: %d \n", forwardSolver->hullMesh->nFaces(), face_colors.size());
+  // printf("hull faces: %d color size: %d \n", forwardSolver->hullMesh->nFaces(), face_colors.size());
   polyscope::SurfaceMesh* coloredPsMesh = polyscope::registerSurfaceMesh("colored polyhedra", shifted_positions, forwardSolver->hullMesh->getFaceVertexList());
   // generate random colors and color the faces
   polyscope::SurfaceFaceColorQuantity *faceQnty = coloredPsMesh->addFaceColorQuantity("random face colors", face_colors);

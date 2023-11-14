@@ -19,7 +19,8 @@
 #include "convex_hull.h"
 
 
-std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
+// std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
+std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>, std::vector<Vector3>>
 get_convex_hull(VertexData<Vector3> point_set){
     const size_t num_points = point_set.size();
     const size_t dim = 3;
@@ -35,9 +36,8 @@ get_convex_hull(VertexData<Vector3> point_set){
     coordT* data = new coordT[num_points * dim];
     std::copy(pset_flat_vec.begin(), pset_flat_vec.end(), data);
     Qhull qhull("n", 3, num_points, data, "QJ Q3");
-    // qhull.qhullCommand();
-    // qhull.setOutputStream(&std::cout);
-    // qhull.outputQhull();
+    
+    // make data structures
     size_t my_count = 0, max_ind = 0;
     std::vector<size_t> indices;
     for (QhullVertex qvertex: qhull.vertexList()){
@@ -52,12 +52,17 @@ get_convex_hull(VertexData<Vector3> point_set){
     std::vector<Vector3> poses(qhull.vertexCount());  // 
     std::sort(indices.begin(), indices.end());
     std::map<size_t, size_t> re_indexing;
-    // std::cout<<"\n";
     for (size_t i = 0; i < indices.size(); i++){
-        // printf(" %d", indices[i]);
         re_indexing[indices[i]] = i;
     }
-    // printf("\n");
+
+    // tracing old vertices
+    std::vector<size_t> old_indices(qhull.vertexCount());
+    for (QhullVertex qvertex: qhull.vertexList()){
+        size_t old_ind = qvertex.point().id();
+        old_indices[re_indexing[qvertex.id() - 1]] = old_ind;
+        // printf("old index %d new index- %d\n", old_ind, re_indexing[qvertex.id() - 1]);
+    }
     for (QhullFacet qfacet: qhull.facetList().toStdVector()){
         std::vector<size_t> hull_face;
         // std::cout << qfacet << "\n";
@@ -85,6 +90,7 @@ get_convex_hull(VertexData<Vector3> point_set){
     std::unique_ptr<VertexPositionGeometry> geometry;
     SurfaceMesh* surf_mesh = new SurfaceMesh(hull_faces);
     surf_mesh->greedilyOrientFaces();
+
     // make sure of outward orientation; can't qhull just do it ?????!
     Face f0 = surf_mesh->face(0);
     Vertex v0 = f0.halfedge().tailVertex(),
@@ -96,41 +102,17 @@ get_convex_hull(VertexData<Vector3> point_set){
     Vector3 p_other = poses[f0.halfedge().twin().next().tipVertex().getIndex()]; // damn you qhull!!!!
     if (dot(p_other - p0, cross(p1 - p0, p2 - p1)) > 0.){
         surf_mesh->invertOrientation(f0);
-        surf_mesh->greedilyOrientFaces(); // will start with f0 hopefully!
-        // printf("old oris\n");
-        // for (Face f: surf_mesh->faces()){
-        //         for (Vertex tv: f.adjacentVertices())
-        //             printf(" %d", tv.getIndex());
-        //         printf("\n");
-        //         // surf_mesh->invertOrientation(f);
-        // }
-        // std::vector<std::vector<size_t>> re_ori_faces;
-        // for (Face f: surf_mesh->faces()){
-        //     std::vector<size_t> re_ori_face;
-        //     for (Vertex v: f.adjacentVertices())
-        //         re_ori_face.push_back(v.getIndex());
-        //     std::reverse(re_ori_face.begin(), re_ori_face.end());
-        //     re_ori_faces.push_back(re_ori_face);
-        // }
-        // surf_mesh = new SurfaceMesh(re_ori_faces);
-        
-        // printf("new oris\n");
-        // for (Face f: surf_mesh->faces()){
-        //     for (Vertex tv: f.adjacentVertices())
-        //         printf(" %d", tv.getIndex());
-        //     printf("\n");
-            // surf_mesh->invertOrientation(f);
-        // }
+        surf_mesh->greedilyOrientFaces(); // will start with f0!
     }
     surf_mesh->compress();
 
-    mesh = std::unique_ptr<ManifoldSurfaceMesh>(new ManifoldSurfaceMesh(surf_mesh->getFaceVertexList())); //  surf_mesh->toManifoldMesh()
-    // mesh.reset(new ManifoldSurfaceMesh(hull_faces));
-    geometry = std::unique_ptr<VertexPositionGeometry>(new VertexPositionGeometry(*mesh));
-    for (Vertex v : mesh->vertices()) {
-        // Use the low-level indexers here since we're constructing
-        (*geometry).inputVertexPositions[v] = poses[v.getIndex()];
-    }
-    return std::make_tuple(std::move(mesh), std::move(geometry));
-    // return nullptr;
+    return {surf_mesh->getFaceVertexList(), old_indices, poses};
+    // mesh = std::unique_ptr<ManifoldSurfaceMesh>(new ManifoldSurfaceMesh(surf_mesh->getFaceVertexList())); //  surf_mesh->toManifoldMesh()
+    // // mesh.reset(new ManifoldSurfaceMesh(hull_faces));
+    // geometry = std::unique_ptr<VertexPositionGeometry>(new VertexPositionGeometry(*mesh));
+    // for (Vertex v : mesh->vertices()) {
+    //     // Use the low-level indexers here since we're constructing
+    //     (*geometry).inputVertexPositions[v] = poses[v.getIndex()];
+    // }
+    // return std::make_tuple(std::move(mesh), std::move(geometry));
 }

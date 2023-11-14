@@ -49,6 +49,10 @@ class Forward3DSolver {
     ManifoldSurfaceMesh* hullMesh;
     VertexPositionGeometry* hullGeometry;
 
+    // hull <-> mesh mapping
+    VertexData<size_t> org_hull_indices; //hull vertex indices in the original mesh
+
+
     // current state; for simulation 
     Vertex curr_v;
     Edge curr_e;

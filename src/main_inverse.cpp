@@ -66,7 +66,7 @@ VertexPositionGeometry* sphere_geometry;
         
 
 // Polyscope visualization handle, to quickly add data to the surface
-polyscope::SurfaceMesh *psInputMesh;
+polyscope::SurfaceMesh *psInputMesh, *psHullMesh;
 
 polyscope::PointCloud *raster_pc;
 
@@ -86,7 +86,7 @@ int sample_count = 8000;
 FaceData<Vector3> face_colors;
 bool recolor_faces = true,
      real_time_raster = false,
-     draw_point_cloud = false,
+     draw_point_cloud = true,
      normalize_vecF = true;
 glm::vec3 vecF_color({0.1, 0.1, 0.1});
 
@@ -111,7 +111,7 @@ float step_size = 0.01,
 float stable_normal_update_thresh = -1;
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc"), std::string("bunny"), std::string("bunnylp")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc"), std::string("bunny-hull"), std::string("bunnylp"), std::string("bunnylp-hull")};
 std::string all_polygons_current_item = "sliced tet";
 static const char* all_polygons_current_item_c_str = "sliced tet";
 
@@ -126,7 +126,13 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
                                                on_height_surface);
     if (test_guess)
       vis_utils.draw_guess_pc(net_pair.first, net_pair.second);
+    else {
+      if (polyscope::hasPointCloud("test point cloud")) polyscope::removePointCloud("test point cloud");
+      if (polyscope::hasSurfaceMesh("dummy mesh for stable regions on polyhedra")) polyscope::removeSurfaceMesh("dummy mesh for stable regions on polyhedra");
+    }
   }
+  else
+    if (polyscope::hasSurfaceMesh("dummy mesh for GM patch arcs")) polyscope::removeSurfaceMesh("dummy mesh for GM patch arcs");
 }
 
 
@@ -161,10 +167,14 @@ void update_solver(){
   vis_utils.forwardSolver = forwardSolver;
   // Register the mesh with polyscope
   psInputMesh = polyscope::registerSurfaceMesh(
-      "input mesh",
-      geometry->inputVertexPositions, mesh->getFaceVertexList(),
-      polyscopePermutations(*mesh));
+    "input mesh",
+    geometry->inputVertexPositions, mesh->getFaceVertexList(),
+    polyscopePermutations(*mesh));
   psInputMesh->setTransparency(0.75);
+  psHullMesh = polyscope::registerSurfaceMesh(
+    "hull mesh",
+    forwardSolver->hullGeometry->inputVertexPositions, forwardSolver->hullMesh->getFaceVertexList(),
+    polyscopePermutations(*forwardSolver->hullMesh));
   vis_utils.draw_G();
   // psInputMesh->addFaceVectorQuantity("normals", geometry->faceNormals);
 }
@@ -190,7 +200,7 @@ void color_faces_with_default(){
 
 void color_faces(){
   if (recolor_faces){
-    printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
+    // printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
     face_colors = generate_random_colors(forwardSolver->hullMesh);
     for (Face f: forwardSolver->hullMesh->faces()){
       if (!forwardSolver->face_is_stable(f))
@@ -203,7 +213,7 @@ void color_faces(){
 void update_solver_and_boundaries(){
   auto t1 = clock();
   forwardSolver->set_G(G);
-  printf("fwd3D precomputes \n");
+  // printf("forward precomputes \n");
   forwardSolver->initialize_pre_computes();
   printf("building boundary normals \n");
   boundary_builder->build_boundary_normals();
@@ -329,18 +339,19 @@ void take_opt_vertices_step(){
   for (Vertex v: forwardSolver->hullMesh->vertices()){
     forwardSolver->hullGeometry->inputVertexPositions[v] += step_size2 * total_vertex_grads[v];
   }
-  polyscope::getSurfaceMesh("input mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
+  polyscope::getSurfaceMesh("hull mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
   update_solver_and_boundaries();
   update_visuals_with_G();
 }
 
-void check_fix_convexity(){
-
-}
 
 void take_uni_mass_opt_vertices_step(){
+
+  printf("finding uniform mass\n");
   forwardSolver->set_uniform_G();
+  printf("finding uniform mass\n");
   forwardSolver->initialize_pre_computes();
+  printf("finding derivatives\n");
   inverseSolver->find_uni_mass_d_pf_dv();
   printf(" uni mass derivatives found!\n");
   if (structured_opt){ // if updating the flow structure
@@ -357,34 +368,29 @@ void take_uni_mass_opt_vertices_step(){
   VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt, stable_normal_update_thresh);
   printf(" total per vertex derivatives found!\n");
 
-  VertexData<Vector3> new_poses(*forwardSolver->hullMesh);
-  forwardSolver->hullGeometry->inputVertexPositions += step_size3 * total_uni_mass_vertex_grads;
-  // DEBUG
-  
-  // polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
-  //                                            forwardSolver->hullMesh->getFaceVertexList());
 
-  // costly
-  polyscope::registerSurfaceMesh("pre-hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                                 forwardSolver->hullMesh->getFaceVertexList());
+  // update original mesh vertices; hull will be updated internally
+  for (Vertex v: forwardSolver->hullMesh->vertices()){
+    size_t old_id = forwardSolver->org_hull_indices[v];
+    forwardSolver->inputGeometry->inputVertexPositions[old_id] += step_size3 * total_uni_mass_vertex_grads[v];
+  }
+
+  polyscope::registerSurfaceMesh("input mesh", forwardSolver->inputGeometry->inputVertexPositions,
+                                                  forwardSolver->inputMesh->getFaceVertexList());
+  // update hull with new positions
   forwardSolver->update_convex_hull();
-  polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
+  polyscope::registerSurfaceMesh("hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
                                                forwardSolver->hullMesh->getFaceVertexList());
   forwardSolver->set_uniform_G();
   G = forwardSolver->get_G();
   update_solver_and_boundaries();
   update_visuals_with_G();
-  // // WJFASJFJAFKAKFAKLF
-  // // printf("updating stuff\n");
-  // forwardSolver->set_G(G);
-  // printf("fwd3D precomputes \n");
-  // forwardSolver->initialize_pre_computes();
-
+  
   //DEBUG
   // FaceData<Vector3> debugg_normals(*forwardSolver->hullMesh, Vector3({0.,0.,0.}));
   // debugg_normals[105] = forwardSolver->hullGeometry->faceNormal(forwardSolver->hullMesh->face(105)) * 3;
   // debugg_normals[812] = forwardSolver->hullGeometry->faceNormal(forwardSolver->hullMesh->face(812)) * 3;
-  // polyscope::getSurfaceMesh("input mesh")->addFaceVectorQuantity("debugg vis normals ", debugg_normals)->setEnabled(true);
+  // polyscope::getSurfaceMesh("hull mesh")->addFaceVectorQuantity("debugg vis normals ", debugg_normals)->setEnabled(true);
   
 }
 
@@ -426,7 +432,7 @@ void myCallback() {
     }
   }
   if (ImGui::Button("uniform mass G")){
-    G = find_center_of_mass(*mesh, *geometry).first;
+    G = find_center_of_mass(*forwardSolver->hullMesh, *forwardSolver->hullGeometry).first;
     update_solver_and_boundaries();
     update_visuals_with_G();
   }
@@ -442,10 +448,6 @@ void myCallback() {
     vis_utils.show_hidden_stable_vertex_normals = show_hidden_stable_vertex_normals;
     vis_utils.draw_stable_vertices_on_gauss_map();
   }
-  if (ImGui::Button("Draw patches")){
-    draw_stable_patches_on_gauss_map();
-  }
-  
   // my simulation 
   if (ImGui::SliderInt("sample count", &sample_count, 1000, 1000000));
   if (ImGui::Button("build raster image")){
@@ -453,20 +455,13 @@ void myCallback() {
     vis_utils.visualize_colored_polyhedra(face_colors);
     build_raster_image();
   }
-  if(ImGui::Button("recolor faces")){
-    recolor_faces = true;// so bad lol
-    color_faces();
-    vis_utils.visualize_colored_polyhedra(face_colors);
-  }
-  if (ImGui::Checkbox("draw point cloud", &draw_point_cloud));
+  // if(ImGui::Button("recolor faces")){
+  //   recolor_faces = true;// so bad lol
+  //   color_faces();
+  //   vis_utils.visualize_colored_polyhedra(face_colors);
+  // }
   if (ImGui::Checkbox("real time raster", &real_time_raster));
-  if (ImGui::Checkbox("normalize vector field", &normalize_vecF));
 
-  if (ImGui::Button("build and show region boundaries")) {
-    initialize_boundary_builder();
-    printf(" - pre patch draw!\n");
-    draw_stable_patches_on_gauss_map();
-  }
   if (ImGui::Checkbox("draw boundary patches", &draw_boundary_patches)) draw_stable_patches_on_gauss_map();
   if (ImGui::Checkbox("test guess", &test_guess)) draw_stable_patches_on_gauss_map();
   if (ImGui::Button("FD (move G)")) {
@@ -499,7 +494,7 @@ void myCallback() {
   if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 1.0));
   
   // if (ImGui::Button("simplify")) {
-  //   polyscope::registerSurfaceMesh("input mesh", forwardSolver->hullGeometry->inputVertexPositions,
+  //   polyscope::registerSurfaceMesh("hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
   //                                            forwardSolver->hullMesh->getFaceVertexList());
   //   Edge e = single_convexity_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry);
   //   polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,

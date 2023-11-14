@@ -265,12 +265,10 @@ void InverseSolver::find_dG_dvs(){
         forwardSolver->initialize_pre_computes();
     Vector3 G = forwardSolver->get_G();
     DenseMatrix<double> zmat = DenseMatrix<double>::Zero(3,3);
-    dG_dv = VertexData<DenseMatrix<double>>(*forwardSolver->hullMesh, zmat);
-    // for (Vertex v: forwardSolver->hullMesh->vertices())
-    //     dG_dv[v] = zmat;
-    for (Face f: forwardSolver->hullMesh->faces()){
+    dG_dv = VertexData<DenseMatrix<double>>(*forwardSolver->inputMesh, zmat);
+    for (Face f: forwardSolver->inputMesh->faces()){
         // double face_area = forwardSolver->inputGeometry->faceArea(f);
-        double face_area = polygonal_face_area(f, *forwardSolver->hullGeometry);
+        double face_area = polygonal_face_area(f, *forwardSolver->inputGeometry);
 
         Vector3 face_normal = forwardSolver->inputGeometry->faceNormal(f); // assuming outward normals
         size_t face_degree = f.degree();
@@ -280,7 +278,7 @@ void InverseSolver::find_dG_dvs(){
             vert_sum += forwardSolver->inputGeometry->inputVertexPositions[tmp_v];
         for (Halfedge he: f.adjacentHalfedges()){
             Vertex v = he.tailVertex();
-            Vector3 p = forwardSolver->hullGeometry->inputVertexPositions[v];
+            Vector3 p = forwardSolver->inputGeometry->inputVertexPositions[v];
             Vector3 Gf_G = (vert_sum + p)/(double)(face_degree + 1) - G;
             DenseMatrix<double> tmp_mat = vec32vec(Gf_G) * 
                                           vec32vec(face_normal).transpose();
@@ -290,7 +288,7 @@ void InverseSolver::find_dG_dvs(){
         }
     }
     double volume = forwardSolver->volume;
-    for (Vertex v: forwardSolver->hullMesh->vertices())
+    for (Vertex v: forwardSolver->inputMesh->vertices())
         dG_dv[v] /= 3.*volume;
 }
 
@@ -307,9 +305,10 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool check_FD){
     for (Face f: forwardSolver->hullMesh->faces()){
         uni_mass_d_pf_dv[f] = VertexData<Vector3>(*forwardSolver->hullMesh, zvec);
         for (Vertex v: f.adjacentVertices()){
-            // if input not convex, just map hullMesh to input mesh 
-            // Vector3 tmp_d_pf_dv = d_pf_dv[f][v];
-            Vector<double> term2 = dG_dv[v].transpose() * vec32vec(d_pf_d_G[f]);
+            // need to find the index in the original mesh (not hull)
+            Vertex org_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]); // converting to vertex for assertion
+            // dG_dv is fetched from original mesh, not the convex hull; everything else is fetched from hull faces and geometry
+            Vector<double> term2 = dG_dv[org_vertex].transpose() * vec32vec(d_pf_d_G[f]);
             uni_mass_d_pf_dv[f][v] = d_pf_dv[f][v] + Vector3({term2[0], term2[1], term2[2]});
         }
     }
@@ -374,6 +373,7 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
                 uni_mass_total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
                                             (goal_prob[f]* 4.*PI - boundaryBuilder->face_region_area[f]);
             }
+            // printf("      -- tmp grad norm for v %d: %f \n", v.getIndex(), uni_mass_d_pf_dv[f][v].norm());
         }
         printf("   finding total grad for f %d area: %f goal area: %f \n", f.getIndex(),
                                                                         boundaryBuilder->face_region_area[last_sink_face]/(4.*PI),

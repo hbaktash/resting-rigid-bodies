@@ -34,10 +34,11 @@ Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B){
 
 Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPositionGeometry* inputGeo_,
                              Vector3 inputG_){
-    hullMesh = inputMesh_;
-    hullGeometry = inputGeo_;
     inputMesh = inputMesh_;
     inputGeometry = inputGeo_;
+    update_convex_hull();
+    // hullMesh = inputMesh_;
+    // hullGeometry = inputGeo_;
     G = inputG_;
     updated = false;
 }
@@ -70,13 +71,21 @@ Vector3 Forward3DSolver::get_G(){
 
 void Forward3DSolver::update_convex_hull(){
     printf(" -- updating convex hull -- \n");
-    std::unique_ptr<ManifoldSurfaceMesh> mesh_uptr;
-    std::unique_ptr<VertexPositionGeometry> geometry_uptr;
-    std::tie(mesh_uptr, geometry_uptr) = get_convex_hull(hullGeometry->inputVertexPositions);
-    hullMesh = mesh_uptr.release();
-    hullGeometry = geometry_uptr.release();
-    inputMesh = hullMesh;
-    inputGeometry = hullGeometry;
+    std::vector<std::vector<size_t>> hull_faces; 
+    std::vector<size_t> hull_vertex_mapping;
+    std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean
+    std::tie(hull_faces, hull_vertex_mapping, hull_poses) = get_convex_hull(inputGeometry->inputVertexPositions);
+
+    hullMesh = new ManifoldSurfaceMesh(hull_faces);
+    hullGeometry = new VertexPositionGeometry(*hullMesh);
+    org_hull_indices = VertexData<size_t>(*hullMesh);
+    for (Vertex v: hullMesh->vertices()){
+        Vector3 new_pos = hull_poses[v.getIndex()];
+        hullGeometry->inputVertexPositions[v] = new_pos;
+        inputGeometry->inputVertexPositions[hull_vertex_mapping[v.getIndex()]] = new_pos;
+        org_hull_indices[v] = hull_vertex_mapping[v.getIndex()];
+    }
+    printf(" -- convex hull updated -- \n");
 }
 
 // height from G to ground after contact
@@ -480,7 +489,7 @@ void Forward3DSolver::build_face_next_faces(){
             //     printf("at face %d\n", f.getIndex());
             //     FaceData<Vector3> dbface_colors(*hullMesh, Vector3({0.,0.,0.}));
             //     dbface_colors[f.getIndex()] = hullGeometry->faceNormal(f) * 3;
-            //     polyscope::getSurfaceMesh("input mesh")->addFaceVectorQuantity("debugg vis color "+std::to_string(f.getIndex()), dbface_colors)->setEnabled(true);
+            //     polyscope::getSurfaceMesh("hull mesh")->addFaceVectorQuantity("debugg vis color "+std::to_string(f.getIndex()), dbface_colors)->setEnabled(true);
             //     curr_f = f;
             //     printf(" too many iters! \n");
             //     break;
@@ -522,7 +531,7 @@ void Forward3DSolver::build_face_last_faces(){
 
 // just call all the pre-compute initializations; not face-last-face
 void Forward3DSolver::initialize_pre_computes(){
-    // printf("precomputes:\n");
+    printf("precomputes:\n");
     // printf("  vertex stability:\n");
     compute_vertex_stabilizablity();
     // printf("  vertex gauss curvature:\n");
@@ -531,6 +540,6 @@ void Forward3DSolver::initialize_pre_computes(){
     compute_edge_stable_normals();
     // printf("  building face next faces:\n");
     build_face_next_faces(); // 
-    // printf("done!\n");
+    printf("precomputes done!\n");
     updated = true;
 }
