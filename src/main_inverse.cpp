@@ -375,6 +375,7 @@ void take_uni_mass_opt_vertices_step(){
     forwardSolver->inputGeometry->inputVertexPositions[old_id] += step_size3 * total_uni_mass_vertex_grads[v];
   }
 
+  inverseSolver->update_positions(total_uni_mass_vertex_grads);
   polyscope::registerSurfaceMesh("input mesh", forwardSolver->inputGeometry->inputVertexPositions,
                                                   forwardSolver->inputMesh->getFaceVertexList());
   // update hull with new positions

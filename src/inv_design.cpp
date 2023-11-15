@@ -381,3 +381,59 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
     }
     return uni_mass_total_vertex_grads;
 }
+
+VertexData<Vector3> InverseSolver::diffusive_update_positions(VertexData<Vector3> hull_updates){
+    auto mapped_position_matrix = EigenMap<double, 3, Eigen::RowMajor>(hull_updates);
+    std::cout << "mapped pos mat: " << mapped_position_matrix.rows() << " " << mapped_position_matrix.cols() << "\n";
+    
+    //  --- Solving with diffusion ---  //
+    forwardSolver->inputGeometry->requireEdgeLengths();
+    double meanEdgeLength = 0.;
+    for (Edge e : forwardSolver->inputMesh->edges()) {
+        meanEdgeLength += forwardSolver->inputGeometry->edgeLengths[e];
+    }
+    meanEdgeLength /= forwardSolver->inputMesh->nEdges();
+    double shortTime = meanEdgeLength * meanEdgeLength;
+
+    forwardSolver->inputGeometry->requireVertexLumpedMassMatrix();
+    SparseMatrix<double>& M = forwardSolver->inputGeometry->vertexLumpedMassMatrix;
+
+    // Laplacian
+    forwardSolver->inputGeometry->requireCotanLaplacian();
+    SparseMatrix<double>& L = forwardSolver->inputGeometry->cotanLaplacian;
+
+    // Heat operator
+    SparseMatrix<double> heatOp = M + shortTime * L;
+
+    PositiveDefiniteSolver<double> heatSolver(heatOp);
+    
+    // Build RHS
+    VertexData<double> rhsx(*forwardSolver->inputMesh, 0.),
+                       rhsy(*forwardSolver->inputMesh, 0.),
+                       rhsz(*forwardSolver->inputMesh, 0.);
+    for (Vertex hull_v: forwardSolver->hullMesh->vertices()){
+        Vertex interior_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[hull_v]); // asserts correct assignment of hull indices
+        rhsx[forwardSolver->org_hull_indices[hull_v]] = hull_updates[hull_v].x;
+        rhsy[forwardSolver->org_hull_indices[hull_v]] = hull_updates[hull_v].y;
+        rhsz[forwardSolver->org_hull_indices[hull_v]] = hull_updates[hull_v].z;
+    }
+    Vector<double> rhsx_Vec = rhsx.toVector(),
+                   rhsy_Vec = rhsy.toVector(),
+                   rhsz_Vec = rhsz.toVector();
+    Vector<double> diffuse_x_Vec = heatSolver.solve(rhsx_Vec),
+                   diffuse_y_Vec = heatSolver.solve(rhsy_Vec),
+                   diffuse_z_Vec = heatSolver.solve(rhsz_Vec);
+
+    VertexData<Vector3> diffused_updates(*forwardSolver->inputMesh);
+    for (Vertex v: forwardSolver->inputMesh->vertices()){
+        diffused_updates[v] = Vector3{diffuse_x_Vec[v.getIndex()], 
+                                      diffuse_y_Vec[v.getIndex()], 
+                                      diffuse_z_Vec[v.getIndex()]};
+    }
+    // keep the original updates ?
+    for (Vertex hull_v: forwardSolver->hullMesh->vertices()){
+        Vertex interior_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[hull_v]); // asserts correct assignment of hull indices
+        diffused_updates[interior_vertex] = hull_updates[hull_v];
+    }
+    return diffused_updates;
+}

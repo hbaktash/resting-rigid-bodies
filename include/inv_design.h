@@ -23,6 +23,9 @@
 // #include "geometrycentral/surface/vertex_position_geometry.h"
 // #include "geometrycentral/surface/surface_point.h"
 #include "boundary_tools.h"
+#include "geometrycentral/utilities/eigen_interop_helpers.h"
+#include "geometrycentral/numerical/linear_solvers.h"
+
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -82,4 +85,7 @@ class InverseSolver{
         VertexData<Vector3> find_uni_mass_total_vertex_grads(bool with_flow_structure = false,
                                                              double stable_normal_update_thres = -1.);
         
+
+        // position update for interior vertices
+        VertexData<Vector3> diffusive_update_positions(VertexData<Vector3> hull_updates);
 };
