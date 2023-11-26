@@ -368,14 +368,11 @@ void take_uni_mass_opt_vertices_step(){
   VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt, stable_normal_update_thresh);
   printf(" total per vertex derivatives found!\n");
 
-
   // update original mesh vertices; hull will be updated internally
-  for (Vertex v: forwardSolver->hullMesh->vertices()){
-    size_t old_id = forwardSolver->org_hull_indices[v];
-    forwardSolver->inputGeometry->inputVertexPositions[old_id] += step_size3 * total_uni_mass_vertex_grads[v];
-  }
+  auto updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
+  // auto updates = inverseSolver->diffusive_update_positions(total_uni_mass_vertex_grads * step_size3);
+  forwardSolver->inputGeometry->inputVertexPositions += updates;
 
-  inverseSolver->update_positions(total_uni_mass_vertex_grads);
   polyscope::registerSurfaceMesh("input mesh", forwardSolver->inputGeometry->inputVertexPositions,
                                                   forwardSolver->inputMesh->getFaceVertexList());
   // update hull with new positions

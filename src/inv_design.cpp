@@ -64,19 +64,60 @@ void InverseSolver::set_fair_distribution() {
 }
 
 void InverseSolver::set_fair_distribution_for_sink_faces(){
-    size_t count = 0;
+    std::vector<double> face_areas;
+    size_t goal_stable_count = 6; // TODO: take as input?
+    size_t count = goal_stable_count;
     goal_prob = FaceData<double>(*forwardSolver->hullMesh, 0.);
     for (Face f: forwardSolver->hullMesh->faces()){
-        if (flow_structure[f] == f) // f is sink
-            count++;
+        if (flow_structure[f] == f) { // f is sink
+            face_areas.push_back(boundaryBuilder->face_region_area[f]);
+        }
     }
+    // select the high prob faces for optimizations
+    std::sort(face_areas.begin(), face_areas.end());
+    double nth_largest_area = face_areas[face_areas.size() - goal_stable_count];
     for (Face f: forwardSolver->hullMesh->faces()){
-        if (flow_structure[f] == f){
+        Vector3 face_normal = forwardSolver->hullGeometry->faceNormal(f);
+        if (flow_structure[f] == f && boundaryBuilder->face_region_area[f] >= nth_largest_area){
             goal_prob[f] = 1./(double)count;
-            old_stable_normals.push_back(forwardSolver->hullGeometry->faceNormal(f));
+            old_stable_normals.push_back(face_normal);
         }
     }
 }
+
+
+//
+void InverseSolver::initialize_interior_vertex_trackers(){
+    for (Face f: forwardSolver->hullMesh->faces()){
+        Vector3 face_normal = forwardSolver->hullGeometry->faceNormal(f);
+        old_normals.push_back(face_normal);
+    }
+    
+    interior_v_to_hull_f = VertexData<Face>(*forwardSolver->inputMesh, Face());
+    interior_v_to_hull_f_hit_ratio = VertexData<double>(*forwardSolver->inputMesh, -1.);
+
+    Vector3 O = forwardSolver->get_G();
+    for (Vertex v: forwardSolver->inputMesh->vertices()){
+        if (forwardSolver->on_hull_index[v] != INVALID_IND)
+            continue;
+        Vector3 p = forwardSolver->inputGeometry->inputVertexPositions[v];
+        for (Face hull_f: forwardSolver->hullMesh->faces()){
+            // assuming planar faces
+            Halfedge he = hull_f.halfedge();
+            std::vector<Vector3> polygon_points;
+            for (Vertex fv: hull_f.adjacentVertices()){
+                Vector3 p1 = forwardSolver->hullGeometry->inputVertexPositions[fv];
+                polygon_points.push_back(p1);
+            }
+            double t = ray_intersect(O, (p - O).normalize(), polygon_points);
+            if (t != -1){
+                interior_v_to_hull_f[v] = hull_f;
+                interior_v_to_hull_f_hit_ratio[v] = (p - O).norm()/t;
+            }
+        }
+    }
+}
+
 
 void InverseSolver::update_fair_distribution(double normal_threshold){
     printf("updating fair dist\n");
@@ -90,6 +131,7 @@ void InverseSolver::update_fair_distribution(double normal_threshold){
     }
     std::vector<Vector3> new_stable_normals;
     size_t new_stables_count = 0;
+    // match with new normals
     for(Vector3 old_stable_normal: old_stable_normals){
         double closest_normal_dist = 10.; // anything < 2 would work
         Face closest_face = Face();
@@ -357,10 +399,13 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
                                                                     double stable_normal_update_thres){
     Vector3 zvec = Vector3::zero();
     VertexData<Vector3> uni_mass_total_vertex_grads(*forwardSolver->hullMesh, zvec);
-    if (with_flow_structure && stable_normal_update_thres < 0)
-        set_fair_distribution_for_sink_faces();
+    if (with_flow_structure && stable_normal_update_thres < 0){
+        set_fair_distribution_for_sink_faces(); // 
+    }
     else if (stable_normal_update_thres > 0)
         update_fair_distribution(stable_normal_update_thres);
+
+    initialize_interior_vertex_trackers(); // follow inner vertices
     for (Face f: forwardSolver->hullMesh->faces()){
         Face last_sink_face;
         for (Vertex v: f.adjacentVertices()){
@@ -382,25 +427,129 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
     return uni_mass_total_vertex_grads;
 }
 
-VertexData<Vector3> InverseSolver::diffusive_update_positions(VertexData<Vector3> hull_updates){
-    auto mapped_position_matrix = EigenMap<double, 3, Eigen::RowMajor>(hull_updates);
-    std::cout << "mapped pos mat: " << mapped_position_matrix.rows() << " " << mapped_position_matrix.cols() << "\n";
+DenseMatrix<double> solve_dense_b(LinearSolver<double> &solver, DenseMatrix<double> b){
+    DenseMatrix<double> sol(b.rows(), b.cols());
     
-    //  --- Solving with diffusion ---  //
+    for (size_t i = 0; i < b.cols(); i++){
+        sol.col(i) = solver.solve(b.col(i));
+    }
+
+    return sol;
+}
+
+VertexData<SparseMatrix<double>> 
+InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos){
+    SparseMatrix<double> L = forwardSolver->inputGeometry->cotanLaplacian; // assuming required already called
+    for (Vertex v: forwardSolver->inputMesh->vertices()){
+            size_t n_v = v.degree();
+            Vector<size_t> neigh_inds(n_v);
+            Vector<double> weights(n_v);
+            size_t cnt = 0;
+            for (Vertex fv: v.adjacentVertices()){
+                neigh_inds(cnt) = fv.getIndex();
+                weights(cnt) = L.coeffRef(v.getIndex(), fv.getIndex());
+                cnt++;
+            }
+            DenseMatrix<double> P_v = old_pos(neigh_inds, Eigen::all) - 
+                                      old_pos(v.getIndex(), Eigen::all).replicate(n_v, 1),
+                                P_v_new = new_pos(neigh_inds, Eigen::all) - 
+                                          new_pos(v.getIndex(), Eigen::all).replicate(n_v, 1);
+            // DenseMatrix<double> 
+        }
+}
+
+VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hull_updates){
+    size_t n = forwardSolver->inputMesh->nVertices();
+    size_t max_iters = 4; // doesnt need much given the small updates
+    VertexData<Vector3> old_positions = forwardSolver->hullGeometry->inputVertexPositions,
+                        new_positions = forwardSolver->hullGeometry->inputVertexPositions;
+    Vector<size_t> hull_indices(forwardSolver->hullMesh->nVertices()); // will be used for row selection later
+
+    for (Vertex v: forwardSolver->hullMesh->vertices()){
+        Vertex interior_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]);
+        new_positions[interior_vertex] = old_positions[interior_vertex] + hull_updates[v];
+        hull_indices[v.getIndex()] = interior_vertex.getIndex();
+    }
+
+    // get laplacian and prefactor
+    forwardSolver->inputGeometry->requireCotanLaplacian();
+    SparseMatrix<double> L = forwardSolver->inputGeometry->cotanLaplacian;
+    SparseMatrix<double> Ls = L + 1e-7 * identityMatrix<double>(n);
+    PositiveDefiniteSolver<double> L_solver(Ls);
+
+    auto old_pos_mat = EigenMap<double, 3, Eigen::RowMajor>(old_positions);
+    auto new_pos_mat = EigenMap<double, 3, Eigen::RowMajor>(new_positions);
+    
+    // initial solution
+    auto delta = Ls * old_pos_mat; // Ls * old_pos
+    DenseMatrix<double> ps_new_ext(n,3); // zeros for non-constrained vertices
+    ps_new_ext.fill(0.);
+    ps_new_ext(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
+    DenseMatrix<double> init_sol = solve_dense_b(L_solver, delta - ps_new_ext); // laplacian edit process
+    init_sol(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
+
+    // find R's
+    for (int i = 0; i < max_iters; i++){
+        // evaluate R_i's
+        
+        // find positions; p'
+    }
+
+}
+
+
+VertexData<Vector3> InverseSolver::greedy_update_positions(VertexData<Vector3> hull_updates){
+    VertexData<Vector3> old_positions = forwardSolver->hullGeometry->inputVertexPositions;
+    // temp update
+    forwardSolver->hullGeometry->inputVertexPositions += hull_updates;
+    printf("hererer\n");
+    Vector3 O = forwardSolver->get_G(); // not updated yet!
+    VertexData<Vector3> greedy_updates(*forwardSolver->inputMesh);
+    for (Vertex v: forwardSolver->inputMesh->vertices()){
+        if (forwardSolver->on_hull_index[v] == INVALID_IND){ // interior check!
+            Face corres_hull_face = interior_v_to_hull_f[v];
+            Vector3 corresF_new_normal = forwardSolver->hullGeometry->faceNormal(corres_hull_face),
+                    corresF_old_normal = old_normals[corres_hull_face.getIndex()];
+            Vector3 old_OP = forwardSolver->inputGeometry->inputVertexPositions[v] - O;
+            Vector3 rot_axis_unnormalized = cross(corresF_old_normal, corresF_new_normal);
+            double rotation_theta = asin(rot_axis_unnormalized.norm());
+            Vector3 new_OP = old_OP.rotateAround(rot_axis_unnormalized.normalize(), rotation_theta);
+            
+            // possible re-scale; TODO: always rescale even if not hitting
+            std::vector<Vector3> polygon_points;
+            for (Vertex fv: corres_hull_face.adjacentVertices())
+                polygon_points.push_back(forwardSolver->hullGeometry->inputVertexPositions[fv]);
+            double new_t = ray_intersect(O, new_OP.normalize(), polygon_points);
+            if (new_t != -1.)
+                new_OP = new_OP.normalize() * interior_v_to_hull_f_hit_ratio[v] * new_t;
+            // o.w. just rotate
+
+            greedy_updates[v] = O + new_OP - old_positions[v];
+        }
+        else 
+            greedy_updates[v] = hull_updates[forwardSolver->on_hull_index[v]];
+    }
+    // undo hull updates?
+    forwardSolver->hullGeometry->inputVertexPositions = old_positions;
+    return greedy_updates;
+}
+
+VertexData<Vector3> InverseSolver::diffusive_update_positions(VertexData<Vector3> hull_updates){
+    //  --- updating with diffusion ---  //
     forwardSolver->inputGeometry->requireEdgeLengths();
     double meanEdgeLength = 0.;
     for (Edge e : forwardSolver->inputMesh->edges()) {
         meanEdgeLength += forwardSolver->inputGeometry->edgeLengths[e];
     }
     meanEdgeLength /= forwardSolver->inputMesh->nEdges();
-    double shortTime = meanEdgeLength * meanEdgeLength;
+    double shortTime = 0.1 * meanEdgeLength * meanEdgeLength;
 
     forwardSolver->inputGeometry->requireVertexLumpedMassMatrix();
     SparseMatrix<double>& M = forwardSolver->inputGeometry->vertexLumpedMassMatrix;
 
     // Laplacian
     forwardSolver->inputGeometry->requireCotanLaplacian();
-    SparseMatrix<double>& L = forwardSolver->inputGeometry->cotanLaplacian;
+    SparseMatrix<double> L = forwardSolver->inputGeometry->cotanLaplacian;
 
     // Heat operator
     SparseMatrix<double> heatOp = M + shortTime * L;
@@ -435,5 +584,11 @@ VertexData<Vector3> InverseSolver::diffusive_update_positions(VertexData<Vector3
         Vertex interior_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[hull_v]); // asserts correct assignment of hull indices
         diffused_updates[interior_vertex] = hull_updates[hull_v];
     }
+
+    // un-require stuff
+    forwardSolver->inputGeometry->unrequireEdgeLengths();
+    forwardSolver->inputGeometry->unrequireVertexLumpedMassMatrix();
+    forwardSolver->inputGeometry->unrequireCotanLaplacian();
+
     return diffused_updates;
 }

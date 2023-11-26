@@ -79,11 +79,13 @@ void Forward3DSolver::update_convex_hull(){
     hullMesh = new ManifoldSurfaceMesh(hull_faces);
     hullGeometry = new VertexPositionGeometry(*hullMesh);
     org_hull_indices = VertexData<size_t>(*hullMesh);
+    on_hull_index = VertexData<size_t>(*inputMesh, INVALID_IND);
     for (Vertex v: hullMesh->vertices()){
         Vector3 new_pos = hull_poses[v.getIndex()];
         hullGeometry->inputVertexPositions[v] = new_pos;
         inputGeometry->inputVertexPositions[hull_vertex_mapping[v.getIndex()]] = new_pos;
         org_hull_indices[v] = hull_vertex_mapping[v.getIndex()];
+        on_hull_index[hull_vertex_mapping[v.getIndex()]] = v.getIndex();
     }
     printf(" -- convex hull updated -- \n");
 }

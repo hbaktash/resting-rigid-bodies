@@ -51,7 +51,7 @@ class Forward3DSolver {
 
     // hull <-> mesh mapping
     VertexData<size_t> org_hull_indices; //hull vertex indices in the original mesh
-
+    VertexData<size_t> on_hull_index; // index of an interior vertex on the hull; INVALID_IND if not on hull
 
     // current state; for simulation 
     Vertex curr_v;

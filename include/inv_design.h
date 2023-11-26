@@ -58,7 +58,14 @@ class InverseSolver{
         // smarter distribution update
         std::vector<Vector3> old_stable_normals;
         void update_fair_distribution(double normal_threshold);
+        
+        // for keeping track of interior points
+        std::vector<Vector3> old_normals; 
+        std::vector<std::pair<Vector3, double>> old_to_new_normal_rotations;
+        VertexData<Face> interior_v_to_hull_f;
+        VertexData<double> interior_v_to_hull_f_hit_ratio;
 
+        void initialize_interior_vertex_trackers();
         // gradient computation; assuming regularity
         // note: pf = face region area
         // G grad; vertices frozen
@@ -87,5 +94,10 @@ class InverseSolver{
         
 
         // position update for interior vertices
+        // ARAP
+        VertexData<SparseMatrix<double>> find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos);
+        VertexData<Vector3> ARAP_update_positions(VertexData<Vector3> hull_updates);
+        // Greedy stuff
+        VertexData<Vector3> greedy_update_positions(VertexData<Vector3> hull_updates);
         VertexData<Vector3> diffusive_update_positions(VertexData<Vector3> hull_updates);
 };
