@@ -22,8 +22,8 @@
 // #include "geometrycentral/surface/manifold_surface_mesh.h"
 // #include "geometrycentral/surface/vertex_position_geometry.h"
 // #include "geometrycentral/surface/surface_point.h"
+// #include "geometrycentral/utilities/eigen_interop_helpers.h"
 #include "boundary_tools.h"
-#include "geometrycentral/utilities/eigen_interop_helpers.h"
 #include "geometrycentral/numerical/linear_solvers.h"
 
 
@@ -95,8 +95,9 @@ class InverseSolver{
 
         // position update for interior vertices
         // ARAP
-        VertexData<SparseMatrix<double>> find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos);
+        VertexData<DenseMatrix<double>> find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos);
         VertexData<Vector3> ARAP_update_positions(VertexData<Vector3> hull_updates);
+        VertexData<Vector3> trivial_update_positions(VertexData<Vector3> hull_updates);
         // Greedy stuff
         VertexData<Vector3> greedy_update_positions(VertexData<Vector3> hull_updates);
         VertexData<Vector3> diffusive_update_positions(VertexData<Vector3> hull_updates);

@@ -19,7 +19,6 @@
 
 #include "inv_design.h"
 
-
 // Gradient stuff
 // formula source in header file
 Vector3 dihedral_angle_grad_G(Vector3 G, Vector3 A, Vector3 B, Vector3 C){
@@ -300,6 +299,13 @@ Vector<double> vec32vec(Vector3 v){
     return ans;
 }
 
+Vector3 vec2vec3(Vector<double> v){
+    Vector3 ans;
+    ans.x = v[0];
+    ans.y = v[1];
+    ans.z = v[2];
+    return ans;
+}
 // populating VertexData<DenseMatrix<double>> dv_d_G;
 void InverseSolver::find_dG_dvs(){
     // TODO; generalize for polygonal faces
@@ -427,42 +433,61 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
     return uni_mass_total_vertex_grads;
 }
 
-DenseMatrix<double> solve_dense_b(LinearSolver<double> &solver, DenseMatrix<double> b){
+DenseMatrix<double> solve_dense_b(LinearSolver<double> *solver, DenseMatrix<double> b){
     DenseMatrix<double> sol(b.rows(), b.cols());
     
-    for (size_t i = 0; i < b.cols(); i++){
-        sol.col(i) = solver.solve(b.col(i));
-    }
+    // for (size_t i = 0; i < b.cols(); i++){
+    //     sol.col(i) = solver->solve(b.col(i));
+    // }
 
     return sol;
 }
 
-VertexData<SparseMatrix<double>> 
+VertexData<DenseMatrix<double>> 
 InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos){
+    VertexData<DenseMatrix<double>> rotations(*forwardSolver->inputMesh);
     SparseMatrix<double> L = forwardSolver->inputGeometry->cotanLaplacian; // assuming required already called
     for (Vertex v: forwardSolver->inputMesh->vertices()){
-            size_t n_v = v.degree();
-            Vector<size_t> neigh_inds(n_v);
-            Vector<double> weights(n_v);
-            size_t cnt = 0;
-            for (Vertex fv: v.adjacentVertices()){
-                neigh_inds(cnt) = fv.getIndex();
-                weights(cnt) = L.coeffRef(v.getIndex(), fv.getIndex());
-                cnt++;
-            }
-            DenseMatrix<double> P_v = old_pos(neigh_inds, Eigen::all) - 
-                                      old_pos(v.getIndex(), Eigen::all).replicate(n_v, 1),
-                                P_v_new = new_pos(neigh_inds, Eigen::all) - 
-                                          new_pos(v.getIndex(), Eigen::all).replicate(n_v, 1);
-            // DenseMatrix<double> 
+        size_t n_v = v.degree();
+        Vector<size_t> neigh_inds(n_v);
+        Vector<double> weights(n_v);
+        size_t cnt = 0;
+        for (Vertex fv: v.adjacentVertices()){
+            neigh_inds(cnt) = fv.getIndex();
+            weights(cnt) = -L.coeffRef(v.getIndex(), fv.getIndex());
+            cnt++;
         }
+        DenseMatrix<double> weights_diag = weights.asDiagonal();
+        DenseMatrix<double> P_v = old_pos(neigh_inds, Eigen::all) - 
+                                    old_pos(v.getIndex(), Eigen::all).replicate(n_v, 1),
+                            P_v_new = new_pos(neigh_inds, Eigen::all) - 
+                                        new_pos(v.getIndex(), Eigen::all).replicate(n_v, 1);
+        DenseMatrix<double> S_v = P_v.transpose() * weights_diag * P_v_new;
+
+        auto bdcSVD = S_v.bdcSvd(Eigen::ComputeFullU | Eigen::ComputeFullV);
+        DenseMatrix<double> U = bdcSVD.matrixU(),
+                            V = bdcSVD.matrixV();
+        DenseMatrix<double> R_v = V * U.transpose();
+        rotations[v] = R_v;
+    }
+    return rotations;
+}
+
+DenseMatrix<double> vertex_data_to_matrix(VertexData<Vector3> positions){
+    size_t n = positions.size();
+    DenseMatrix<double> mat(n, 3);
+    for (Vertex v: positions.getMesh()->vertices()){
+        Vector3 p = positions[v];
+        mat.row(v.getIndex()) = vec32vec(p);
+    }
+    return mat;
 }
 
 VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hull_updates){
     size_t n = forwardSolver->inputMesh->nVertices();
     size_t max_iters = 4; // doesnt need much given the small updates
-    VertexData<Vector3> old_positions = forwardSolver->hullGeometry->inputVertexPositions,
-                        new_positions = forwardSolver->hullGeometry->inputVertexPositions;
+    VertexData<Vector3> old_positions = forwardSolver->inputGeometry->inputVertexPositions,
+                        new_positions = forwardSolver->inputGeometry->inputVertexPositions;
     Vector<size_t> hull_indices(forwardSolver->hullMesh->nVertices()); // will be used for row selection later
 
     for (Vertex v: forwardSolver->hullMesh->vertices()){
@@ -473,30 +498,61 @@ VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hul
 
     // get laplacian and prefactor
     forwardSolver->inputGeometry->requireCotanLaplacian();
-    SparseMatrix<double> L = forwardSolver->inputGeometry->cotanLaplacian;
+    SparseMatrix<double> L(forwardSolver->inputGeometry->cotanLaplacian);
     SparseMatrix<double> Ls = L + 1e-7 * identityMatrix<double>(n);
     PositiveDefiniteSolver<double> L_solver(Ls);
 
-    auto old_pos_mat = EigenMap<double, 3, Eigen::RowMajor>(old_positions);
-    auto new_pos_mat = EigenMap<double, 3, Eigen::RowMajor>(new_positions);
+    DenseMatrix<double> old_pos_mat = vertex_data_to_matrix(old_positions);
+    DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_positions);
     
     // initial solution
     auto delta = Ls * old_pos_mat; // Ls * old_pos
-    DenseMatrix<double> ps_new_ext(n,3); // zeros for non-constrained vertices
-    ps_new_ext.fill(0.);
-    ps_new_ext(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
-    DenseMatrix<double> init_sol = solve_dense_b(L_solver, delta - ps_new_ext); // laplacian edit process
+    DenseMatrix<double> constraint_vec(n,3); // zeros for non-constrained vertices
+    constraint_vec.fill(0.);
+    constraint_vec(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
+    std::cout << "hull indices: \n" << hull_indices << "\n";
+    std::cout << "constraint vec: \n" << constraint_vec << "\n";
+    std::cout << "new pos vec: \n" << new_pos_mat << "\n";
+    constraint_vec = Ls * constraint_vec;
+    DenseMatrix<double> init_sol = solve_dense_b(&L_solver, delta - constraint_vec); // laplacian edit process
     init_sol(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
 
-    // find R's
+    polyscope::registerSurfaceMesh("init sol", init_sol,
+                                               forwardSolver->inputMesh->getFaceVertexList());
+    DenseMatrix<double> tmp_pos_mat = init_sol;
     for (int i = 0; i < max_iters; i++){
         // evaluate R_i's
-        
+        VertexData<DenseMatrix<double>> rotations = find_rotations(old_pos_mat, tmp_pos_mat);
         // find positions; p'
+        DenseMatrix<double> b(n,3);
+        //  - LHS
+        b.fill(0.);
+        for (Vertex v: forwardSolver->inputMesh->vertices()){
+            for (Vertex fv: v.adjacentVertices()){
+                b(v.getIndex(), Eigen::all) += (-L.coeffRef(v.getIndex(), fv.getIndex()) * 
+                                       (rotations[v] + rotations[fv]) * (old_pos_mat.row(v.getIndex()) - old_pos_mat.row(fv.getIndex())).transpose()).transpose()/2.;
+            }
+        }
+        // solving with constraints
+        tmp_pos_mat = solve_dense_b(&L_solver, b - constraint_vec);
+        tmp_pos_mat(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
     }
-
+    VertexData<Vector3> update_vecs(*forwardSolver->inputMesh);
+    for (Vertex v: forwardSolver->inputMesh->vertices()){
+        update_vecs[v] = vec2vec3(tmp_pos_mat.row(v.getIndex()));
+    }
+    return update_vecs;
 }
 
+VertexData<Vector3> InverseSolver::trivial_update_positions(VertexData<Vector3> hull_updates){
+    VertexData<Vector3> old_positions = forwardSolver->inputGeometry->inputVertexPositions,
+                        new_positions = forwardSolver->inputGeometry->inputVertexPositions;
+    for (Vertex v: forwardSolver->hullMesh->vertices()){
+        Vertex interior_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]);
+        new_positions[interior_vertex] = old_positions[interior_vertex] + hull_updates[v];
+    }
+    return new_positions - old_positions;
+}
 
 VertexData<Vector3> InverseSolver::greedy_update_positions(VertexData<Vector3> hull_updates){
     VertexData<Vector3> old_positions = forwardSolver->hullGeometry->inputVertexPositions;

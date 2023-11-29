@@ -96,8 +96,8 @@ polyscope::PointCloud *boundary_normals_pc;
 polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
 bool draw_boundary_patches = false;
 bool test_guess = true;
-bool structured_opt = false,
-     always_update_structure = false,
+bool structured_opt = true,
+     always_update_structure = true,
      first_time = false;
 
 polyscope::PointCloud *test_pc;
@@ -112,8 +112,8 @@ float stable_normal_update_thresh = -1;
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc"), std::string("bunny-hull"), std::string("bunnylp"), std::string("bunnylp-hull")};
-std::string all_polygons_current_item = "sliced tet";
-static const char* all_polygons_current_item_c_str = "sliced tet";
+std::string all_polygons_current_item = "bunnylp";
+static const char* all_polygons_current_item_c_str = "bunnylp";
 
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
@@ -368,17 +368,22 @@ void take_uni_mass_opt_vertices_step(){
   VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt, stable_normal_update_thresh);
   printf(" total per vertex derivatives found!\n");
 
-  // update original mesh vertices; hull will be updated internally
-  auto updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
+  // Update original mesh vertices; hull will be updated internally
+  auto trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * step_size3);
+  polyscope::registerSurfaceMesh("pre-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions + trivial_updates,
+                                               forwardSolver->inputMesh->getFaceVertexList());
+  
+  auto updates = inverseSolver->ARAP_update_positions(total_uni_mass_vertex_grads * step_size3);
+  // auto updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
   // auto updates = inverseSolver->diffusive_update_positions(total_uni_mass_vertex_grads * step_size3);
   forwardSolver->inputGeometry->inputVertexPositions += updates;
 
-  polyscope::registerSurfaceMesh("input mesh", forwardSolver->inputGeometry->inputVertexPositions,
-                                                  forwardSolver->inputMesh->getFaceVertexList());
+  polyscope::registerSurfaceMesh("post-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions,
+                                               forwardSolver->inputMesh->getFaceVertexList());
   // update hull with new positions
   forwardSolver->update_convex_hull();
   polyscope::registerSurfaceMesh("hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                               forwardSolver->hullMesh->getFaceVertexList());
+                                              forwardSolver->hullMesh->getFaceVertexList());
   forwardSolver->set_uniform_G();
   G = forwardSolver->get_G();
   update_solver_and_boundaries();
@@ -486,7 +491,7 @@ void myCallback() {
   if (ImGui::Button("take fair step (joint gradient)")) {
     take_uni_mass_opt_vertices_step();
   }
-  if (ImGui::SliderFloat("step size 3", &step_size3, 0., 1.0));
+  if (ImGui::SliderFloat("step size 3", &step_size3, 0., 10.0));
   if (ImGui::Checkbox("structured opt", &structured_opt));
   if (ImGui::Checkbox("update structured at every step", &always_update_structure));
   if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 1.0));
