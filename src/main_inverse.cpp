@@ -388,13 +388,53 @@ void take_uni_mass_opt_vertices_step(){
   G = forwardSolver->get_G();
   update_solver_and_boundaries();
   update_visuals_with_G();
+}
+
+void just_take_step(){
+  printf("finding uniform mass\n");
+  forwardSolver->set_uniform_G();
+  printf("finding uniform mass\n");
+  forwardSolver->initialize_pre_computes();
+  printf("finding derivatives\n");
+  inverseSolver->find_uni_mass_d_pf_dv();
+  printf(" uni mass derivatives found!\n");
+  if (structured_opt){ // if updating the flow structure
+    boundary_builder->build_boundary_normals();
+    boundary_builder->print_area_of_boundary_loops();
+    if (first_time || always_update_structure){
+      inverseSolver->flow_structure = forwardSolver->face_last_face;
+      if (first_time) stable_normal_update_thresh = -1.;
+      else stable_normal_update_thresh = 0.1;
+      first_time = false;
+    }
+  }
+  printf(" finding total per vertex derivatives\n");
+  VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt, stable_normal_update_thresh);
+  printf(" total per vertex derivatives found!\n");
+
+  // Update original mesh vertices; hull will be updated internally
+  auto trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * step_size3);
+  polyscope::registerSurfaceMesh("pre-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions + trivial_updates,
+                                               forwardSolver->inputMesh->getFaceVertexList());
   
-  //DEBUG
-  // FaceData<Vector3> debugg_normals(*forwardSolver->hullMesh, Vector3({0.,0.,0.}));
-  // debugg_normals[105] = forwardSolver->hullGeometry->faceNormal(forwardSolver->hullMesh->face(105)) * 3;
-  // debugg_normals[812] = forwardSolver->hullGeometry->faceNormal(forwardSolver->hullMesh->face(812)) * 3;
-  // polyscope::getSurfaceMesh("hull mesh")->addFaceVectorQuantity("debugg vis normals ", debugg_normals)->setEnabled(true);
-  
+  auto updates = inverseSolver->ARAP_update_positions(total_uni_mass_vertex_grads * step_size3);
+  // // auto updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
+  // // auto updates = inverseSolver->diffusive_update_positions(total_uni_mass_vertex_grads * step_size3);
+  forwardSolver->inputGeometry->inputVertexPositions += updates;
+
+  polyscope::registerSurfaceMesh("post-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions,
+                                               forwardSolver->inputMesh->getFaceVertexList());
+  // update hull with new positions
+  forwardSolver->update_convex_hull();
+  polyscope::registerSurfaceMesh("hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
+                                              forwardSolver->hullMesh->getFaceVertexList());
+}
+
+void just_update(){
+  forwardSolver->set_uniform_G();
+  G = forwardSolver->get_G();
+  update_solver_and_boundaries();
+  update_visuals_with_G();
 }
 
 // A user-defined callback, for creating control panels (etc)
@@ -495,27 +535,12 @@ void myCallback() {
   if (ImGui::Checkbox("structured opt", &structured_opt));
   if (ImGui::Checkbox("update structured at every step", &always_update_structure));
   if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 1.0));
-  
-  // if (ImGui::Button("simplify")) {
-  //   polyscope::registerSurfaceMesh("hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
-  //                                            forwardSolver->hullMesh->getFaceVertexList());
-  //   Edge e = single_convexity_repair(forwardSolver->hullMesh, forwardSolver->hullGeometry);
-  //   polyscope::registerSurfaceMesh("old mesh", forwardSolver->hullGeometry->inputVertexPositions,
-  //                                            forwardSolver->hullMesh->getFaceVertexList());
-  //   if (e.getIndex() != INVALID_IND){
-  //     Vertex v1 = e.firstVertex(),
-  //            v2 = e.secondVertex(),
-  //            v3 = e.halfedge().next().tipVertex(),
-  //            v4 = e.halfedge().twin().next().tipVertex();
-  //     std::vector<std::vector<size_t>> ff({{0, 1, 2}, {0,1,3}});
-  //     std::vector<Vector3> possss({forwardSolver->hullGeometry->inputVertexPositions[v1],
-  //                                                  forwardSolver->hullGeometry->inputVertexPositions[v2],
-  //                                                  forwardSolver->hullGeometry->inputVertexPositions[v3],
-  //                                                  forwardSolver->hullGeometry->inputVertexPositions[v4]});
-  //     polyscope::registerSurfaceMesh("temp mesh", possss,
-  //                                            ff);  
-  //   }
-  // }
+  if (ImGui::Button("just take step")) {
+    just_take_step();
+  }
+  if (ImGui::Button("just update")) {
+    just_update();
+  }
 }
 
 

@@ -300,12 +300,10 @@ Vector<double> vec32vec(Vector3 v){
 }
 
 Vector3 vec2vec3(Vector<double> v){
-    Vector3 ans;
-    ans.x = v[0];
-    ans.y = v[1];
-    ans.z = v[2];
+    Vector3 ans({v[0], v[1], v[2]});
     return ans;
 }
+
 // populating VertexData<DenseMatrix<double>> dv_d_G;
 void InverseSolver::find_dG_dvs(){
     // TODO; generalize for polygonal faces
@@ -436,9 +434,9 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
 DenseMatrix<double> solve_dense_b(LinearSolver<double> *solver, DenseMatrix<double> b){
     DenseMatrix<double> sol(b.rows(), b.cols());
     
-    // for (size_t i = 0; i < b.cols(); i++){
-    //     sol.col(i) = solver->solve(b.col(i));
-    // }
+    for (size_t i = 0; i < b.cols(); i++){
+        sol.col(i) = solver->solve(b.col(i));
+    }
 
     return sol;
 }
@@ -458,10 +456,10 @@ InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> n
             cnt++;
         }
         DenseMatrix<double> weights_diag = weights.asDiagonal();
-        DenseMatrix<double> P_v = old_pos(neigh_inds, Eigen::all) - 
-                                    old_pos(v.getIndex(), Eigen::all).replicate(n_v, 1),
-                            P_v_new = new_pos(neigh_inds, Eigen::all) - 
-                                        new_pos(v.getIndex(), Eigen::all).replicate(n_v, 1);
+        DenseMatrix<double> P_v = old_pos(v.getIndex(), Eigen::all).replicate(n_v, 1) - 
+                                   old_pos(neigh_inds, Eigen::all),
+                            P_v_new = new_pos(v.getIndex(), Eigen::all).replicate(n_v, 1) - 
+                                       new_pos(neigh_inds, Eigen::all);
         DenseMatrix<double> S_v = P_v.transpose() * weights_diag * P_v_new;
 
         auto bdcSVD = S_v.bdcSvd(Eigen::ComputeFullU | Eigen::ComputeFullV);
@@ -485,15 +483,22 @@ DenseMatrix<double> vertex_data_to_matrix(VertexData<Vector3> positions){
 
 VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hull_updates){
     size_t n = forwardSolver->inputMesh->nVertices();
-    size_t max_iters = 4; // doesnt need much given the small updates
+    size_t max_iters = 1; // doesnt need much given the small updates
     VertexData<Vector3> old_positions = forwardSolver->inputGeometry->inputVertexPositions,
                         new_positions = forwardSolver->inputGeometry->inputVertexPositions;
-    Vector<size_t> hull_indices(forwardSolver->hullMesh->nVertices()); // will be used for row selection later
+    Vector<size_t> hull_indices(forwardSolver->hullMesh->nVertices()), // will be used for row selection later
+                   interior_indices(n - forwardSolver->hullMesh->nVertices());
 
     for (Vertex v: forwardSolver->hullMesh->vertices()){
         Vertex interior_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]);
         new_positions[interior_vertex] = old_positions[interior_vertex] + hull_updates[v];
         hull_indices[v.getIndex()] = interior_vertex.getIndex();
+    }
+    size_t cnt = 0;
+    for (Vertex v: forwardSolver->inputMesh->vertices()){
+        if (forwardSolver->on_hull_index[v] == INVALID_IND){
+            interior_indices[cnt++] = v.getIndex();
+        }
     }
 
     // get laplacian and prefactor
@@ -501,6 +506,10 @@ VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hul
     SparseMatrix<double> L(forwardSolver->inputGeometry->cotanLaplacian);
     SparseMatrix<double> Ls = L + 1e-7 * identityMatrix<double>(n);
     PositiveDefiniteSolver<double> L_solver(Ls);
+    // constraint matrix
+    DenseMatrix<double> temp_Ls = Ls.toDense();
+    SparseMatrix<double> constraint_Ls = temp_Ls(interior_indices, interior_indices).sparseView();
+    PositiveDefiniteSolver<double> constraint_L_solver(constraint_Ls);
 
     DenseMatrix<double> old_pos_mat = vertex_data_to_matrix(old_positions);
     DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_positions);
@@ -510,17 +519,15 @@ VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hul
     DenseMatrix<double> constraint_vec(n,3); // zeros for non-constrained vertices
     constraint_vec.fill(0.);
     constraint_vec(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
-    std::cout << "hull indices: \n" << hull_indices << "\n";
-    std::cout << "constraint vec: \n" << constraint_vec << "\n";
-    std::cout << "new pos vec: \n" << new_pos_mat << "\n";
     constraint_vec = Ls * constraint_vec;
     DenseMatrix<double> init_sol = solve_dense_b(&L_solver, delta - constraint_vec); // laplacian edit process
     init_sol(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
 
-    polyscope::registerSurfaceMesh("init sol", init_sol,
-                                               forwardSolver->inputMesh->getFaceVertexList());
-    DenseMatrix<double> tmp_pos_mat = init_sol;
-    for (int i = 0; i < max_iters; i++){
+    // polyscope::registerSurfaceMesh("init sol", init_sol,
+    //                                            forwardSolver->inputMesh->getFaceVertexList());
+    DenseMatrix<double> tmp_pos_mat = init_sol,
+                        tmp_interior_pos_mat = init_sol(interior_indices, Eigen::all);
+    for (size_t i = 0; i < max_iters; i++){
         // evaluate R_i's
         VertexData<DenseMatrix<double>> rotations = find_rotations(old_pos_mat, tmp_pos_mat);
         // find positions; p'
@@ -528,30 +535,37 @@ VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hul
         //  - LHS
         b.fill(0.);
         for (Vertex v: forwardSolver->inputMesh->vertices()){
+            auto p_v = old_pos_mat.row(v.getIndex());
+            DenseMatrix<double> R_v = rotations[v];
             for (Vertex fv: v.adjacentVertices()){
+                DenseMatrix<double> R_fv = rotations[fv];
+                auto p_fv = old_pos_mat.row(fv.getIndex());
                 b(v.getIndex(), Eigen::all) += (-L.coeffRef(v.getIndex(), fv.getIndex()) * 
-                                       (rotations[v] + rotations[fv]) * (old_pos_mat.row(v.getIndex()) - old_pos_mat.row(fv.getIndex())).transpose()).transpose()/2.;
+                                       (R_v + R_fv) * (p_v - p_fv).transpose()).transpose()/2.;
             }
         }
         // solving with constraints
-        tmp_pos_mat = solve_dense_b(&L_solver, b - constraint_vec);
-        tmp_pos_mat(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
+        DenseMatrix<double> constraint_b = (b - constraint_vec)(interior_indices, Eigen::all);
+        tmp_interior_pos_mat = solve_dense_b(&constraint_L_solver, constraint_b);
+        tmp_pos_mat(interior_indices, Eigen::all) = tmp_interior_pos_mat;
+        polyscope::registerSurfaceMesh("z ARAP iter " + std::to_string(i), tmp_pos_mat,
+                                               forwardSolver->inputMesh->getFaceVertexList());
     }
+    forwardSolver->inputGeometry->unrequireCotanLaplacian();
     VertexData<Vector3> update_vecs(*forwardSolver->inputMesh);
     for (Vertex v: forwardSolver->inputMesh->vertices()){
-        update_vecs[v] = vec2vec3(tmp_pos_mat.row(v.getIndex()));
+        update_vecs[v] = vec2vec3(tmp_pos_mat.row(v.getIndex())) - old_positions[v];
     }
     return update_vecs;
 }
 
 VertexData<Vector3> InverseSolver::trivial_update_positions(VertexData<Vector3> hull_updates){
-    VertexData<Vector3> old_positions = forwardSolver->inputGeometry->inputVertexPositions,
-                        new_positions = forwardSolver->inputGeometry->inputVertexPositions;
+    VertexData<Vector3> updates(*forwardSolver->inputMesh, Vector3::zero());
     for (Vertex v: forwardSolver->hullMesh->vertices()){
         Vertex interior_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]);
-        new_positions[interior_vertex] = old_positions[interior_vertex] + hull_updates[v];
+        updates[interior_vertex] = hull_updates[v];
     }
-    return new_positions - old_positions;
+    return updates;
 }
 
 VertexData<Vector3> InverseSolver::greedy_update_positions(VertexData<Vector3> hull_updates){
