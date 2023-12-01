@@ -109,9 +109,10 @@ float step_size = 0.01,
       step_size2 = 0.01,
       step_size3 = 0.01;
 float stable_normal_update_thresh = -1;
+int ARAP_max_iters = 10;
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc"), std::string("bunny-hull"), std::string("bunnylp"), std::string("bunnylp-hull")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc"), std::string("bunny"), std::string("bunny-hull"), std::string("bunnylp"), std::string("bunnylp-hull")};
 std::string all_polygons_current_item = "bunnylp";
 static const char* all_polygons_current_item_c_str = "bunnylp";
 
@@ -369,15 +370,19 @@ void take_uni_mass_opt_vertices_step(){
   printf(" total per vertex derivatives found!\n");
 
   // Update original mesh vertices; hull will be updated internally
+  polyscope::registerSurfaceMesh("pre-step mesh", forwardSolver->inputGeometry->inputVertexPositions,
+                                               forwardSolver->inputMesh->getFaceVertexList());
+  
   auto trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * step_size3);
   polyscope::registerSurfaceMesh("pre-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions + trivial_updates,
                                                forwardSolver->inputMesh->getFaceVertexList());
-  
-  auto updates = inverseSolver->ARAP_update_positions(total_uni_mass_vertex_grads * step_size3);
+  printf("updating interior positions\n");
+  auto updates = inverseSolver->laplace_update_positions(total_uni_mass_vertex_grads * step_size3);
+  // auto updates = inverseSolver->ARAP_update_positions(total_uni_mass_vertex_grads * step_size3);
   // auto updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
   // auto updates = inverseSolver->diffusive_update_positions(total_uni_mass_vertex_grads * step_size3);
   forwardSolver->inputGeometry->inputVertexPositions += updates;
-
+  printf("updates for interior found!\n");
   polyscope::registerSurfaceMesh("post-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions,
                                                forwardSolver->inputMesh->getFaceVertexList());
   // update hull with new positions
@@ -534,7 +539,9 @@ void myCallback() {
   if (ImGui::SliderFloat("step size 3", &step_size3, 0., 10.0));
   if (ImGui::Checkbox("structured opt", &structured_opt));
   if (ImGui::Checkbox("update structured at every step", &always_update_structure));
-  if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 1.0));
+  if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
+  if (ImGui::SliderInt("ARAP max iters", &ARAP_max_iters, 1, 30)) inverseSolver->arap_max_iter = ARAP_max_iters;
+  
   if (ImGui::Button("just take step")) {
     just_take_step();
   }

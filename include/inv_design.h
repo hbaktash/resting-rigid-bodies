@@ -95,10 +95,18 @@ class InverseSolver{
 
         // position update for interior vertices
         // ARAP
+        size_t arap_max_iter = 10;
+        PositiveDefiniteSolver<double> *constrained_L_solver;
+        SparseMatrix<double> initial_Ls;
+        DenseMatrix<double> initial_pos_mat;
+        void save_initial_pos_and_Ls();
+        void initialize_constrained_L_solver(Vector<size_t> interior_indices);
         VertexData<DenseMatrix<double>> find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos);
         VertexData<Vector3> ARAP_update_positions(VertexData<Vector3> hull_updates);
-        VertexData<Vector3> trivial_update_positions(VertexData<Vector3> hull_updates);
+        VertexData<Vector3> laplace_update_positions(VertexData<Vector3> hull_updates);
+        // Laplacian edit
         // Greedy stuff
+        VertexData<Vector3> trivial_update_positions(VertexData<Vector3> hull_updates);
         VertexData<Vector3> greedy_update_positions(VertexData<Vector3> hull_updates);
         VertexData<Vector3> diffusive_update_positions(VertexData<Vector3> hull_updates);
 };

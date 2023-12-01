@@ -80,14 +80,25 @@ void Forward3DSolver::update_convex_hull(){
     hullGeometry = new VertexPositionGeometry(*hullMesh);
     org_hull_indices = VertexData<size_t>(*hullMesh);
     on_hull_index = VertexData<size_t>(*inputMesh, INVALID_IND);
+    hull_indices.resize(hullMesh->nVertices());
     for (Vertex v: hullMesh->vertices()){
         Vector3 new_pos = hull_poses[v.getIndex()];
         hullGeometry->inputVertexPositions[v] = new_pos;
         inputGeometry->inputVertexPositions[hull_vertex_mapping[v.getIndex()]] = new_pos;
         org_hull_indices[v] = hull_vertex_mapping[v.getIndex()];
         on_hull_index[hull_vertex_mapping[v.getIndex()]] = v.getIndex();
+        hull_indices[v.getIndex()] = org_hull_indices[v];
     }
     printf(" -- convex hull updated -- \n");
+    
+    // updating index vectors
+    interior_indices.resize(inputMesh->nVertices() - hullMesh->nVertices()); // = std::vector<size_t>(inputMesh->nVertices() - hullMesh->nVertices());
+    size_t cnt = 0;
+    for (Vertex v: inputMesh->vertices()){
+        if (on_hull_index[v] == INVALID_IND){
+            interior_indices[cnt++] = v.getIndex();
+        }
+    }
 }
 
 // height from G to ground after contact
