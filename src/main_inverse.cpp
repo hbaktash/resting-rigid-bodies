@@ -345,6 +345,16 @@ void take_opt_vertices_step(){
   update_visuals_with_G();
 }
 
+void show_hull_updates(VertexData<Vector3> hull_updates){
+  polyscope::PointCloud* pre_pc = polyscope::registerPointCloud("pre-step hull points", forwardSolver->hullGeometry->inputVertexPositions);
+  pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1.5, false);
+  pre_pc->setPointColor(glm::vec3({0.8,0.1, 0.1}));
+
+  polyscope::PointCloud* post_pc = polyscope::registerPointCloud("post-step hull points", forwardSolver->hullGeometry->inputVertexPositions + hull_updates);
+  pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1.5, false);
+  pre_pc->setPointColor(glm::vec3({0.1,0.1, 0.8}));
+}
+
 
 void take_uni_mass_opt_vertices_step(){
 
@@ -370,9 +380,11 @@ void take_uni_mass_opt_vertices_step(){
   printf(" total per vertex derivatives found!\n");
 
   // Update original mesh vertices; hull will be updated internally
+  polyscope::registerSurfaceMesh("pre-step hull", forwardSolver->hullGeometry->inputVertexPositions,
+                                               forwardSolver->hullMesh->getFaceVertexList());
   polyscope::registerSurfaceMesh("pre-step mesh", forwardSolver->inputGeometry->inputVertexPositions,
                                                forwardSolver->inputMesh->getFaceVertexList());
-  
+  show_hull_updates(total_uni_mass_vertex_grads * step_size3);
   auto trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * step_size3);
   polyscope::registerSurfaceMesh("pre-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions + trivial_updates,
                                                forwardSolver->inputMesh->getFaceVertexList());
@@ -395,52 +407,6 @@ void take_uni_mass_opt_vertices_step(){
   update_visuals_with_G();
 }
 
-void just_take_step(){
-  printf("finding uniform mass\n");
-  forwardSolver->set_uniform_G();
-  printf("finding uniform mass\n");
-  forwardSolver->initialize_pre_computes();
-  printf("finding derivatives\n");
-  inverseSolver->find_uni_mass_d_pf_dv();
-  printf(" uni mass derivatives found!\n");
-  if (structured_opt){ // if updating the flow structure
-    boundary_builder->build_boundary_normals();
-    boundary_builder->print_area_of_boundary_loops();
-    if (first_time || always_update_structure){
-      inverseSolver->flow_structure = forwardSolver->face_last_face;
-      if (first_time) stable_normal_update_thresh = -1.;
-      else stable_normal_update_thresh = 0.1;
-      first_time = false;
-    }
-  }
-  printf(" finding total per vertex derivatives\n");
-  VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt, stable_normal_update_thresh);
-  printf(" total per vertex derivatives found!\n");
-
-  // Update original mesh vertices; hull will be updated internally
-  auto trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * step_size3);
-  polyscope::registerSurfaceMesh("pre-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions + trivial_updates,
-                                               forwardSolver->inputMesh->getFaceVertexList());
-  
-  auto updates = inverseSolver->ARAP_update_positions(total_uni_mass_vertex_grads * step_size3);
-  // // auto updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
-  // // auto updates = inverseSolver->diffusive_update_positions(total_uni_mass_vertex_grads * step_size3);
-  forwardSolver->inputGeometry->inputVertexPositions += updates;
-
-  polyscope::registerSurfaceMesh("post-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions,
-                                               forwardSolver->inputMesh->getFaceVertexList());
-  // update hull with new positions
-  forwardSolver->update_convex_hull();
-  polyscope::registerSurfaceMesh("hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                              forwardSolver->hullMesh->getFaceVertexList());
-}
-
-void just_update(){
-  forwardSolver->set_uniform_G();
-  G = forwardSolver->get_G();
-  update_solver_and_boundaries();
-  update_visuals_with_G();
-}
 
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
@@ -541,13 +507,6 @@ void myCallback() {
   if (ImGui::Checkbox("update structured at every step", &always_update_structure));
   if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
   if (ImGui::SliderInt("ARAP max iters", &ARAP_max_iters, 1, 30)) inverseSolver->arap_max_iter = ARAP_max_iters;
-  
-  if (ImGui::Button("just take step")) {
-    just_take_step();
-  }
-  if (ImGui::Button("just update")) {
-    just_update();
-  }
 }
 
 

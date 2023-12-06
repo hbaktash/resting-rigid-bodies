@@ -65,7 +65,7 @@ class InverseSolver{
         VertexData<Face> interior_v_to_hull_f;
         VertexData<double> interior_v_to_hull_f_hit_ratio;
 
-        void initialize_interior_vertex_trackers();
+        // void initialize_interior_vertex_trackers();
         // gradient computation; assuming regularity
         // note: pf = face region area
         // G grad; vertices frozen
@@ -107,6 +107,5 @@ class InverseSolver{
         // Laplacian edit
         // Greedy stuff
         VertexData<Vector3> trivial_update_positions(VertexData<Vector3> hull_updates);
-        VertexData<Vector3> greedy_update_positions(VertexData<Vector3> hull_updates);
         VertexData<Vector3> diffusive_update_positions(VertexData<Vector3> hull_updates);
 };

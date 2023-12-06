@@ -76,8 +76,8 @@ InverseSolver::InverseSolver(BoundaryBuilder* boundaryBuilder){
     this->boundaryBuilder = boundaryBuilder;
     forwardSolver = boundaryBuilder->forward_solver;
     set_fair_distribution();
-    initialize_constrained_L_solver(forwardSolver->interior_indices); // calling required L
     save_initial_pos_and_Ls(); // calling required L
+    initialize_constrained_L_solver(forwardSolver->interior_indices); // calling required L
 }
 
 void InverseSolver::save_initial_pos_and_Ls(){
@@ -110,39 +110,7 @@ void InverseSolver::set_fair_distribution_for_sink_faces(){
         if (flow_structure[f] == f && boundaryBuilder->face_region_area[f] >= nth_largest_area){
             goal_prob[f] = 1./(double)count;
             old_stable_normals.push_back(face_normal);
-        }
-    }
-}
-
-
-// try not to use
-void InverseSolver::initialize_interior_vertex_trackers(){
-    for (Face f: forwardSolver->hullMesh->faces()){
-        Vector3 face_normal = forwardSolver->hullGeometry->faceNormal(f);
-        old_normals.push_back(face_normal);
-    }
-    
-    interior_v_to_hull_f = VertexData<Face>(*forwardSolver->inputMesh, Face());
-    interior_v_to_hull_f_hit_ratio = VertexData<double>(*forwardSolver->inputMesh, -1.);
-
-    Vector3 O = forwardSolver->get_G();
-    for (Vertex v: forwardSolver->inputMesh->vertices()){
-        if (forwardSolver->on_hull_index[v] != INVALID_IND)
-            continue;
-        Vector3 p = forwardSolver->inputGeometry->inputVertexPositions[v];
-        for (Face hull_f: forwardSolver->hullMesh->faces()){
-            // assuming planar faces
-            Halfedge he = hull_f.halfedge();
-            std::vector<Vector3> polygon_points;
-            for (Vertex fv: hull_f.adjacentVertices()){
-                Vector3 p1 = forwardSolver->hullGeometry->inputVertexPositions[fv];
-                polygon_points.push_back(p1);
-            }
-            double t = ray_intersect(O, (p - O).normalize(), polygon_points);
-            if (t != -1){
-                interior_v_to_hull_f[v] = hull_f;
-                interior_v_to_hull_f_hit_ratio[v] = (p - O).norm()/t;
-            }
+            printf(" face %d goal area: %f \n", f.getIndex(), goal_prob[f]);
         }
     }
 }
@@ -185,11 +153,45 @@ void InverseSolver::update_fair_distribution(double normal_threshold){
         // }
     }
     double goal_fair_prob = 1./(double)new_stables_count;
-    for (Face f: new_stable_faces)
+    for (Face f: new_stable_faces){
         goal_prob[f] += goal_fair_prob; // += in case two stables merge into one
+        printf(" face %d goal area: %f \n", f.getIndex(), goal_prob[f]);
+    }
     old_stable_normals = new_stable_normals;
     printf("done updating stable faces\n");
 }
+
+
+// try not to use
+// void InverseSolver::initialize_interior_vertex_trackers(){
+//     for (Face f: forwardSolver->hullMesh->faces()){
+//         Vector3 face_normal = forwardSolver->hullGeometry->faceNormal(f);
+//         old_normals.push_back(face_normal);
+//     }
+//     interior_v_to_hull_f = VertexData<Face>(*forwardSolver->inputMesh, Face());
+//     interior_v_to_hull_f_hit_ratio = VertexData<double>(*forwardSolver->inputMesh, -1.);
+//     Vector3 O = forwardSolver->get_G();
+//     for (Vertex v: forwardSolver->inputMesh->vertices()){
+//         if (forwardSolver->on_hull_index[v] != INVALID_IND)
+//             continue;
+//         Vector3 p = forwardSolver->inputGeometry->inputVertexPositions[v];
+//         for (Face hull_f: forwardSolver->hullMesh->faces()){
+//             // assuming planar faces
+//             Halfedge he = hull_f.halfedge();
+//             std::vector<Vector3> polygon_points;
+//             for (Vertex fv: hull_f.adjacentVertices()){
+//                 Vector3 p1 = forwardSolver->hullGeometry->inputVertexPositions[fv];
+//                 polygon_points.push_back(p1);
+//             }
+//             double t = ray_intersect(O, (p - O).normalize(), polygon_points);
+//             if (t != -1){
+//                 interior_v_to_hull_f[v] = hull_f;
+//                 interior_v_to_hull_f_hit_ratio[v] = (p - O).norm()/t;
+//             }
+//         }
+//     }
+// }
+
 
 void InverseSolver::find_d_pf_d_Gs(bool check_FD){
     Vector3 zero_vec = Vector3::zero();
@@ -449,9 +451,9 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
             }
             // printf("      -- tmp grad norm for v %d: %f \n", v.getIndex(), uni_mass_d_pf_dv[f][v].norm());
         }
-        printf("   finding total grad for f %d area: %f goal area: %f \n", f.getIndex(),
-                                                                        boundaryBuilder->face_region_area[last_sink_face]/(4.*PI),
-                                                                        goal_prob[last_sink_face]);
+        // printf("   finding total grad for f %d area: %f goal area: %f \n", f.getIndex(),
+        //                                                                 boundaryBuilder->face_region_area[last_sink_face]/(4.*PI),
+        //                                                                 goal_prob[last_sink_face]);
     }
     return uni_mass_total_vertex_grads;
 }
@@ -469,17 +471,19 @@ DenseMatrix<double> solve_dense_b(LinearSolver<double> *solver, DenseMatrix<doub
 VertexData<DenseMatrix<double>> 
 InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos){
     VertexData<DenseMatrix<double>> rotations(*forwardSolver->inputMesh);
-    SparseMatrix<double> L = forwardSolver->inputGeometry->cotanLaplacian; // assuming required already called
+    auto edgeCotW = forwardSolver->inputGeometry->edgeCotanWeights;
     for (Vertex v: forwardSolver->inputMesh->vertices()){
         size_t n_v = v.degree();
         Vector<size_t> neigh_inds(n_v);
         Vector<double> weights(n_v);
         size_t cnt = 0;
-        for (Vertex fv: v.adjacentVertices()){
-            neigh_inds(cnt) = fv.getIndex();
-            weights(cnt) = -L.coeffRef(v.getIndex(), fv.getIndex());
+        for (Edge e: v.adjacentEdges()){
+            Vertex neigh_v = e.otherVertex(v);
+            neigh_inds(cnt) = neigh_v.getIndex();
+            weights(cnt) = edgeCotW[e];
             cnt++;
         }
+        assert(n_v == cnt);
         DenseMatrix<double> weights_diag = weights.asDiagonal();
         DenseMatrix<double> P_v = old_pos(v.getIndex(), Eigen::all).replicate(n_v, 1) - 
                                    old_pos(neigh_inds, Eigen::all),
@@ -491,7 +495,7 @@ InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> n
         DenseMatrix<double> U = bdcSVD.matrixU(),
                             V = bdcSVD.matrixV();
         DenseMatrix<double> R_v = V * U.transpose();
-        rotations[v] = R_v.transpose();
+        rotations[v] = R_v;
         std::cout<< "rot at v " << v.getIndex() << ":\n" << R_v << "\n";
     }
     return rotations;
@@ -503,12 +507,14 @@ void InverseSolver::initialize_constrained_L_solver(Vector<size_t> interior_indi
     // get laplacian and prefactor
     forwardSolver->inputGeometry->requireCotanLaplacian();
     SparseMatrix<double> L(forwardSolver->inputGeometry->cotanLaplacian);
-    SparseMatrix<double> Ls = L + 1e-6 * identityMatrix<double>(n);
+    SparseMatrix<double> Ls = L + 1e-7 * identityMatrix<double>(n);
     // constrained matrix
-    DenseMatrix<double> temp_Ls = Ls.toDense();
-    SparseMatrix<double> constrained_Ls = temp_Ls(interior_indices, 
-                                                  interior_indices).sparseView();
-    constrained_L_solver = new PositiveDefiniteSolver<double>(constrained_Ls);
+    Vector<bool> interior_indicator(n);
+    interior_indicator.fill(false);
+    for (size_t int_idx: interior_indices)
+        interior_indicator[int_idx] = true;
+    BlockDecompositionResult<double> decomp = blockDecomposeSquare(Ls, interior_indicator, true);
+    constrained_L_solver = new PositiveDefiniteSolver<double>(decomp.AA);
     forwardSolver->inputGeometry->unrequireCotanLaplacian();
 }
 
@@ -578,9 +584,7 @@ VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hul
     SparseMatrix<double> Ls = L + 1e-6 * identityMatrix<double>(n);
     PositiveDefiniteSolver<double> L_solver(Ls);
     // constrained matrix
-    DenseMatrix<double> temp_Ls = Ls.toDense();
-    SparseMatrix<double> constrained_Ls = temp_Ls(interior_indices, interior_indices).sparseView();
-    PositiveDefiniteSolver<double> constrained_L_solver(constrained_Ls);
+    initialize_constrained_L_solver(interior_indices);
 
     DenseMatrix<double> old_pos_mat = vertex_data_to_matrix(old_positions);
     DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_positions);
@@ -592,14 +596,16 @@ VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hul
     constrained_vec(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
     constrained_vec = Ls * constrained_vec;
     DenseMatrix<double> init_sol(n,3);
-    init_sol(interior_indices, Eigen::all) = solve_dense_b(&constrained_L_solver, (delta - constrained_vec)(interior_indices, Eigen::all)); // laplacian edit process
+    init_sol(interior_indices, Eigen::all) = solve_dense_b(constrained_L_solver, (delta - constrained_vec)(interior_indices, Eigen::all)); // laplacian edit process
     init_sol(hull_indices, Eigen::all) = new_pos_mat(hull_indices, Eigen::all);
-    // // just trying the naive approach for now
+    // // naive initialization
     // init_sol = new_pos_mat;
+
     polyscope::registerSurfaceMesh("z ARAP init", init_sol,
                                            forwardSolver->inputMesh->getFaceVertexList());
     DenseMatrix<double> tmp_pos_mat = init_sol,
                         tmp_interior_pos_mat = init_sol(interior_indices, Eigen::all);
+    forwardSolver->inputGeometry->requireEdgeCotanWeights(); // needed for rotations
     for (size_t i = 0; i < max_iters; i++){
         // evaluate R_i's
         VertexData<DenseMatrix<double>> rotations = find_rotations(old_pos_mat, tmp_pos_mat);
@@ -612,18 +618,18 @@ VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hul
             DenseMatrix<double> R_v = rotations[v];
             if (forwardSolver->on_hull_index[v] != INVALID_IND)
                 R_v = identityMatrix<double>(3).toDense();
-            for (Vertex fv: v.adjacentVertices()){
-                DenseMatrix<double> R_fv = rotations[fv];
-                if (forwardSolver->on_hull_index[fv] != INVALID_IND)
-                    R_fv = identityMatrix<double>(3).toDense();
-                auto p_fv = old_pos_mat.row(fv.getIndex());
-                b(v.getIndex(), Eigen::all) += (-L.coeffRef(v.getIndex(), fv.getIndex()) * 
-                                       (R_v + R_fv) * (p_v - p_fv).transpose()).transpose()/2.;
+            for (Vertex v_neigh: v.adjacentVertices()){
+                DenseMatrix<double> R_v_neigh = rotations[v_neigh];
+                if (forwardSolver->on_hull_index[v_neigh] != INVALID_IND)
+                    R_v_neigh = identityMatrix<double>(3).toDense();
+                auto p_v_neigh = old_pos_mat.row(v_neigh.getIndex());
+                b(v.getIndex(), Eigen::all) += (-L.coeffRef(v.getIndex(), v_neigh.getIndex()) * 
+                                       (R_v + R_v_neigh) * (p_v - p_v_neigh).transpose()).transpose()/2.;
             }
         }
         // solving with constraints
         DenseMatrix<double> constrained_b = (b - constrained_vec)(interior_indices, Eigen::all);
-        tmp_interior_pos_mat = solve_dense_b(&constrained_L_solver, constrained_b);
+        tmp_interior_pos_mat = solve_dense_b(constrained_L_solver, constrained_b);
         tmp_pos_mat(interior_indices, Eigen::all) = tmp_interior_pos_mat;
         // polyscope::registerSurfaceMesh("z ARAP iter " + std::to_string(i), tmp_pos_mat,
         //                                        forwardSolver->inputMesh->getFaceVertexList());
@@ -644,41 +650,41 @@ VertexData<Vector3> InverseSolver::trivial_update_positions(VertexData<Vector3> 
     return updates;
 }
 
-VertexData<Vector3> InverseSolver::greedy_update_positions(VertexData<Vector3> hull_updates){
-    VertexData<Vector3> old_positions = forwardSolver->hullGeometry->inputVertexPositions;
-    // temp update
-    forwardSolver->hullGeometry->inputVertexPositions += hull_updates;
-    printf("hererer\n");
-    Vector3 O = forwardSolver->get_G(); // not updated yet!
-    VertexData<Vector3> greedy_updates(*forwardSolver->inputMesh);
-    for (Vertex v: forwardSolver->inputMesh->vertices()){
-        if (forwardSolver->on_hull_index[v] == INVALID_IND){ // interior check!
-            Face corres_hull_face = interior_v_to_hull_f[v];
-            Vector3 corresF_new_normal = forwardSolver->hullGeometry->faceNormal(corres_hull_face),
-                    corresF_old_normal = old_normals[corres_hull_face.getIndex()];
-            Vector3 old_OP = forwardSolver->inputGeometry->inputVertexPositions[v] - O;
-            Vector3 rot_axis_unnormalized = cross(corresF_old_normal, corresF_new_normal);
-            double rotation_theta = asin(rot_axis_unnormalized.norm());
-            Vector3 new_OP = old_OP.rotateAround(rot_axis_unnormalized.normalize(), rotation_theta);
+// VertexData<Vector3> InverseSolver::greedy_update_positions(VertexData<Vector3> hull_updates){
+//     VertexData<Vector3> old_positions = forwardSolver->hullGeometry->inputVertexPositions;
+//     // temp update
+//     forwardSolver->hullGeometry->inputVertexPositions += hull_updates;
+//     printf("hererer\n");
+//     Vector3 O = forwardSolver->get_G(); // not updated yet!
+//     VertexData<Vector3> greedy_updates(*forwardSolver->inputMesh);
+//     for (Vertex v: forwardSolver->inputMesh->vertices()){
+//         if (forwardSolver->on_hull_index[v] == INVALID_IND){ // interior check!
+//             Face corres_hull_face = interior_v_to_hull_f[v];
+//             Vector3 corresF_new_normal = forwardSolver->hullGeometry->faceNormal(corres_hull_face),
+//                     corresF_old_normal = old_normals[corres_hull_face.getIndex()];
+//             Vector3 old_OP = forwardSolver->inputGeometry->inputVertexPositions[v] - O;
+//             Vector3 rot_axis_unnormalized = cross(corresF_old_normal, corresF_new_normal);
+//             double rotation_theta = asin(rot_axis_unnormalized.norm());
+//             Vector3 new_OP = old_OP.rotateAround(rot_axis_unnormalized.normalize(), rotation_theta);
             
-            // possible re-scale; TODO: always rescale even if not hitting
-            std::vector<Vector3> polygon_points;
-            for (Vertex fv: corres_hull_face.adjacentVertices())
-                polygon_points.push_back(forwardSolver->hullGeometry->inputVertexPositions[fv]);
-            double new_t = ray_intersect(O, new_OP.normalize(), polygon_points);
-            if (new_t != -1.)
-                new_OP = new_OP.normalize() * interior_v_to_hull_f_hit_ratio[v] * new_t;
-            // o.w. just rotate
+//             // possible re-scale; TODO: always rescale even if not hitting
+//             std::vector<Vector3> polygon_points;
+//             for (Vertex fv: corres_hull_face.adjacentVertices())
+//                 polygon_points.push_back(forwardSolver->hullGeometry->inputVertexPositions[fv]);
+//             double new_t = ray_intersect(O, new_OP.normalize(), polygon_points);
+//             if (new_t != -1.)
+//                 new_OP = new_OP.normalize() * interior_v_to_hull_f_hit_ratio[v] * new_t;
+//             // o.w. just rotate
 
-            greedy_updates[v] = O + new_OP - old_positions[v];
-        }
-        else 
-            greedy_updates[v] = hull_updates[forwardSolver->on_hull_index[v]];
-    }
-    // undo hull updates?
-    forwardSolver->hullGeometry->inputVertexPositions = old_positions;
-    return greedy_updates;
-}
+//             greedy_updates[v] = O + new_OP - old_positions[v];
+//         }
+//         else 
+//             greedy_updates[v] = hull_updates[forwardSolver->on_hull_index[v]];
+//     }
+//     // undo hull updates?
+//     forwardSolver->hullGeometry->inputVertexPositions = old_positions;
+//     return greedy_updates;
+// }
 
 VertexData<Vector3> InverseSolver::diffusive_update_positions(VertexData<Vector3> hull_updates){
     //  --- updating with diffusion ---  //

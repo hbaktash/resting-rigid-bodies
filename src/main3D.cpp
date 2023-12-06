@@ -65,7 +65,7 @@ VertexPositionGeometry* sphere_geometry;
         
 
 // Polyscope visualization handle, to quickly add data to the surface
-polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, 
+polyscope::SurfaceMesh *psInputMesh, *psHullMesh, *dummy_psMesh1, 
                        *dummy_psMesh2, *dummy_psMesh3, *dummy_psMesh4,
                        *dummy_forward_vis,
                        *coloredPsMesh, *gm_sphere_mesh, *height_function_mesh;
@@ -125,17 +125,23 @@ static const char* all_polygons_current_item_c_str = "tet";
 
 
 
-void draw_stable_patches_on_gauss_map(){
+void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
   if (!forwardSolver->updated)
     forwardSolver->initialize_pre_computes();
   // std::vector<Vector3> boundary_normals;
   if (draw_boundary_patches){
-    auto pair = build_and_draw_stable_patches_on_gauss_map(boundary_builder, dummy_psMesh_for_regions,
+    auto net_pair = build_and_draw_stable_patches_on_gauss_map(boundary_builder, dummy_psMesh_for_regions,
                                                vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
-                                               height_function_extras && gm_is_drawn);
+                                               on_height_surface);
     if (test_guess)
-      vis_utils.draw_guess_pc(pair.first, pair.second);
+      vis_utils.draw_guess_pc(net_pair.first, net_pair.second);
+    else {
+      if (polyscope::hasPointCloud("test point cloud")) polyscope::removePointCloud("test point cloud");
+      if (polyscope::hasSurfaceMesh("dummy mesh for stable regions on polyhedra")) polyscope::removeSurfaceMesh("dummy mesh for stable regions on polyhedra");
+    }
   }
+  else
+    if (polyscope::hasSurfaceMesh("dummy mesh for GM patch arcs")) polyscope::removeSurfaceMesh("dummy mesh for GM patch arcs");
 }
 
 
@@ -160,18 +166,29 @@ void visualize_gauss_map(){
   gm_is_drawn = true;
 }
 
+// initialize boundary builder
+void initialize_boundary_builder(){
+  boundary_builder = new BoundaryBuilder(forwardSolver);
+  boundary_builder->build_boundary_normals();
+}
 
 
 void update_solver(){
   //assuming convex input here
   forwardSolver = new Forward3DSolver(mesh, geometry, G);
+  forwardSolver->initialize_pre_computes();
+  initialize_boundary_builder();
   vis_utils.forwardSolver = forwardSolver;
   // Register the mesh with polyscope
   psInputMesh = polyscope::registerSurfaceMesh(
-      "input mesh",
-      geometry->inputVertexPositions, mesh->getFaceVertexList(),
-      polyscopePermutations(*mesh));
+    "input mesh",
+    geometry->inputVertexPositions, mesh->getFaceVertexList(),
+    polyscopePermutations(*mesh));
   psInputMesh->setTransparency(0.75);
+  psHullMesh = polyscope::registerSurfaceMesh(
+    "hull mesh",
+    forwardSolver->hullGeometry->inputVertexPositions, forwardSolver->hullMesh->getFaceVertexList(),
+    polyscopePermutations(*forwardSolver->hullMesh));
   vis_utils.draw_G();
 }
 
@@ -224,18 +241,10 @@ void visualize_sudo_faces(){
 }
 
 
-// initialize boundary builder
-void initialize_boundary_builder(){
-  boundary_builder = new BoundaryBuilder(forwardSolver);
-  boundary_builder->build_boundary_normals();
-}
-// visualize boundary
-
-
 // color input polyhedra with default
 void color_faces_with_default(){
   FaceData<Vector3> face_colors(*forwardSolver->hullMesh, default_face_color);
-  polyscope::SurfaceFaceColorQuantity *fColor = psInputMesh->addFaceColorQuantity("state vis color", face_colors);
+  polyscope::SurfaceFaceColorQuantity *fColor = psHullMesh->addFaceColorQuantity("state vis color", face_colors);
   fColor->setEnabled(true);
 }
 
@@ -245,8 +254,8 @@ void visualize_g_vec(){
   std::vector<Vector3> the_g_vec = {forwardSolver->curr_g_vec};
   polyscope::PointCloudVectorQuantity *psG_vec = vis_utils.psG->addVectorQuantity("g_vec", the_g_vec);
   psG_vec->setEnabled(true);
-  psG_vec->setVectorRadius(curve_radi_scale * 1., false);
-  psG_vec->setVectorLengthScale(0.2);
+  psG_vec->setVectorRadius(curve_radi_scale * 5., false);
+  psG_vec->setVectorLengthScale(1., false);
   psG_vec->setVectorColor({0.8,0.1,0.1});
 }
 
@@ -263,13 +272,13 @@ void visualize_contact(){
     std::vector<Vector3> curr_state_pos = {forwardSolver->hullGeometry->inputVertexPositions[forwardSolver->curr_v]}; // first and second should be the same since we just initialized.
     curr_state_pt = polyscope::registerPointCloud("current Vertex", curr_state_pos);
     curr_state_pt->setEnabled(true);
-    curr_state_pt->setPointRadius(pt_cloud_radi_scale, false);
+    curr_state_pt->setPointRadius(pt_cloud_radi_scale * 5., false);
     
     // show gravity vec on Gauss Map
     std::vector<Vector3> curr_g_vec_pos = {forwardSolver->curr_g_vec + vis_utils.center}; // first and second should be the same since we just initialized.
     curr_g_vec_gm_pt = polyscope::registerPointCloud("current g vec", curr_g_vec_pos);
     curr_g_vec_gm_pt->setEnabled(true);
-    curr_g_vec_gm_pt->setPointRadius(vis_utils.gm_pt_radi * 1.1, false);
+    curr_g_vec_gm_pt->setPointRadius(vis_utils.gm_pt_radi * 5., false);
     curr_g_vec_gm_pt->setPointColor({0.,0.,0.});
   }
   else if (forwardSolver->curr_e.getIndex() != INVALID_IND){
@@ -283,14 +292,14 @@ void visualize_contact(){
     edgeInds.push_back({0, 1});
     positions.push_back(p1); positions.push_back(p2);
     curr_state_segment =  dummy_forward_vis->addSurfaceGraphQuantity("current contact edge", positions, edgeInds);
-    curr_state_segment->setRadius(curve_radi_scale/2.3);
+    curr_state_segment->setRadius(curve_radi_scale*3., false);
     curr_state_segment->setColor({0., 0., 1.});
     curr_state_segment->setEnabled(true);
   }
   else if (forwardSolver->curr_f.getIndex() != INVALID_IND){
     face_colors = FaceData<Vector3>(*forwardSolver->hullMesh, default_face_color);
     face_colors[forwardSolver->curr_f] = curr_face_color;
-    polyscope::SurfaceFaceColorQuantity *fColor = psInputMesh->addFaceColorQuantity("state vis color", face_colors);
+    polyscope::SurfaceFaceColorQuantity *fColor = psHullMesh->addFaceColorQuantity("state vis color", face_colors);
     fColor->setEnabled(true);
   }
   else {
@@ -324,13 +333,21 @@ void color_faces(){
   }
 }
 
+void update_solver_and_boundaries(){
+  auto t1 = clock();
+  forwardSolver->set_G(G);
+  // printf("forward precomputes \n");
+  forwardSolver->initialize_pre_computes();
+  printf("building boundary normals \n");
+  boundary_builder->build_boundary_normals();
+  boundary_builder->print_area_of_boundary_loops();
+  printf("precomputes took %d\n", clock() - t1);
+}
+
 
 void update_visuals_with_G(){
-  forwardSolver->set_G(G);
-  vis_utils.draw_G();
   auto t1 = clock();
-  forwardSolver->initialize_pre_computes();
-  printf("precomputes took %d\n", clock() - t1);
+  vis_utils.draw_G();
   if (gm_is_drawn)
     vis_utils.plot_height_function();
   // stuff on the polyhedra
@@ -351,12 +368,8 @@ void update_visuals_with_G(){
   vis_utils.draw_stable_face_normals_on_gauss_map();
   printf("visuals took %d\n", clock() - t1);
   t1 = clock();
-  initialize_boundary_builder();
-  boundary_builder->print_area_of_boundary_loops();
-  printf("boundary took %d\n", clock() - t1);
-  t1 = clock();
   if (draw_boundary_patches)
-    draw_stable_patches_on_gauss_map();
+    draw_stable_patches_on_gauss_map(gm_is_drawn);
   printf("boundary visuals took %d\n", clock() - t1);
   // initiate_markov_model();
   // visualize_sudo_faces();
@@ -466,16 +479,18 @@ void myCallback() {
     }
   }
   if (ImGui::Button("uniform mass G")){
-    G = find_center_of_mass(*mesh, *geometry).first;
+    G = find_center_of_mass(*forwardSolver->hullMesh, *forwardSolver->hullGeometry).first;
+    update_solver_and_boundaries();
     update_visuals_with_G();
   }
   if (ImGui::Button("Show Gauss Map")){///face_normal_vertex_gm_radi
     visualize_gauss_map();
+    // Debugging stuff
     // geometry->requireFaceNormals();
-    FaceData<Vector3> selected_normals(*mesh, Vector3::zero());
-    selected_normals[mesh->face(566)] = geometry->faceNormal(mesh->face(566));
-    selected_normals[mesh->face(3975)] = geometry->faceNormal(mesh->face(3975));
-    psInputMesh->addFaceVectorQuantity("selected normals ", selected_normals)->setEnabled(true);
+    // FaceData<Vector3> selected_normals(*mesh, Vector3::zero());
+    // selected_normals[mesh->face(566)] = geometry->faceNormal(mesh->face(566));
+    // selected_normals[mesh->face(3975)] = geometry->faceNormal(mesh->face(3975));
+    // psInputMesh->addFaceVectorQuantity("selected normals ", selected_normals)->setEnabled(true);
   }
   if (ImGui::Checkbox("colored arcs (slows)", &color_arcs)) vis_utils.color_arcs = color_arcs;
   if (ImGui::Checkbox("draw unstable edge arcs", &draw_unstable_edge_arcs)) {
@@ -510,7 +525,7 @@ void myCallback() {
     if(show_snail_trail && norm(old_g_vec-new_g_vec) != 0.){ // proly dont have to use tol
       draw_arc_on_sphere(old_g_vec, new_g_vec, vis_utils.center,
                          vis_utils.gm_radi, vis_utils.arcs_seg_count, 200 + snail_trail_dummy_counter, 
-                         dummy_ps_mesh_for_snail_trail, 1.5);
+                         dummy_ps_mesh_for_snail_trail, 3., {0.9,0.8,0.1});
       snail_trail_dummy_counter++;
     }
     old_g_vec = new_g_vec;

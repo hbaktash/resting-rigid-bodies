@@ -47,7 +47,7 @@ class VisualUtils{
               stablizable_edge_radi = 0.009,
               both_edge_radi = 0.013,
               gm_pt_radi = 0.01,
-              G_radi = 0.01;
+              G_radi = 0.1;
 
         
         glm::vec3 stable_edge_color = glm::vec3({0.2, 0.3, 0.3}),
