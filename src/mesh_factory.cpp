@@ -288,35 +288,10 @@ generate_polyhedra(std::string poly_str){
         std::cout << "pos: " << pos << "\n";
       }
     }
-    else if (std::strcmp(poly_str.c_str(), "bunny") == 0){
-      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/bunny.obj");
+    else { // read from file
+      std::string filename = "../meshes/" + poly_str + ".obj";
+      std::tie(mesh, geometry) = readManifoldSurfaceMesh(filename);
       return std::make_tuple(std::move(mesh), std::move(geometry));
-    }
-    else if (std::strcmp(poly_str.c_str(), "bunny-hull") == 0){
-      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/bunny-convhull.obj");
-      return std::make_tuple(std::move(mesh), std::move(geometry));
-    }
-    else if (std::strcmp(poly_str.c_str(), "bunnylp") == 0){
-      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/bunny-lp.stl");
-      return std::make_tuple(std::move(mesh), std::move(geometry));
-    }
-    else if (std::strcmp(poly_str.c_str(), "bunnylp-hull") == 0){
-      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/bunny-lp-convhull.obj");
-      return std::make_tuple(std::move(mesh), std::move(geometry));
-    }
-    else if (std::strcmp(poly_str.c_str(), "gomboc") == 0){
-      // std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/gomboc2.stl");
-      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/gomboc.obj");
-      return std::make_tuple(std::move(mesh), std::move(geometry));
-    }
-    else if (std::strcmp(poly_str.c_str(), "rndbs 9-gon 1") == 0){
-    }
-    else if (std::strcmp(poly_str.c_str(), "sphere") == 0){
-      std::tie(mesh, geometry) = readManifoldSurfaceMesh("../meshes/sphere.obj");
-      return std::make_tuple(std::move(mesh), std::move(geometry));
-    }
-    else {
-      throw std::runtime_error("no valid string provided\n");
     }
     // std::unique_ptr<ManifoldSurfaceMesh> poly_triangulated;
     

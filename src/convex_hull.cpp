@@ -107,12 +107,35 @@ get_convex_hull(VertexData<Vector3> point_set){
     surf_mesh->compress();
 
     return {surf_mesh->getFaceVertexList(), old_indices, poses};
-    // mesh = std::unique_ptr<ManifoldSurfaceMesh>(new ManifoldSurfaceMesh(surf_mesh->getFaceVertexList())); //  surf_mesh->toManifoldMesh()
-    // // mesh.reset(new ManifoldSurfaceMesh(hull_faces));
-    // geometry = std::unique_ptr<VertexPositionGeometry>(new VertexPositionGeometry(*mesh));
-    // for (Vertex v : mesh->vertices()) {
-    //     // Use the low-level indexers here since we're constructing
-    //     (*geometry).inputVertexPositions[v] = poses[v.getIndex()];
-    // }
-    // return std::make_tuple(std::move(mesh), std::move(geometry));
+}
+
+
+Vector3 project_back_into_hull(VertexPositionGeometry hull_geometry, Vector3 p){
+    // find closest face on hull
+    double min_face_dist  = std::numeric_limits<double>::infinity(),
+           min_point_dist = std::numeric_limits<double>::infinity();
+    Face closest_outward_face;
+    Vertex closest_vertex;
+    for (Face f: hull_geometry.mesh.faces()){ // check if face-projectable; while keeping track of closest vertex 
+        Halfedge curr_he  = f.halfedge(),
+                 first_he = f.halfedge();
+        Vector3 N_ABC = -hull_geometry.faceNormal(f);
+        if (dot(N_ABC, p - hull_geometry.inputVertexPositions[f.halfedge().vertex()]) <= 0) // not face-projectable on this face
+            continue;
+        while (true){ // checking if face-projectable
+            Vertex v1 = curr_he.tailVertex(), v2 = curr_he.tipVertex(), v3 = curr_he.next().tipVertex();
+            Vector3 A = hull_geometry.inputVertexPositions[v1], 
+                    B = hull_geometry.inputVertexPositions[v2], 
+                    C = hull_geometry.inputVertexPositions[v3];
+            min_point_dist = std::min(min_point_dist, std::min((p - A).norm(), std::min((p - B).norm(), (p - C).norm())));
+            // assume outward normals; which is inward w.r.t. p
+            Vector3 N_PAB = cross(A - B, p - A);
+            if (dot(N_ABC, N_PAB) >= 0) // not face-projectable on this face
+                return false;
+            curr_he = curr_he.next();
+            if (curr_he == first_he)
+                break;
+        }
+    }
+    return ;
 }

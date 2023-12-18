@@ -59,11 +59,11 @@ class InverseSolver{
         std::vector<Vector3> old_stable_normals;
         void update_fair_distribution(double normal_threshold);
         
-        // for keeping track of interior points
-        std::vector<Vector3> old_normals; 
-        std::vector<std::pair<Vector3, double>> old_to_new_normal_rotations;
-        VertexData<Face> interior_v_to_hull_f;
-        VertexData<double> interior_v_to_hull_f_hit_ratio;
+        // // for keeping track of interior points
+        // std::vector<Vector3> old_normals; 
+        // std::vector<std::pair<Vector3, double>> old_to_new_normal_rotations;
+        // VertexData<Face> interior_v_to_hull_f;
+        // VertexData<double> interior_v_to_hull_f_hit_ratio;
 
         // void initialize_interior_vertex_trackers();
         // gradient computation; assuming regularity
@@ -91,16 +91,20 @@ class InverseSolver{
         FaceData<Face> flow_structure;
         VertexData<Vector3> find_uni_mass_total_vertex_grads(bool with_flow_structure = false,
                                                              double stable_normal_update_thres = -1.);
-        
 
+        
+        // pre-step for updates 
+        void subdivide_for_aggressive_updates(VertexData<Vector3> hull_updates);
+        
         // position update for interior vertices
         // ARAP
         size_t arap_max_iter = 10;
         PositiveDefiniteSolver<double> *constrained_L_solver;
         SparseMatrix<double> initial_Ls;
-        DenseMatrix<double> initial_pos_mat;
+        VertexPositionGeometry* initial_geometry;
         void save_initial_pos_and_Ls();
-        void initialize_constrained_L_solver(Vector<size_t> interior_indices);
+        bool use_old_Ls = false;
+        DenseMatrix<double> solve_constrained_Laplace(Vector<size_t> interior_indices, DenseMatrix<double> old_pos, DenseMatrix<double> new_pos);
         VertexData<DenseMatrix<double>> find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos);
         VertexData<Vector3> ARAP_update_positions(VertexData<Vector3> hull_updates);
         VertexData<Vector3> laplace_update_positions(VertexData<Vector3> hull_updates);
@@ -108,4 +112,5 @@ class InverseSolver{
         // Greedy stuff
         VertexData<Vector3> trivial_update_positions(VertexData<Vector3> hull_updates);
         VertexData<Vector3> diffusive_update_positions(VertexData<Vector3> hull_updates);
+
 };
