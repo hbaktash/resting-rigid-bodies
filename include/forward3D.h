@@ -75,10 +75,10 @@ class Forward3DSolver {
     void set_uniform_G();
     Vector3 get_G();
 
-    // geometry updates
+    // Hull related updates
+    bool first_hull = false;
     Vector<size_t> hull_indices, interior_indices;
-    void update_convex_hull();
-    Vector3 project_back_into_hull(Vector3 p);
+    void update_convex_hull(bool with_projection = false);
 
     // initialize state
     void initialize_state(Vertex curr_v, Edge curr_e, Face curr_f, Vector3 curr_g_vec);

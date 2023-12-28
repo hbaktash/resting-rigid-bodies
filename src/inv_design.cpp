@@ -86,6 +86,7 @@ void InverseSolver::save_initial_pos_and_Ls(){
     initial_geometry->requireCotanLaplacian(); // could save this in future
     initial_Ls = initial_geometry->cotanLaplacian;
     initial_geometry->unrequireCotanLaplacian();
+    current_Ls = initial_Ls;
 }
 
 void InverseSolver::set_fair_distribution() {
@@ -501,7 +502,6 @@ DenseMatrix<double> solve_dense_b(LinearSolver<double> *solver, DenseMatrix<doub
 VertexData<DenseMatrix<double>> 
 InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos){
     VertexData<DenseMatrix<double>> rotations(*forwardSolver->inputMesh);
-    auto edgeCotW = forwardSolver->inputGeometry->edgeCotanWeights;
     for (Vertex v: forwardSolver->inputMesh->vertices()){
         size_t n_v = v.degree();
         Vector<size_t> neigh_inds(n_v);
@@ -510,7 +510,7 @@ InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> n
         for (Edge e: v.adjacentEdges()){
             Vertex neigh_v = e.otherVertex(v);
             neigh_inds(cnt) = neigh_v.getIndex();
-            weights(cnt) = edgeCotW[e];
+            weights(cnt) = current_Ls.coeff(e.firstVertex().getIndex(), e.secondVertex().getIndex());
             cnt++;
         }
         assert(n_v == cnt);
@@ -526,53 +526,54 @@ InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> n
                             V = bdcSVD.matrixV();
         DenseMatrix<double> R_v = V * U.transpose();
         rotations[v] = R_v;
-        std::cout<< "rot at v " << v.getIndex() << ":\n" << R_v << "\n";
+        // std::cout<< "rot at v " << v.getIndex() << ":\n" << R_v << "\n";
     }
     return rotations;
 }
 
-
-DenseMatrix<double> InverseSolver::solve_constrained_Laplace(Vector<size_t> interior_indices, DenseMatrix<double> old_pos, DenseMatrix<double> new_pos){
+void InverseSolver::update_Ls(){
     size_t n = forwardSolver->inputMesh->nVertices();
-    // get laplacian and prefactor
-    SparseMatrix<double> Ls;
     printf("old Ls flag: %d\n", use_old_Ls);
     if (use_old_Ls)
-        Ls = initial_Ls;
+        current_Ls = initial_Ls;
     else {
         printf("recomputing Ls\n");
         // forwardSolver->inputGeometry->unrequireCotanLaplacian();
         forwardSolver->inputGeometry->requireCotanLaplacian();
-        printf("new Laplace computed\n");
-        printf("Ls size: %d %d\n", forwardSolver->inputGeometry->cotanLaplacian.rows(), forwardSolver->inputGeometry->cotanLaplacian.cols());
-        printf("n: %d\n", n);
-        printf("input mesh size: %d\n", forwardSolver->inputGeometry->mesh.nVertices());
-        Ls = forwardSolver->inputGeometry->cotanLaplacian + 1e-7 * identityMatrix<double>(n);
-        printf("Ls assigned\n");
+        current_Ls = forwardSolver->inputGeometry->cotanLaplacian + 1e-7 * identityMatrix<double>(n);
         forwardSolver->inputGeometry->unrequireCotanLaplacian();
     }
+}
+
+
+DenseMatrix<double> InverseSolver::solve_constrained_Laplace(Vector<size_t> interior_indices, 
+                                                             DenseMatrix<double> old_pos, DenseMatrix<double> new_pos,
+                                                             bool update_solver_decomp){
+    size_t n = forwardSolver->inputMesh->nVertices();
+    // get laplacian and prefactor
+    geometrycentral::SparseMatrix<double> Ls = current_Ls;
+    
     // constrained matrix
-    Vector<bool> interior_indicator(n);
-    interior_indicator.fill(false);
-    printf("making interior indicator\n");
-    for (size_t int_idx: interior_indices)
-        interior_indicator[int_idx] = true;
-    printf("interior indicator done! Ls size %d %d, indic size %d\n", Ls.rows(), Ls.cols(), interior_indicator.size());
-    BlockDecompositionResult<double> decomp = blockDecomposeSquare(Ls, interior_indicator, false);
-    printf("decomposed!\n");
-    constrained_L_solver = new PositiveDefiniteSolver<double>(decomp.AA);
-    printf("solver created!\n");
+    if (update_solver_decomp){
+        Vector<bool> interior_indicator(n);
+        interior_indicator.fill(false);
+        printf("making interior indicator\n");
+        for (size_t int_idx: interior_indices)
+            interior_indicator[int_idx] = true;
+        printf("interior indicator done! Ls size %d %d, indic size %d\n", Ls.rows(), Ls.cols(), interior_indicator.size());
+        BlockDecompositionResult<double> decomp = blockDecomposeSquare(Ls, interior_indicator, false);
+        printf("decomposed!\n");
+        constrained_L_solver = new PositiveDefiniteSolver<double>(decomp.AA);
+        printf("solver created!\n");
+    }
 
     // initial solution
-    DenseMatrix<double> delta = Ls * old_pos; // Ls * old_pos
-    printf("ls size: %d %d poses size %d %d \n", Ls.rows(), Ls.cols(), old_pos.rows(), old_pos.cols());
-    DenseMatrix<double> constrained_vec(n,3); // zeros for non-constrained vertices
-    constrained_vec.fill(0.);
-    constrained_vec(forwardSolver->hull_indices, Eigen::all) = new_pos(forwardSolver->hull_indices, Eigen::all);
-    constrained_vec = Ls * constrained_vec;
+    DenseMatrix<double> padded_handles(n,3); // zeros for un-constrained vertices
+    padded_handles.fill(0.);
+    padded_handles(forwardSolver->hull_indices, Eigen::all) = new_pos(forwardSolver->hull_indices, Eigen::all);
     DenseMatrix<double> sol(n,3);
     // update constraint solver since hull indices changed
-    sol(interior_indices, Eigen::all) = solve_dense_b(constrained_L_solver, (delta - constrained_vec)(interior_indices, Eigen::all)); // laplacian edit process
+    sol(interior_indices, Eigen::all) = solve_dense_b(constrained_L_solver, (Ls*(old_pos - padded_handles))(interior_indices, Eigen::all)); // laplacian edit process
     sol(forwardSolver->hull_indices, Eigen::all) = new_pos(forwardSolver->hull_indices, Eigen::all);
     return sol;
 }
@@ -591,6 +592,7 @@ VertexData<Vector3> InverseSolver::laplace_update_positions(VertexData<Vector3> 
     DenseMatrix<double> old_pos_mat = vertex_data_to_matrix(old_positions); 
     DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_positions);
     
+    update_Ls(); // whether to use initial Laplacian or the current one
     DenseMatrix<double> sol = solve_constrained_Laplace(forwardSolver->interior_indices, old_pos_mat, new_pos_mat);
     
     VertexData<Vector3> update_vecs(*forwardSolver->inputMesh);
@@ -606,35 +608,21 @@ VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hul
     size_t max_iters = arap_max_iter; // shouldn't need much given the small updates?
     VertexData<Vector3> old_positions = forwardSolver->inputGeometry->inputVertexPositions,
                         new_positions = forwardSolver->inputGeometry->inputVertexPositions;
-    Vector<size_t> hull_indices(forwardSolver->hullMesh->nVertices()), // will be used for row selection later
-                   interior_indices(n - forwardSolver->hullMesh->nVertices());
-
     for (Vertex v: forwardSolver->hullMesh->vertices()){
         Vertex interior_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]);
         new_positions[interior_vertex] = old_positions[interior_vertex] + hull_updates[v];
-        hull_indices[v.getIndex()] = interior_vertex.getIndex();
     }
-    size_t cnt = 0;
-    for (Vertex v: forwardSolver->inputMesh->vertices()){
-        if (forwardSolver->on_hull_index[v] == INVALID_IND){
-            interior_indices[cnt++] = v.getIndex();
-        }
-    }
-
     DenseMatrix<double> old_pos_mat = vertex_data_to_matrix(old_positions);
     DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_positions);
     
     // constrained matrix
+    Vector<size_t> interior_indices = forwardSolver->interior_indices;
+    update_Ls(); // whether to use initial Laplacian or the current one
     DenseMatrix<double> init_sol = solve_constrained_Laplace(interior_indices, old_pos_mat, new_pos_mat);;
-    // // naive initialization
-    // init_sol = new_pos_mat;
-
-    polyscope::registerSurfaceMesh("z ARAP init", init_sol,
+    
+    polyscope::registerSurfaceMesh("z ARAP Laplace init", init_sol,
                                            forwardSolver->inputMesh->getFaceVertexList());
-    DenseMatrix<double> tmp_pos_mat = init_sol,
-                        tmp_interior_pos_mat = init_sol(interior_indices, Eigen::all);
-    forwardSolver->inputGeometry->requireEdgeCotanWeights(); // needed for rotations
-    SparseMatrix<double> L = forwardSolver->inputGeometry->cotanLaplacian;
+    DenseMatrix<double> tmp_pos_mat = init_sol;
     for (size_t i = 0; i < max_iters; i++){
         // evaluate R_i's
         VertexData<DenseMatrix<double>> rotations = find_rotations(old_pos_mat, tmp_pos_mat);
@@ -645,25 +633,26 @@ VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> hul
         for (Vertex v: forwardSolver->inputMesh->vertices()){
             auto p_v = old_pos_mat.row(v.getIndex());
             DenseMatrix<double> R_v = rotations[v];
-            if (forwardSolver->on_hull_index[v] != INVALID_IND)
-                R_v = identityMatrix<double>(3).toDense();
+            // if (forwardSolver->on_hull_index[v] != INVALID_IND)
+            //     R_v = identityMatrix<double>(3).toDense();
             for (Vertex v_neigh: v.adjacentVertices()){
                 DenseMatrix<double> R_v_neigh = rotations[v_neigh];
-                if (forwardSolver->on_hull_index[v_neigh] != INVALID_IND)
-                    R_v_neigh = identityMatrix<double>(3).toDense();
+                // if (forwardSolver->on_hull_index[v_neigh] != INVALID_IND)
+                //     R_v_neigh = identityMatrix<double>(3).toDense();
                 auto p_v_neigh = old_pos_mat.row(v_neigh.getIndex());
-                // TODO fix L
-                b(v.getIndex(), Eigen::all) += (-L.coeffRef(v.getIndex(), v_neigh.getIndex()) * 
-                                       (R_v + R_v_neigh) * (p_v - p_v_neigh).transpose()).transpose()/2.;
+                b(v.getIndex(), Eigen::all) += current_Ls.coeff(v.getIndex(), v_neigh.getIndex()) * 
+                                       ((R_v + R_v_neigh).transpose() * (p_v - p_v_neigh).transpose()).transpose();
             }
         }
+        b = b/2.;
         // solving with constraints
-        //TODO fix constrain vec
-        DenseMatrix<double> constrained_b = b(interior_indices, Eigen::all);
-        tmp_interior_pos_mat = solve_dense_b(constrained_L_solver, constrained_b);
-        tmp_pos_mat(interior_indices, Eigen::all) = tmp_interior_pos_mat;
-        // polyscope::registerSurfaceMesh("z ARAP iter " + std::to_string(i), tmp_pos_mat,
-        //                                        forwardSolver->inputMesh->getFaceVertexList());
+        DenseMatrix<double> padded_handles(n,3); // zeros for un-constrained vertices
+        padded_handles.fill(0.);
+        padded_handles(forwardSolver->hull_indices, Eigen::all) = new_pos_mat(forwardSolver->hull_indices, Eigen::all);
+        tmp_pos_mat(interior_indices, Eigen::all) = solve_dense_b(constrained_L_solver,  
+                                             (b - current_Ls*padded_handles)(interior_indices, Eigen::all));
+        polyscope::registerSurfaceMesh("z ARAP iter " + std::to_string(i), tmp_pos_mat,
+                                               forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
     }
     VertexData<Vector3> update_vecs(*forwardSolver->inputMesh);
     for (Vertex v: forwardSolver->inputMesh->vertices()){
@@ -693,14 +682,14 @@ VertexData<Vector3> InverseSolver::diffusive_update_positions(VertexData<Vector3
     double shortTime = 0.1 * meanEdgeLength * meanEdgeLength;
 
     forwardSolver->inputGeometry->requireVertexLumpedMassMatrix();
-    SparseMatrix<double>& M = forwardSolver->inputGeometry->vertexLumpedMassMatrix;
+    geometrycentral::SparseMatrix<double>& M = forwardSolver->inputGeometry->vertexLumpedMassMatrix;
 
     // Laplacian
     forwardSolver->inputGeometry->requireCotanLaplacian();
-    SparseMatrix<double> L = forwardSolver->inputGeometry->cotanLaplacian;
+    geometrycentral::SparseMatrix<double> L = forwardSolver->inputGeometry->cotanLaplacian;
 
     // Heat operator
-    SparseMatrix<double> heatOp = M + shortTime * L;
+    geometrycentral::SparseMatrix<double> heatOp = M + shortTime * L;
 
     PositiveDefiniteSolver<double> heatSolver(heatOp);
     

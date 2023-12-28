@@ -26,7 +26,6 @@
 #include "boundary_tools.h"
 #include "geometrycentral/numerical/linear_solvers.h"
 
-
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
@@ -100,11 +99,14 @@ class InverseSolver{
         // ARAP
         size_t arap_max_iter = 10;
         PositiveDefiniteSolver<double> *constrained_L_solver;
-        SparseMatrix<double> initial_Ls;
+        geometrycentral::SparseMatrix<double> initial_Ls;
+        geometrycentral::SparseMatrix<double> current_Ls;
         VertexPositionGeometry* initial_geometry;
         void save_initial_pos_and_Ls();
-        bool use_old_Ls = false;
-        DenseMatrix<double> solve_constrained_Laplace(Vector<size_t> interior_indices, DenseMatrix<double> old_pos, DenseMatrix<double> new_pos);
+        bool use_old_Ls = true;
+        void update_Ls();
+        DenseMatrix<double> solve_constrained_Laplace(Vector<size_t> interior_indices, DenseMatrix<double> old_pos, DenseMatrix<double> new_pos,
+                                                      bool update_solver_decomp = true);
         VertexData<DenseMatrix<double>> find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos);
         VertexData<Vector3> ARAP_update_positions(VertexData<Vector3> hull_updates);
         VertexData<Vector3> laplace_update_positions(VertexData<Vector3> hull_updates);

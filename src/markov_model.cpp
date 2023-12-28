@@ -461,7 +461,7 @@ void RollingMarkovModel::build_transition_matrix(){
     // not doing triplet list since duplicate pairs exist.
     std::vector<T> tripletList;
     tripletList.reserve(2*total_size); // just an estimate
-    transition_matrix = SparseMatrix<double>(total_size, total_size);
+    transition_matrix = geometrycentral::SparseMatrix<double>(total_size, total_size);
     // inserting all pairs of elements; 3 types
     for (int i = 0; i < vertex_sf_pairs.size(); i++){
         std::pair<Vertex, SudoFace*> v_sf_pair = vertex_sf_pairs[i];

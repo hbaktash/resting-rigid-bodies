@@ -112,6 +112,7 @@ set(inverse_SRCS
   src/boundary_tools.cpp
   src/inv_design.cpp
   src/convex_hull.cpp
+  src/deformation.cpp
 	# add any other source files here
 )
 
@@ -146,8 +147,8 @@ target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qh
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 # add the args.hxx project which we use for command line args
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
 target_link_libraries(invDesign PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
-
 
 # Bullet stuff
 

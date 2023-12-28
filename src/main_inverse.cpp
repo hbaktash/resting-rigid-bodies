@@ -23,9 +23,7 @@
 
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
-// #include "polyscope/curve_network.h"
 #include "polyscope/point_cloud.h"
-// #include "bullet3/examples/BasicExample.h"
 #include "args/args.hxx"
 #include "imgui.h"
 
@@ -36,13 +34,8 @@
 #include "visual_utils.h"
 #include "markov_model.h"
 #include "inv_design.h"
-
-// #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-// #include <CGAL/Polyhedron_3.h>
-// #include <CGAL/Surface_mesh.h>
-// #include <CGAL/convex_hull_3.h>
-// #include <vector>
-// #include <fstream>
+#include "deformation.h"
+// #include "igl/arap.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -94,10 +87,11 @@ glm::vec3 vecF_color({0.1, 0.1, 0.1});
 BoundaryBuilder *boundary_builder;
 polyscope::PointCloud *boundary_normals_pc;
 polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
-bool draw_boundary_patches = false;
+bool draw_boundary_patches = true;
 bool test_guess = true;
 bool structured_opt = true,
      always_update_structure = true,
+     with_hull_projection = true,
      use_initial_Ls = true,
      first_time = false;
 
@@ -114,8 +108,8 @@ int ARAP_max_iters = 10;
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc")};
-std::string all_polygons_current_item = "small_bunny";
-static const char* all_polygons_current_item_c_str = "small_bunny";
+std::string all_polygons_current_item = "bunnylp";
+static const char* all_polygons_current_item_c_str = "bunnylp";
 
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
@@ -346,17 +340,6 @@ void take_opt_vertices_step(){
   update_visuals_with_G();
 }
 
-void show_hull_updates(VertexData<Vector3> hull_updates){
-  polyscope::PointCloud* pre_pc = polyscope::registerPointCloud("pre-step hull points", forwardSolver->hullGeometry->inputVertexPositions);
-  pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1., false);
-  pre_pc->setPointColor(glm::vec3({0.8,0.1, 0.1}));
-  pre_pc->setEnabled(false);
-
-  polyscope::PointCloud* post_pc = polyscope::registerPointCloud("post-step hull points", forwardSolver->hullGeometry->inputVertexPositions + hull_updates);
-  pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1., false);
-  pre_pc->setPointColor(glm::vec3({0.1,0.1, 0.8}));
-}
-
 
 void take_uni_mass_opt_vertices_step(){
 
@@ -382,30 +365,41 @@ void take_uni_mass_opt_vertices_step(){
   printf(" total per vertex derivatives found!\n");
 
   // subdivide for aggressive updates
-  inverseSolver->subdivide_for_aggressive_updates(total_uni_mass_vertex_grads);
+  // inverseSolver->subdivide_for_aggressive_updates(total_uni_mass_vertex_grads);
 
   // Update original mesh vertices; hull will be updated internally
   // polyscope::registerSurfaceMesh("pre-step hull", forwardSolver->hullGeometry->inputVertexPositions,
   //                                              forwardSolver->hullMesh->getFaceVertexList());
   polyscope::registerSurfaceMesh("pre-step mesh", forwardSolver->inputGeometry->inputVertexPositions,
                                                forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
-  show_hull_updates(total_uni_mass_vertex_grads * step_size3);
+  
+  //PC
+  polyscope::PointCloud* pre_pc = polyscope::registerPointCloud("pre-step hull points", forwardSolver->hullGeometry->inputVertexPositions);
+  pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1., false);
+  pre_pc->setPointColor(glm::vec3({0.8,0.1, 0.1}));
+  pre_pc->setEnabled(false);
+  
   auto trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * step_size3);
   polyscope::registerSurfaceMesh("pre-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions + trivial_updates,
                                                forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
   printf("updating interior positions\n");
-  auto updates = inverseSolver->laplace_update_positions(total_uni_mass_vertex_grads * step_size3);
-  // auto updates = inverseSolver->ARAP_update_positions(total_uni_mass_vertex_grads * step_size3);
+  // auto updates = inverseSolver->laplace_update_positions(total_uni_mass_vertex_grads * step_size3);
+  auto updates = inverseSolver->ARAP_update_positions(total_uni_mass_vertex_grads * step_size3);
   // auto updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
   // auto updates = inverseSolver->diffusive_update_positions(total_uni_mass_vertex_grads * step_size3);
   forwardSolver->inputGeometry->inputVertexPositions += updates;
   printf("updates for interior found!\n");
+  // update hull with new positions
+  forwardSolver->update_convex_hull(with_hull_projection);
+  
   polyscope::registerSurfaceMesh("post-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions,
                                                forwardSolver->inputMesh->getFaceVertexList());
-  // update hull with new positions
-  forwardSolver->update_convex_hull();
   polyscope::registerSurfaceMesh("hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                              forwardSolver->hullMesh->getFaceVertexList());
+                                              forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
+  // PC
+  polyscope::PointCloud* post_pc = polyscope::registerPointCloud("post-step hull points", forwardSolver->hullGeometry->inputVertexPositions);
+  pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1., false);
+  pre_pc->setPointColor(glm::vec3({0.1,0.1, 0.8}));
   forwardSolver->set_uniform_G();
   G = forwardSolver->get_G();
   update_solver_and_boundaries();
@@ -426,6 +420,12 @@ void myCallback() {
               update_solver();
               recolor_faces = true;
               color_faces();
+
+              //
+              visualize_gauss_map();//
+              G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
+              update_solver_and_boundaries();
+              update_visuals_with_G();
           }
           if (is_selected)
               ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
@@ -455,14 +455,7 @@ void myCallback() {
     update_solver_and_boundaries();
     update_visuals_with_G();
   }
-  if (ImGui::Button("Show Gauss Map")){///face_normal_vertex_gm_radi
-    visualize_gauss_map();
-  }
   if (ImGui::Checkbox("colored arcs (slows)", &color_arcs)) vis_utils.color_arcs = color_arcs;
-  if (ImGui::Checkbox("draw unstable edge arcs", &draw_unstable_edge_arcs)) {
-    vis_utils.draw_unstable_edge_arcs = draw_unstable_edge_arcs;
-    vis_utils.draw_edge_arcs_on_gauss_map();
-  }
   if (ImGui::Checkbox("show hidden stable vertex normals", &show_hidden_stable_vertex_normals)) {
     vis_utils.show_hidden_stable_vertex_normals = show_hidden_stable_vertex_normals;
     vis_utils.draw_stable_vertices_on_gauss_map();
@@ -479,26 +472,13 @@ void myCallback() {
   //   color_faces();
   //   vis_utils.visualize_colored_polyhedra(face_colors);
   // }
-  if (ImGui::Checkbox("real time raster", &real_time_raster));
-
-  if (ImGui::Checkbox("draw boundary patches", &draw_boundary_patches)) draw_stable_patches_on_gauss_map();
-  if (ImGui::Checkbox("test guess", &test_guess)) draw_stable_patches_on_gauss_map();
+  if (ImGui::Checkbox("draw artificial R3 boundaries", &test_guess)) draw_stable_patches_on_gauss_map();
   if (ImGui::Button("FD (move G)")) {
     inverseSolver->find_d_pf_d_Gs(true);
   }
-  if (ImGui::Button("take fair step (move G)")) {
-    take_opt_G_step();
-  }
-  if (ImGui::SliderFloat("step size", &step_size, 0., 0.10));
-  
   if (ImGui::Button("FD (move vertices)")) {
     inverseSolver->find_d_pf_dvs(true);
   }
-  if (ImGui::Button("take fair step (move vertices)")) {
-    take_opt_vertices_step();
-  }
-  if (ImGui::SliderFloat("step size 2", &step_size2, 0., 0.10));
-
   if (ImGui::Button("joint gradient (FD)")) {
     forwardSolver->set_uniform_G();
     forwardSolver->initialize_pre_computes();
@@ -510,9 +490,11 @@ void myCallback() {
   if (ImGui::SliderFloat("step size 3", &step_size3, 0., 1.0));
   if (ImGui::Checkbox("structured opt", &structured_opt));
   if (ImGui::Checkbox("update structured at every step", &always_update_structure));
+  if (ImGui::Checkbox("decrease convex hull points", &with_hull_projection));
   if (ImGui::Checkbox("use initial geometry Laplacian", &use_initial_Ls)) inverseSolver->use_old_Ls = use_initial_Ls;
   if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
   if (ImGui::SliderInt("ARAP max iters", &ARAP_max_iters, 1, 30)) inverseSolver->arap_max_iter = ARAP_max_iters;
+
 }
 
 
@@ -529,6 +511,7 @@ int main(int argc, char **argv) {
   polyscope::init();
   color_faces();
   vis_utils.visualize_colored_polyhedra(face_colors);
+  visualize_gauss_map();
   // Set the callback function
   polyscope::state::userCallback = myCallback;
   polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;

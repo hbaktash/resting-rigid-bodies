@@ -69,25 +69,71 @@ Vector3 Forward3DSolver::get_G(){
     return G; 
 }
 
-void Forward3DSolver::update_convex_hull(){
+void Forward3DSolver::update_convex_hull(bool with_projection){
     printf(" -- updating convex hull -- \n");
-    std::vector<std::vector<size_t>> hull_faces; 
-    std::vector<size_t> hull_vertex_mapping;
-    std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean
-    std::tie(hull_faces, hull_vertex_mapping, hull_poses) = get_convex_hull(inputGeometry->inputVertexPositions);
+    if (!with_projection || first_hull){
+        std::vector<std::vector<size_t>> hull_faces; 
+        std::vector<size_t> hull_vertex_mapping;
+        std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean
+        std::tie(hull_faces, hull_vertex_mapping, hull_poses) = get_convex_hull(inputGeometry->inputVertexPositions);
 
-    hullMesh = new ManifoldSurfaceMesh(hull_faces);
-    hullGeometry = new VertexPositionGeometry(*hullMesh);
-    org_hull_indices = VertexData<size_t>(*hullMesh);
-    on_hull_index = VertexData<size_t>(*inputMesh, INVALID_IND);
-    hull_indices.resize(hullMesh->nVertices());
-    for (Vertex v: hullMesh->vertices()){
-        Vector3 new_pos = hull_poses[v.getIndex()];
-        hullGeometry->inputVertexPositions[v] = new_pos;
-        inputGeometry->inputVertexPositions[hull_vertex_mapping[v.getIndex()]] = new_pos;
-        org_hull_indices[v] = hull_vertex_mapping[v.getIndex()];
-        on_hull_index[hull_vertex_mapping[v.getIndex()]] = v.getIndex();
-        hull_indices[v.getIndex()] = org_hull_indices[v];
+        hullMesh = new ManifoldSurfaceMesh(hull_faces);
+        hullGeometry = new VertexPositionGeometry(*hullMesh);
+        org_hull_indices = VertexData<size_t>(*hullMesh);
+        on_hull_index = VertexData<size_t>(*inputMesh, INVALID_IND);
+        hull_indices.resize(hullMesh->nVertices());
+        
+        for (Vertex v: hullMesh->vertices()){
+            Vector3 new_pos = hull_poses[v.getIndex()];
+            hullGeometry->inputVertexPositions[v] = new_pos;
+            inputGeometry->inputVertexPositions[hull_vertex_mapping[v.getIndex()]] = new_pos;
+            org_hull_indices[v] = hull_vertex_mapping[v.getIndex()];
+            on_hull_index[hull_vertex_mapping[v.getIndex()]] = v.getIndex();
+            hull_indices[v.getIndex()] = org_hull_indices[v];
+        }
+
+        first_hull = false;
+    }
+    else { // hull gets smaller always in vertex count
+        // update hull pos first
+        for (Vertex v: hullMesh->vertices()){
+            hullGeometry->inputVertexPositions[v] = inputGeometry->inputVertexPositions[org_hull_indices[v]];
+        }
+        std::vector<std::vector<size_t>> hull_hull_faces; 
+        std::vector<size_t> hull_hull_vertex_mapping;
+        std::vector<Vector3> hull_hull_poses; // redundant, but helps with keeping this function clean
+        // hull of the current (possibly updated) hull
+        std::tie(hull_hull_faces, hull_hull_vertex_mapping, hull_hull_poses) = get_convex_hull(hullGeometry->inputVertexPositions); 
+
+        // update index trackers
+        hullMesh = new ManifoldSurfaceMesh(hull_hull_faces);
+        hullGeometry = new VertexPositionGeometry(*hullMesh);
+        
+        VertexData<size_t> new_org_hull_indices = VertexData<size_t>(*hullMesh);
+        on_hull_index = VertexData<size_t>(*inputMesh, INVALID_IND); // no need to preserve the previous mapping
+        hull_indices.resize(hullMesh->nVertices());
+        for (Vertex v: hullMesh->vertices()){
+            // index updates
+            new_org_hull_indices[v] = org_hull_indices[hull_hull_vertex_mapping[v.getIndex()]]; // m1(m2(x))
+            on_hull_index[new_org_hull_indices[v]] = v.getIndex();
+            hull_indices[v.getIndex()] = new_org_hull_indices[v];
+            // geo updates
+            Vector3 new_pos = hull_hull_poses[v.getIndex()];
+            hullGeometry->inputVertexPositions[v] = new_pos;
+            inputGeometry->inputVertexPositions[new_org_hull_indices[v]] = new_pos;
+        }
+        org_hull_indices = new_org_hull_indices;
+
+        polyscope::registerSurfaceMesh("pre-projection mesh", inputGeometry->inputVertexPositions,
+                                                              inputMesh->getFaceVertexList())->setEnabled(false);
+        // projection step
+        for (Vertex v: inputMesh->vertices()){
+            if (on_hull_index[v] == INVALID_IND){ // interior vertex
+                // printf("projecting vertex %d\n", v.getIndex());
+                Vector3 new_pos = project_back_into_hull(hullGeometry, inputGeometry->inputVertexPositions[v]);
+                inputGeometry->inputVertexPositions[v] = new_pos;
+            }
+        }
     }
     printf(" -- convex hull updated -- \n");
     

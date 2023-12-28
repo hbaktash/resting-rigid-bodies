@@ -16,27 +16,25 @@
 * from Adobe.
 *************************************************************************
 */
-#pragma once
 
-#include "libqhullcpp/QhullFacet.h"
-#include "libqhullcpp/QhullFacetList.h"
-#include "libqhullcpp/QhullVertex.h"
-#include "libqhullcpp/QhullVertexSet.h"
-#include "libqhullcpp/Qhull.h"
-#include "libqhull/qhull_a.h"
+#pragma once
 
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
+#include "geometrycentral/numerical/linear_solvers.h"
 
-using orgQhull::Qhull;
-using orgQhull::QhullFacet;
-using orgQhull::QhullVertex;
+#include <igl/arap.h>
+#include <Eigen/Core>
+
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 
-// std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
-std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>, std::vector<Vector3>>
-get_convex_hull(VertexData<Vector3> point_set);
+geometrycentral::DenseMatrix<double> get_ARAP_positions(geometrycentral::DenseMatrix<double> old_pos_mat,
+                                       geometrycentral::DenseMatrix<double> new_pos_mat,
+                                       geometrycentral::DenseMatrix<double> init_sol,
+                                       ManifoldSurfaceMesh &inner_mesh,
+                                       geometrycentral::Vector<int> hull_indices);
 
-Vector3 project_back_into_hull(VertexPositionGeometry *hull_geometry, Vector3 p);
+SparseMatrix<double> foo();
+

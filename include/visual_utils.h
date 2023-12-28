@@ -66,7 +66,7 @@ class VisualUtils{
         bool color_arcs = false, gm_is_drawn = false,
              draw_unstable_edge_arcs = true,
              draw_stable_g_vec_for_unstable_edge_arcs = false,
-             show_hidden_stable_vertex_normals = true;
+             show_hidden_stable_vertex_normals = false;
 
         // arc stuff
         // float arc_curve_radi = 0.0005;
