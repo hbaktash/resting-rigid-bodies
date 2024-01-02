@@ -52,6 +52,7 @@ class Forward3DSolver {
     // hull <-> mesh mapping
     VertexData<size_t> org_hull_indices; //hull vertex indices in the original mesh
     VertexData<size_t> on_hull_index; // index of an interior vertex on the hull; INVALID_IND if not on hull
+    Vector<size_t> hull_indices, interior_indices;
 
     // current state; for simulation 
     Vertex curr_v;
@@ -77,8 +78,9 @@ class Forward3DSolver {
 
     // Hull related updates
     bool first_hull = false;
-    Vector<size_t> hull_indices, interior_indices;
+    void update_hull_index_arrays();
     void update_convex_hull(bool with_projection = false);
+    void update_hull_points_correspondence(VertexData<Vector3> new_hull_points, VertexData<Vector3> old_points);
 
     // initialize state
     void initialize_state(Vertex curr_v, Edge curr_e, Face curr_f, Vector3 curr_g_vec);

@@ -36,5 +36,3 @@ geometrycentral::DenseMatrix<double> get_ARAP_positions(geometrycentral::DenseMa
                                        ManifoldSurfaceMesh &inner_mesh,
                                        geometrycentral::Vector<int> hull_indices);
 
-SparseMatrix<double> foo();
-

@@ -69,9 +69,24 @@ Vector3 Forward3DSolver::get_G(){
     return G; 
 }
 
+void Forward3DSolver::update_hull_index_arrays(){
+    hull_indices.resize(hullMesh->nVertices());
+    interior_indices.resize(inputMesh->nVertices() - hullMesh->nVertices());
+    for (Vertex v: hullMesh->vertices()){
+        hull_indices[v.getIndex()] = org_hull_indices[v];
+    }
+    size_t cnt = 0;
+    for (Vertex v: inputMesh->vertices()){
+        if (on_hull_index[v] == INVALID_IND){
+            // printf("updating interior v %d \n", v.getIndex());
+            interior_indices[cnt++] = v.getIndex();
+        }
+    }
+}
+
 void Forward3DSolver::update_convex_hull(bool with_projection){
     printf(" -- updating convex hull -- \n");
-    if (!with_projection || first_hull){
+    if (!with_projection || first_hull){ // just update and take the new hull
         std::vector<std::vector<size_t>> hull_faces; 
         std::vector<size_t> hull_vertex_mapping;
         std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean
@@ -99,10 +114,10 @@ void Forward3DSolver::update_convex_hull(bool with_projection){
         for (Vertex v: hullMesh->vertices()){
             hullGeometry->inputVertexPositions[v] = inputGeometry->inputVertexPositions[org_hull_indices[v]];
         }
+        // getting the hull of the current (possibly updated) hull
         std::vector<std::vector<size_t>> hull_hull_faces; 
         std::vector<size_t> hull_hull_vertex_mapping;
         std::vector<Vector3> hull_hull_poses; // redundant, but helps with keeping this function clean
-        // hull of the current (possibly updated) hull
         std::tie(hull_hull_faces, hull_hull_vertex_mapping, hull_hull_poses) = get_convex_hull(hullGeometry->inputVertexPositions); 
 
         // update index trackers
@@ -138,13 +153,42 @@ void Forward3DSolver::update_convex_hull(bool with_projection){
     printf(" -- convex hull updated -- \n");
     
     // updating index vectors
-    interior_indices.resize(inputMesh->nVertices() - hullMesh->nVertices()); // = std::vector<size_t>(inputMesh->nVertices() - hullMesh->nVertices());
-    size_t cnt = 0;
-    for (Vertex v: inputMesh->vertices()){
-        if (on_hull_index[v] == INVALID_IND){
-            interior_indices[cnt++] = v.getIndex();
+    update_hull_index_arrays();
+}
+
+// redo the indices
+void Forward3DSolver::update_hull_points_correspondence(VertexData<Vector3> new_hull_points, VertexData<Vector3> old_points){
+    VertexData<bool> assigned(*inputMesh, false),
+                     best_match_taken(*hullMesh, false);
+    on_hull_index = VertexData<size_t>(*inputMesh, INVALID_IND);
+    org_hull_indices = VertexData<size_t>(*hullMesh, INVALID_IND);
+    for (Vertex v: hullMesh->vertices()){ // hull points
+        Vector3 hull_p = new_hull_points[v];
+        double min_dist = 1e10;
+        Vertex best_v = Vertex();
+        for (Vertex other_v: inputMesh->vertices()){
+            double tmp_dist = norm(hull_p - old_points[other_v]);
+            if (tmp_dist < min_dist){
+                if (!assigned[other_v]){
+                    min_dist = tmp_dist;
+                    best_v = other_v;
+                    best_match_taken[v] = false;
+                }
+                else 
+                    best_match_taken[v] = true;
+            }
         }
+        assigned[best_v] = true;
+        
+        assert(best_v.getIndex() != INVALID_IND);
+        Vertex prev_org_vertex = inputMesh->vertex(org_hull_indices[v]);
+        if (best_match_taken[v])
+            printf(" :((( taken: hull v %d\n", v.getIndex(), v.getIndex());
+        // on_hull_index[prev_org_vertex] = INVALID_IND;
+        on_hull_index[best_v] = v.getIndex();
+        org_hull_indices[v] = best_v.getIndex();
     }
+    update_hull_index_arrays();
 }
 
 // height from G to ground after contact
@@ -600,5 +644,8 @@ void Forward3DSolver::initialize_pre_computes(){
     // printf("  building face next faces:\n");
     build_face_next_faces(); // 
     printf("precomputes done!\n");
+    inputGeometry->refreshQuantities();
+    hullGeometry->refreshQuantities();
     updated = true;
+
 }

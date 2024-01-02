@@ -25,6 +25,7 @@
 // #include "geometrycentral/utilities/eigen_interop_helpers.h"
 #include "boundary_tools.h"
 #include "geometrycentral/numerical/linear_solvers.h"
+#include "deformation.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -83,6 +84,7 @@ class InverseSolver{
         VertexData<DenseMatrix<double>> dG_dv; // interior vertex related
         void find_dG_dvs();                    
         // dp_f/dv
+        bool compute_global_G_effect = true;
         FaceData<VertexData<Vector3>> uni_mass_d_pf_dv;
         // after chain and product rule
         void find_uni_mass_d_pf_dv(bool check_FD = false);
@@ -90,7 +92,6 @@ class InverseSolver{
         FaceData<Face> flow_structure;
         VertexData<Vector3> find_uni_mass_total_vertex_grads(bool with_flow_structure = false,
                                                              double stable_normal_update_thres = -1.);
-
         
         // pre-step for updates 
         void subdivide_for_aggressive_updates(VertexData<Vector3> hull_updates);
@@ -103,7 +104,9 @@ class InverseSolver{
         geometrycentral::SparseMatrix<double> current_Ls;
         VertexPositionGeometry* initial_geometry;
         void save_initial_pos_and_Ls();
-        bool use_old_Ls = true;
+        bool use_old_Ls = false, 
+             use_old_geometry = false, 
+             libigl_ARAP = true;
         void update_Ls();
         DenseMatrix<double> solve_constrained_Laplace(Vector<size_t> interior_indices, DenseMatrix<double> old_pos, DenseMatrix<double> new_pos,
                                                       bool update_solver_decomp = true);

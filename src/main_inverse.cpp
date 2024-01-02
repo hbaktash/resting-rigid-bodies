@@ -34,7 +34,6 @@
 #include "visual_utils.h"
 #include "markov_model.h"
 #include "inv_design.h"
-#include "deformation.h"
 // #include "igl/arap.h"
 
 using namespace geometrycentral;
@@ -89,10 +88,12 @@ polyscope::PointCloud *boundary_normals_pc;
 polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
 bool draw_boundary_patches = true;
 bool test_guess = true;
-bool structured_opt = true,
+bool compute_global_G_effect = true,
+     structured_opt = true,
      always_update_structure = true,
-     with_hull_projection = true,
-     use_initial_Ls = true,
+     with_hull_projection = false,
+     use_initial_Ls = false,
+     use_initial_geometry = false,
      first_time = false;
 
 polyscope::PointCloud *test_pc;
@@ -371,7 +372,7 @@ void take_uni_mass_opt_vertices_step(){
   // polyscope::registerSurfaceMesh("pre-step hull", forwardSolver->hullGeometry->inputVertexPositions,
   //                                              forwardSolver->hullMesh->getFaceVertexList());
   polyscope::registerSurfaceMesh("pre-step mesh", forwardSolver->inputGeometry->inputVertexPositions,
-                                               forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
+                                                  forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
   
   //PC
   polyscope::PointCloud* pre_pc = polyscope::registerPointCloud("pre-step hull points", forwardSolver->hullGeometry->inputVertexPositions);
@@ -379,14 +380,28 @@ void take_uni_mass_opt_vertices_step(){
   pre_pc->setPointColor(glm::vec3({0.8,0.1, 0.1}));
   pre_pc->setEnabled(false);
   
-  auto trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * step_size3);
-  polyscope::registerSurfaceMesh("pre-ARAP mesh", forwardSolver->inputGeometry->inputVertexPositions + trivial_updates,
+  printf("update interior indexing\n");
+  forwardSolver->update_hull_points_correspondence(forwardSolver->hullGeometry->inputVertexPositions + total_uni_mass_vertex_grads * step_size3, 
+                                                   inverseSolver->initial_geometry->inputVertexPositions);
+  
+  VertexData<Vector3> trivial_updates;
+  trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * step_size3);
+  auto new_positions = forwardSolver->inputGeometry->inputVertexPositions + trivial_updates;
+  polyscope::registerSurfaceMesh("pre-ARAP mesh", new_positions,
                                                forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
+  // update indexing for interior vertices
+
+
   printf("updating interior positions\n");
-  // auto updates = inverseSolver->laplace_update_positions(total_uni_mass_vertex_grads * step_size3);
-  auto updates = inverseSolver->ARAP_update_positions(total_uni_mass_vertex_grads * step_size3);
-  // auto updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
-  // auto updates = inverseSolver->diffusive_update_positions(total_uni_mass_vertex_grads * step_size3);
+  VertexData<Vector3> updates;
+  if (forwardSolver->hullMesh->nVertices() == forwardSolver->inputMesh->nVertices()) // no interior vertices
+    updates = trivial_updates;
+  else {
+    // updates = inverseSolver->laplace_update_positions(new_positions);
+    updates = inverseSolver->ARAP_update_positions(new_positions);
+    // updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
+    // updates = inverseSolver->diffusive_update_positions(total_uni_mass_vertex_grads * step_size3);
+  }
   forwardSolver->inputGeometry->inputVertexPositions += updates;
   printf("updates for interior found!\n");
   // update hull with new positions
@@ -488,12 +503,17 @@ void myCallback() {
     take_uni_mass_opt_vertices_step();
   }
   if (ImGui::SliderFloat("step size 3", &step_size3, 0., 1.0));
+  if (ImGui::Checkbox("compute global G effect", &compute_global_G_effect)) inverseSolver->compute_global_G_effect = compute_global_G_effect;
   if (ImGui::Checkbox("structured opt", &structured_opt));
   if (ImGui::Checkbox("update structured at every step", &always_update_structure));
   if (ImGui::Checkbox("decrease convex hull points", &with_hull_projection));
-  if (ImGui::Checkbox("use initial geometry Laplacian", &use_initial_Ls)) inverseSolver->use_old_Ls = use_initial_Ls;
-  if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
+  if (ImGui::Checkbox("use initial Laplacian", &use_initial_Ls)) inverseSolver->use_old_Ls = use_initial_Ls;
+  if (ImGui::Checkbox("use initial geomtery", &use_initial_geometry)) {
+    inverseSolver->use_old_Ls = use_initial_geometry;
+    inverseSolver->use_old_geometry = use_initial_geometry;
+  }
   if (ImGui::SliderInt("ARAP max iters", &ARAP_max_iters, 1, 30)) inverseSolver->arap_max_iter = ARAP_max_iters;
+  if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
 
 }
 
