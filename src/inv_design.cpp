@@ -20,26 +20,6 @@
 #include "inv_design.h"
 
 
-// convertion stuff
-
-Vector<double> vec32vec(Vector3 v){
-    Vector<double> ans(3);
-    ans[0] = v.x;
-    ans[1] = v.y;
-    ans[2] = v.z;
-    return ans;
-}
-
-DenseMatrix<double> vertex_data_to_matrix(VertexData<Vector3> positions){
-    size_t n = positions.getMesh()->nVertices();
-    DenseMatrix<double> mat(n, 3);
-    for (Vertex v: positions.getMesh()->vertices()){
-        Vector3 p = positions[v];
-        mat.row(v.getIndex()) = vec32vec(p);
-    }
-    return mat;
-}
-
 // optimization stuff
 
 InverseSolver::InverseSolver(BoundaryBuilder* boundaryBuilder){

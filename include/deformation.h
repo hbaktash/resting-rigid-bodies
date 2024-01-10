@@ -31,6 +31,13 @@ using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 
+
+// convertion stuff
+
+Vector<double> vec32vec(Vector3 v);
+DenseMatrix<double> vertex_data_to_matrix(VertexData<Vector3> positions);
+DenseMatrix<double> face_data_to_matrix(FaceData<Vector3> fdata);
+
 // Gradient stuff
 // from: https://www.sciencedirect.com/science/article/pii/S0167839607000891 
 // Diherdral angle derivative; the angle <BAC on unit sphere
@@ -49,27 +56,34 @@ class DeformationSolver{
         ManifoldSurfaceMesh *convex_mesh;
         VertexPositionGeometry *convex_geometry;
 
+        // CP energy stuff
         VertexData<SurfacePoint> closest_point_assignment;
         SparseMatrix<double> closest_point_operator;
+        
+        // linear constraints
+        DenseMatrix<double> constraint_matrix;
+        Vector<double> constraint_rhs;
+
         // constructors
         DeformationSolver(ManifoldSurfaceMesh *old_mesh, VertexPositionGeometry *old_geometry,
                           ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry);
 
         // bending energy
         double bending_energy(VertexPositionGeometry *new_geometry);
-        // gradient of energy X
+        // gradient of bending energy
         VertexData<Vector3> bending_energy_gradient(VertexPositionGeometry *new_geometry);
-        // hessian of energy X
-        DenseMatrix<double> bending_energy_hessian(VertexPositionGeometry *new_geometry);
+        // hessian of bending energy
+        // DenseMatrix<double> bending_energy_hessian(VertexPositionGeometry *new_geometry);
         
         // closest point energy
         void assign_closest_points(VertexPositionGeometry *new_geometry);
         double closest_point_energy(VertexPositionGeometry *new_geometry);
         // gradient of CP energy
-        VertexData<Vector3> closest_point_energy_gradient(VertexPositionGeometry *new_geometry);
+        DenseMatrix<double> closest_point_energy_gradient(VertexPositionGeometry *new_geometry);
         
 
         // constraints
+        void build_constraint_matrix_and_rhs();
 
         // QP solver for a set of energies
         // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);

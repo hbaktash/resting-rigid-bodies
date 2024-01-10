@@ -19,6 +19,34 @@
  #include "deformation.h"
 
 
+// vector stuff
+Vector<double> vec32vec(Vector3 v){
+    Vector<double> ans(3);
+    ans[0] = v.x;
+    ans[1] = v.y;
+    ans[2] = v.z;
+    return ans;
+}
+DenseMatrix<double> vertex_data_to_matrix(VertexData<Vector3> positions){
+    size_t n = positions.getMesh()->nVertices();
+    DenseMatrix<double> mat(n, 3);
+    for (Vertex v: positions.getMesh()->vertices()){
+        Vector3 p = positions[v];
+        mat.row(v.getIndex()) = vec32vec(p);
+    }
+    return mat;
+}
+
+
+DenseMatrix<double> face_data_to_matrix(FaceData<Vector3> fdata){
+    size_t n = fdata.getMesh()->nFaces();
+    DenseMatrix<double> mat(n, 3);
+    for (Face f: fdata.getMesh()->faces()){
+        Vector3 p = fdata[f];
+        mat.row(f.getIndex()) = vec32vec(p);
+    }
+    return mat;
+}
 
 // Gradient stuff
 // formula source in header file
@@ -171,18 +199,25 @@ double DeformationSolver::closest_point_energy(VertexPositionGeometry *new_geome
     //     assign_closest_points(new_geometry);
     assign_closest_points(new_geometry); // make more efficient by not calling this all the time
     double energy = 0.;
-    for (Vertex c_v: convex_mesh->vertices()){
-        Vector3 c_p = convex_geometry->inputVertexPositions[c_v],
-                closest_point = closest_point_assignment[c_v].interpolate(new_geometry->inputVertexPositions);
-        energy += (c_p - closest_point).norm();
-    }
+    DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_geometry->inputVertexPositions),
+                        convex_points_mat = vertex_data_to_matrix(convex_geometry->inputVertexPositions);
+    energy = (closest_point_operator*new_pos_mat - convex_points_mat).norm();
+    // for (Vertex c_v: convex_mesh->vertices()){
+    //     Vector3 c_p = convex_geometry->inputVertexPositions[c_v],
+    //             closest_point = closest_point_assignment[c_v].interpolate(new_geometry->inputVertexPositions);
+    //     energy += (c_p - closest_point).norm();
+    // }
     return energy;
 }
 
 
-VertexData<Vector3> DeformationSolver::closest_point_energy_gradient(VertexPositionGeometry *new_geometry){
+DenseMatrix<double> DeformationSolver::closest_point_energy_gradient(VertexPositionGeometry *new_geometry){
     VertexData<Vector3> CP_energy_gradients(*mesh, Vector3::zero());
-
+    DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_geometry->inputVertexPositions),
+                        convex_points_mat = vertex_data_to_matrix(convex_geometry->inputVertexPositions);
+    DenseMatrix<double> CP_grad = closest_point_operator.transpose()*
+                                  (closest_point_operator*new_pos_mat - convex_points_mat);
+    return CP_grad;
 }
 
 
@@ -273,7 +308,14 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
             tripletList.emplace_back(c_v.getIndex(), closest_vertex.getIndex(), 1.);
         }
     }
-
     closest_point_operator.setFromTriplets(tripletList.begin(), tripletList.end());
 }
 
+
+void DeformationSolver::build_constraint_matrix_and_rhs(){
+    size_t nf = convex_mesh->nFaces();
+    DenseMatrix<double> convex_face_normals(nf, 3);
+    convex_geometry->requireFaceNormals(); // assuming outward normals
+    constraint_matrix = -face_data_to_matrix(convex_geometry->faceNormals);
+    constraint_rhs = Vector<double>::Zero(nf);
+}
