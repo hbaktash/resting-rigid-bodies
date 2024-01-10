@@ -77,7 +77,7 @@ class Forward3DSolver {
     Vector3 get_G();
 
     // Hull related updates
-    bool first_hull = false;
+    bool first_hull = true;
     void update_hull_index_arrays();
     void update_convex_hull(bool with_projection = false);
     void update_hull_points_correspondence(VertexData<Vector3> new_hull_points, VertexData<Vector3> old_points);

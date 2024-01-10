@@ -91,7 +91,7 @@ get_convex_hull(VertexData<Vector3> point_set){
     SurfaceMesh* surf_mesh = new SurfaceMesh(hull_faces);
     surf_mesh->greedilyOrientFaces();
 
-    // make sure of outward orientation; can't qhull just do it ?????!
+    // make sure of outward orientation; can't just make qhull do it ??!
     Face f0 = surf_mesh->face(0);
     Vertex v0 = f0.halfedge().tailVertex(),
            v1 = f0.halfedge().tipVertex(),
@@ -112,22 +112,7 @@ get_convex_hull(VertexData<Vector3> point_set){
 
 Vector3 project_back_into_hull(VertexPositionGeometry *hull_geometry, Vector3 p){
     // find closest face on hull
-    double min_edge_dist = std::numeric_limits<double>::infinity();
-    Edge closest_edge;
-    Vector3 closest_edge_ortho_p;
-    for (Edge e: hull_geometry->mesh.edges()){ // check if vertex-projectable
-        Vector3 A = hull_geometry->inputVertexPositions[e.firstVertex()], 
-                B = hull_geometry->inputVertexPositions[e.secondVertex()];
-        Vector3 PB = B - p,
-                AB = B - A;
-        Vector3 ortho_p = PB - AB*dot(AB, PB)/dot(AB,AB);
-        double edge_dist =  ortho_p.norm();
-        if (edge_dist < min_edge_dist){
-            closest_edge = e;
-            min_edge_dist = edge_dist;
-            closest_edge_ortho_p = ortho_p;
-        }
-    }
+    
     Face closest_outward_face;
     double min_face_dist  = std::numeric_limits<double>::infinity();
     bool is_outside_flag = false;
@@ -149,7 +134,7 @@ Vector3 project_back_into_hull(VertexPositionGeometry *hull_geometry, Vector3 p)
                     C = hull_geometry->inputVertexPositions[v3];
             // assume outward normals; which is inward w.r.t. p
             Vector3 N_PAB = cross(A - B, p - A);
-            if (dot(-f_normal, N_PAB) >= 0) { // not face-projectable on this face
+            if (dot(f_normal, N_PAB) >= 0) { // not face-projectable on this face
                 face_is_projectable = false;
                 break; // go to next face
             }
@@ -157,20 +142,62 @@ Vector3 project_back_into_hull(VertexPositionGeometry *hull_geometry, Vector3 p)
             if (curr_he == first_he)
                 break;
         }
-        if (face_is_projectable){
-            min_face_dist = std::min(min_face_dist, face_dist);
+        if (face_is_projectable && face_dist < min_face_dist){
+            min_face_dist = face_dist;
             closest_outward_face = f;
         }
     }
+
     if (!is_outside_flag)
         return p;
-    if (min_face_dist != std::numeric_limits<double>::infinity()){ // no closest point; use closest face
-        printf("face projected\n");
+    
+    // is outside the hull; use closest face if projectable
+    if (min_face_dist != std::numeric_limits<double>::infinity()){ // use closest face
+        // printf("face projected\n");
         return p - min_face_dist * hull_geometry->faceNormal(closest_outward_face) * 1.01;
     }
-    else { // no face-projectable face ; use closest point
-        printf("edge projected\n");
+
+    // is outside the hull; not face-projectable; use closest edge
+    double min_edge_dist = std::numeric_limits<double>::infinity();
+    Edge closest_edge;
+    Vector3 closest_edge_ortho_p;
+    
+    for (Edge e: hull_geometry->mesh.edges()){ // check if vertex-projectable
+        Vector3 A = hull_geometry->inputVertexPositions[e.firstVertex()], 
+                B = hull_geometry->inputVertexPositions[e.secondVertex()];
+        Vector3 PB = B - p,
+                PA = A - p,
+                AB = B - A;
+        bool edge_is_projectable = dot(PB, AB) >= 0 && dot(PA, -AB) >= 0; // similar to singular edge condition in rolling dynamics
+        if (!edge_is_projectable)
+            continue;
+        Vector3 ortho_p = PB - AB*dot(AB, PB)/dot(AB,AB);
+        double edge_dist =  ortho_p.norm();
+        if (edge_dist < min_edge_dist){
+            closest_edge = e;
+            min_edge_dist = edge_dist;
+            closest_edge_ortho_p = ortho_p;
+        }
+    }
+    if (min_edge_dist != std::numeric_limits<double>::infinity()){ // no face-projectable face ; use closest projectable edge
+        // printf("edge projected\n");
         return p + closest_edge_ortho_p * 1.01;
     }
+
+
+    // not edge-projectable; use closest vertex
+    double min_vertex_dist = std::numeric_limits<double>::infinity();
+    Vertex closest_vertex;
+    for (Vertex v: hull_geometry->mesh.vertices()){ 
+        Vector3 V = hull_geometry->inputVertexPositions[v];
+        double vertex_dist = (V - p).norm();
+        if (vertex_dist < min_vertex_dist){
+            closest_vertex = v;
+            min_vertex_dist = vertex_dist;
+        }
+    }
+
+    printf("vertex projected\n");
+    return p + (hull_geometry->inputVertexPositions[closest_vertex] - p) * 1.01;
     
 }

@@ -33,15 +33,6 @@ using namespace geometrycentral::surface;
 
 
 
-// Gradient stuff
-// from: https://www.sciencedirect.com/science/article/pii/S0167839607000891 
-// Diherdral angle derivative; the angle <BAC on unit sphere
-Vector3 dihedral_angle_grad_G(Vector3 G, Vector3 A, Vector3 B, Vector3 C);
-Vector3 dihedral_angle_grad_A(Vector3 G, Vector3 A, Vector3 B, Vector3 C);
-Vector3 dihedral_angle_grad_B(Vector3 G, Vector3 A, Vector3 B, Vector3 C);
-Vector3 dihedral_angle_grad_C(Vector3 G, Vector3 A, Vector3 B, Vector3 C);
-
-
 class InverseSolver{
     public:
         Forward3DSolver* forwardSolver;

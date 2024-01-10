@@ -6,6 +6,8 @@ project(rolling_dragons)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)  
+
 
 # Print the build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -64,6 +66,17 @@ add_subdirectory(deps/polyscope)
 add_subdirectory(deps/qhull)
 # add_subdirectory(deps/pymesh)
 # add_subdirectory(deps/bullet3)
+
+# SET(GUROBI_DIR "/Library/gurobi1100/macos_universal2")
+find_package(GUROBI REQUIRED)
+if (GUROBI_FOUND)
+  message(STATUS "Gurobi found at ${GUROBI_LIBRARY}")
+else ()
+  message(STATUS "Gurobi not found!")
+endif ()
+include_directories(${GUROBI_INCLUDE_DIRS})
+
+
 # == Build our project stuff
 
 set(polygons_SRCS 
@@ -116,6 +129,21 @@ set(inverse_SRCS
 	# add any other source files here
 )
 
+set(convex_fill 
+  src/main_convex_fill.cpp
+  src/arc_algebra.cpp
+  src/forward3D.cpp
+  src/mesh_factory.cpp
+  src/geometry_utils.cpp
+  src/coloring.cpp
+  src/visual_utils.cpp
+  src/boundary_tools.cpp
+  src/inv_design.cpp
+  src/convex_hull.cpp
+  src/deformation.cpp
+	# add any other source files here
+)
+
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 add_executable(polygons "${polygons_SRCS}")
 target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
@@ -149,6 +177,20 @@ target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
 target_link_libraries(invDesign PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
+
+# To change the name of your executable, change "gc_project" in the lines below to whatever you want
+# SET(qhull_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/build")
+# Find_Package(qhull)
+add_executable(convexFill "${convex_fill}")
+# target_link_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
+# target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
+target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# add the args.hxx project which we use for command line args
+target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+target_link_libraries(convexFill PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
+
 
 # Bullet stuff
 

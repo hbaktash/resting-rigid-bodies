@@ -54,10 +54,10 @@ void BoundaryBuilder::build_boundary_normals(){
     forward_solver->build_face_last_faces(); // calls face next face within
     // printf("  finding terminal edges \n");
     for (Edge e: forward_solver->hullMesh->edges()){
-        if (forward_solver->edge_next_vertex[e].getIndex() == INVALID_IND){
+        if (forward_solver->edge_next_vertex[e].getIndex() == INVALID_IND){ // singular edge
             Face f1 = e.halfedge().face(),
                  f2 = e.halfedge().twin().face();
-            if (forward_solver->face_last_face[f1] != forward_solver->face_last_face[f2]){ 
+            if (forward_solver->face_last_face[f1] != forward_solver->face_last_face[f2]){ // saddle edge
                 // proved: at least one singular edge like this must exist
                 // TODO: assert that stable normal falls inside the edge arc 
                 Vector3 stable_edge_normal = forward_solver->edge_stable_normal[e];

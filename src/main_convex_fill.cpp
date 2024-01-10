@@ -187,14 +187,6 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
 }
 
 
-// color input polyhedra with default
-void color_faces_with_default(){
-  FaceData<Vector3> face_colors(*forwardSolver->hullMesh, default_face_color);
-  polyscope::SurfaceFaceColorQuantity *fColor = psInputMesh->addFaceColorQuantity("state vis color", face_colors);
-  fColor->setEnabled(true);
-}
-
-
 void color_faces(){
   if (recolor_faces){
     // printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
@@ -254,93 +246,7 @@ void update_visuals_with_G(){
 }
 
 
-// maybe move to another file, to merge with bullet sim; this and some other functions
-// sample and raster; colors should be generated beforehand
-void build_raster_image(){
-  FaceData<std::vector<Vector3>> face_samples(*forwardSolver->hullMesh);
-  FaceData<double> empirical_face_probabilities(*forwardSolver->hullMesh, 0.);
-  int total_invalids = 0,
-      valid_samples = 0;
-  // need to re-iterate later with the same order
-  FaceData<std::vector<Vector3>> initial_rolling_dirs(*forwardSolver->hullMesh);
-  for (int i = 0; i < sample_count; i++){
-    Vector3 random_g_vec = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
-    if (random_g_vec.norm() <= 1.){
-      // if (i % 10000 == 0 && i > 0)
-      //   printf("$$$ at sample %d\n", i);
-      random_g_vec /= norm(random_g_vec);
-      Face touching_face = forwardSolver->final_touching_face(random_g_vec);
-      if (touching_face.getIndex() == INVALID_IND){
-        total_invalids++;
-        continue;
-      }
-      valid_samples++;
-      empirical_face_probabilities[touching_face] += 1;
-      if (draw_point_cloud){
-        face_samples[touching_face].push_back(random_g_vec);
-        if (normalize_vecF)
-          initial_rolling_dirs[touching_face].push_back(forwardSolver->initial_roll_dir.normalize());
-        else 
-          initial_rolling_dirs[touching_face].push_back(forwardSolver->initial_roll_dir);
-      }
-    }
-  }
-  // printf(" ###### total invalid faces: %d  ######\n", total_invalids);
-  
-  std::vector<Vector3> raster_positions,
-                       raster_colors;
-  std::vector<Vector3> all_rolling_dirs;
-  for (Face f: forwardSolver->hullMesh->faces()){
-    empirical_face_probabilities[f] /= (double)valid_samples;
-    if (draw_point_cloud) {
-      std::vector<Vector3> tmp_points = face_samples[f];
-      for (Vector3 tmp_p: tmp_points){
-        raster_positions.push_back(tmp_p + vis_utils.center);
-        raster_colors.push_back(face_colors[f]);
-      }
-      std::vector<Vector3> tmp_rolling_dirs = initial_rolling_dirs[f];
-      for (Vector3 rolling_dir: tmp_rolling_dirs){
-        all_rolling_dirs.push_back(rolling_dir);
-      }
-    }
-  }
-  if (draw_point_cloud) {
-    raster_pc = polyscope::registerPointCloud("raster point cloud", raster_positions);
-    raster_pc->setPointRadius(0.0078, false);
-    polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("random color", raster_colors);
-    pc_col_quant->setEnabled(true);
-    polyscope::PointCloudVectorQuantity* raster_pc_vec_field = raster_pc->addVectorQuantity("init roll directions", all_rolling_dirs);
-    raster_pc_vec_field->setEnabled(true);
-    raster_pc_vec_field->setVectorLengthScale(0.05, false);
-    raster_pc_vec_field->setVectorRadius(0.003, false);
-    raster_pc_vec_field->setVectorColor(vecF_color);
-  }
-  std::cout << "empirical_face_probabilities: \n"<< empirical_face_probabilities.toVector().transpose() << "sum: " << empirical_face_probabilities.toVector().sum()<< "\n";
-}
-
-
-// inverse stuff
-void take_opt_G_step(){
-  inverseSolver->find_d_pf_d_Gs();
-  Vector3 G_grad = inverseSolver->find_total_g_grad();
-  G = G + step_size * G_grad;
-  update_solver_and_boundaries();
-  update_visuals_with_G();
-}
-
-
-void take_opt_vertices_step(){
-  inverseSolver->find_d_pf_dvs();
-  VertexData<Vector3> total_vertex_grads = inverseSolver->find_total_vertex_grads();
-  VertexData<Vector3> new_poses(*forwardSolver->hullMesh);
-  for (Vertex v: forwardSolver->hullMesh->vertices()){
-    forwardSolver->hullGeometry->inputVertexPositions[v] += step_size2 * total_vertex_grads[v];
-  }
-  polyscope::getSurfaceMesh("hull mesh")->updateVertexPositions(forwardSolver->hullGeometry->inputVertexPositions);
-  update_solver_and_boundaries();
-  update_visuals_with_G();
-}
-
+// hull update stuff
 
 void take_uni_mass_opt_vertices_step(){
 
@@ -449,57 +355,13 @@ void myCallback() {
       ImGui::EndCombo();
   }
 
-  if (ImGui::SliderFloat("vertex radi scale", &pt_cloud_radi_scale, 0., 1.)){
-    vis_utils.draw_G();
-  }
-  
-  if (ImGui::SliderFloat("G radi scale", &G_r, -1., 1.)||
-      ImGui::SliderFloat("G theta", &G_theta, 0., 2*PI)||
-      ImGui::SliderFloat("G phi", &G_phi, 0., 2*PI)) {
-    G = {cos(G_phi)*sin(G_theta)*G_r, cos(G_phi)*cos(G_theta)*G_r, sin(G_phi)*G_r};
-    if (G_is_inside(*forwardSolver->hullMesh, *forwardSolver->hullGeometry, G)){
-      update_solver_and_boundaries();
-      update_visuals_with_G();
-      if (real_time_raster){
-        color_faces();
-        build_raster_image();
-      }
-    }
-  }
   if (ImGui::Button("uniform mass G")){
     G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
     update_solver_and_boundaries();
     update_visuals_with_G();
   }
-  if (ImGui::Checkbox("colored arcs (slows)", &color_arcs)) vis_utils.color_arcs = color_arcs;
-  if (ImGui::Checkbox("show hidden stable vertex normals", &show_hidden_stable_vertex_normals)) {
-    vis_utils.show_hidden_stable_vertex_normals = show_hidden_stable_vertex_normals;
-    vis_utils.draw_stable_vertices_on_gauss_map();
-  }
-  // my simulation 
-  if (ImGui::SliderInt("sample count", &sample_count, 1000, 1000000));
-  if (ImGui::Button("build raster image")){
-    color_faces();
-    vis_utils.visualize_colored_polyhedra(face_colors);
-    build_raster_image();
-  }
-  // if(ImGui::Button("recolor faces")){
-  //   recolor_faces = true;// so bad lol
-  //   color_faces();
-  //   vis_utils.visualize_colored_polyhedra(face_colors);
-  // }
   if (ImGui::Checkbox("draw artificial R3 boundaries", &test_guess)) draw_stable_patches_on_gauss_map();
-  if (ImGui::Button("FD (move G)")) {
-    inverseSolver->find_d_pf_d_Gs(true);
-  }
-  if (ImGui::Button("FD (move vertices)")) {
-    inverseSolver->find_d_pf_dvs(true);
-  }
-  if (ImGui::Button("joint gradient (FD)")) {
-    forwardSolver->set_uniform_G();
-    forwardSolver->initialize_pre_computes();
-    inverseSolver->find_uni_mass_d_pf_dv(true);
-  }
+  
   if (ImGui::Button("take fair step (joint gradient)")) {
     take_uni_mass_opt_vertices_step();
   }

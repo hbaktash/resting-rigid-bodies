@@ -127,15 +127,15 @@ void Forward3DSolver::update_convex_hull(bool with_projection){
         VertexData<size_t> new_org_hull_indices = VertexData<size_t>(*hullMesh);
         on_hull_index = VertexData<size_t>(*inputMesh, INVALID_IND); // no need to preserve the previous mapping
         hull_indices.resize(hullMesh->nVertices());
-        for (Vertex v: hullMesh->vertices()){
+        for (Vertex hull_v: hullMesh->vertices()){
             // index updates
-            new_org_hull_indices[v] = org_hull_indices[hull_hull_vertex_mapping[v.getIndex()]]; // m1(m2(x))
-            on_hull_index[new_org_hull_indices[v]] = v.getIndex();
-            hull_indices[v.getIndex()] = new_org_hull_indices[v];
+            new_org_hull_indices[hull_v] = org_hull_indices[hull_hull_vertex_mapping[hull_v.getIndex()]]; // m1(m2(x))
+            on_hull_index[new_org_hull_indices[hull_v]] = hull_v.getIndex();
+            hull_indices[hull_v.getIndex()] = new_org_hull_indices[hull_v];
             // geo updates
-            Vector3 new_pos = hull_hull_poses[v.getIndex()];
-            hullGeometry->inputVertexPositions[v] = new_pos;
-            inputGeometry->inputVertexPositions[new_org_hull_indices[v]] = new_pos;
+            Vector3 new_pos = hull_hull_poses[hull_v.getIndex()];
+            hullGeometry->inputVertexPositions[hull_v] = new_pos;
+            // inputGeometry->inputVertexPositions[new_org_hull_indices[v]] = new_pos;
         }
         org_hull_indices = new_org_hull_indices;
 
@@ -144,8 +144,10 @@ void Forward3DSolver::update_convex_hull(bool with_projection){
         // projection step
         for (Vertex v: inputMesh->vertices()){
             if (on_hull_index[v] == INVALID_IND){ // interior vertex
-                // printf("projecting vertex %d\n", v.getIndex());
                 Vector3 new_pos = project_back_into_hull(hullGeometry, inputGeometry->inputVertexPositions[v]);
+                if (new_pos != inputGeometry->inputVertexPositions[v]){
+                    // printf("projected vertex %d\n", v.getIndex());
+                }
                 inputGeometry->inputVertexPositions[v] = new_pos;
             }
         }
@@ -167,8 +169,8 @@ void Forward3DSolver::update_hull_points_correspondence(VertexData<Vector3> new_
         double min_dist = 1e10;
         Vertex best_v = Vertex();
         for (Vertex other_v: inputMesh->vertices()){
-            double tmp_dist = norm(hull_p - old_points[other_v]);
-            if (tmp_dist < min_dist){
+            double tmp_dist = (hull_p - old_points[other_v]).norm();
+            if (tmp_dist <= min_dist){
                 if (!assigned[other_v]){
                     min_dist = tmp_dist;
                     best_v = other_v;
@@ -181,9 +183,10 @@ void Forward3DSolver::update_hull_points_correspondence(VertexData<Vector3> new_
         assigned[best_v] = true;
         
         assert(best_v.getIndex() != INVALID_IND);
-        Vertex prev_org_vertex = inputMesh->vertex(org_hull_indices[v]);
-        if (best_match_taken[v])
-            printf(" :((( taken: hull v %d\n", v.getIndex(), v.getIndex());
+        // Vertex prev_org_vertex = inputMesh->vertex(org_hull_indices[v]);
+        // printf("hull v %d assigned to %d\n", v.getIndex(), best_v.getIndex());
+        // if (best_match_taken[v])
+        //     printf(" :((( best match taken\n");
         // on_hull_index[prev_org_vertex] = INVALID_IND;
         on_hull_index[best_v] = v.getIndex();
         org_hull_indices[v] = best_v.getIndex();
