@@ -24,6 +24,8 @@
 #include "geometrycentral/numerical/linear_solvers.h"
 #include "geometrycentral/surface/surface_point.h"
 
+#include "gurobi_c++.h"
+
 #include <igl/arap.h>
 #include <Eigen/Core>
 
@@ -85,7 +87,8 @@ class DeformationSolver{
         // constraints
         void build_constraint_matrix_and_rhs();
 
-        // QP solver for a set of energies
+        // solver
+        void solve_for_bending();
         // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
 };
 

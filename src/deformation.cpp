@@ -319,3 +319,18 @@ void DeformationSolver::build_constraint_matrix_and_rhs(){
     constraint_matrix = -face_data_to_matrix(convex_geometry->faceNormals);
     constraint_rhs = Vector<double>::Zero(nf);
 }
+
+
+void DeformationSolver::solve_for_bending(){
+    size_t num_var = 3 * mesh->nVertices();
+    GRBEnv env = GRBEnv();
+    GRBModel model = GRBModel(env);
+    std::cerr << "Allocating variables and setting up objective..." << std::endl;
+    std::vector<GRBVar> X(num_var);
+    for (size_t i = 0; i < num_var; i++) {
+        X[i] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0., GRB_CONTINUOUS); // lb, ub, obj, vtype, vname=""
+    }
+
+    model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
+    
+}
