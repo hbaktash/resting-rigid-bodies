@@ -24,7 +24,15 @@
 #include "geometrycentral/numerical/linear_solvers.h"
 #include "geometrycentral/surface/surface_point.h"
 
-#include "gurobi_c++.h"
+
+
+#include <TinyAD/Support/GeometryCentral.hh>
+#include <TinyAD/ScalarFunction.hh>
+#include <TinyAD/Utils/NewtonDirection.hh>
+#include <TinyAD/Utils/NewtonDecrement.hh>
+#include <TinyAD/Utils/LineSearch.hh>
+
+
 
 #include <igl/arap.h>
 #include <Eigen/Core>
@@ -61,6 +69,7 @@ class DeformationSolver{
         // CP energy stuff
         VertexData<SurfacePoint> closest_point_assignment;
         SparseMatrix<double> closest_point_operator;
+        SparseMatrix<double> closest_point_flat_operator;
         
         // linear constraints
         DenseMatrix<double> constraint_matrix;
@@ -88,7 +97,7 @@ class DeformationSolver{
         void build_constraint_matrix_and_rhs();
 
         // solver
-        void solve_for_bending();
+        VertexData<Vector3> solve_for_bending(VertexPositionGeometry *new_geometry);
         // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
 };
 

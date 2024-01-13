@@ -20,6 +20,25 @@
 
 
 // vector stuff
+Eigen::Vector3d to_eigen(const geometrycentral::Vector3& _v){
+    return Eigen::Vector3d(_v.x, _v.y, _v.z);
+}
+
+geometrycentral::Vector3 to_geometrycentral(
+        const Eigen::Vector3d& _v) {
+    return geometrycentral::Vector3 { _v.x(), _v.y() };
+}
+
+Vector<double> tinyAD_flatten(DenseMatrix<double> mat){
+    size_t n = mat.rows();
+    Vector<double> ans(n*3);
+    for (size_t i = 0; i < n; i++){
+        for (size_t j = 0; j < n; j++)
+            ans(3*i + j) = mat(i,j);
+    }
+    return ans;
+}
+
 Vector<double> vec32vec(Vector3 v){
     Vector<double> ans(3);
     ans[0] = v.x;
@@ -27,6 +46,7 @@ Vector<double> vec32vec(Vector3 v){
     ans[2] = v.z;
     return ans;
 }
+
 DenseMatrix<double> vertex_data_to_matrix(VertexData<Vector3> positions){
     size_t n = positions.getMesh()->nVertices();
     DenseMatrix<double> mat(n, 3);
@@ -197,7 +217,7 @@ VertexData<Vector3> DeformationSolver::bending_energy_gradient(VertexPositionGeo
 double DeformationSolver::closest_point_energy(VertexPositionGeometry *new_geometry){
     // if (closest_point_assignment.size() == 0)
     //     assign_closest_points(new_geometry);
-    assign_closest_points(new_geometry); // make more efficient by not calling this all the time
+    // assign_closest_points(new_geometry); 
     double energy = 0.;
     DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_geometry->inputVertexPositions),
                         convex_points_mat = vertex_data_to_matrix(convex_geometry->inputVertexPositions);
@@ -226,7 +246,10 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
     
     // linear operator corresponding to assignments
     closest_point_operator = Eigen::SparseMatrix<double>(convex_mesh->nVertices(), mesh->nVertices());
-    std::vector<Eigen::Triplet<double>> tripletList;
+    closest_point_flat_operator = Eigen::SparseMatrix<double>(convex_mesh->nVertices(), 3*mesh->nVertices());
+    std::vector<Eigen::Triplet<double>> tripletList, flat_tripletList;
+    tripletList.reserve(3*mesh->nVertices());
+    flat_tripletList.reserve(9*mesh->nVertices());
 
     for (Vertex c_v: convex_mesh->vertices()){
         Face closest_face;
@@ -290,6 +313,11 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
             tripletList.emplace_back(c_v.getIndex(), v1.getIndex(), bary_coor.x);
             tripletList.emplace_back(c_v.getIndex(), v2.getIndex(), bary_coor.y);
             tripletList.emplace_back(c_v.getIndex(), v3.getIndex(), bary_coor.z);
+            for (size_t d = 0; d < 3; d++){
+                flat_tripletList.emplace_back(c_v.getIndex(), 3*v1.getIndex() + d, bary_coor.x);
+                flat_tripletList.emplace_back(c_v.getIndex(), 3*v1.getIndex() + d, bary_coor.y);
+                flat_tripletList.emplace_back(c_v.getIndex(), 3*v1.getIndex() + d, bary_coor.z);
+            }
         }
         else if (min_dist == min_edge_dist){
             Vertex v1 = closest_edge.firstVertex(),
@@ -302,13 +330,20 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
             // operator entries
             tripletList.emplace_back(c_v.getIndex(), v1.getIndex(), 1. - tVal);
             tripletList.emplace_back(c_v.getIndex(), v2.getIndex(), tVal);
+            for (size_t d = 0; d < 3; d++){
+                flat_tripletList.emplace_back(c_v.getIndex(), 3*v1.getIndex() + d, 1. - tVal);
+                flat_tripletList.emplace_back(c_v.getIndex(), 3*v2.getIndex() + d, tVal);
+            }
         }
         else {// min_dist == min_vertex_dist
             closest_point_assignment[c_v] = SurfacePoint(closest_vertex);   
             tripletList.emplace_back(c_v.getIndex(), closest_vertex.getIndex(), 1.);
+            for (size_t d = 0; d < 3; d++)
+                flat_tripletList.emplace_back(c_v.getIndex(), 3*closest_vertex.getIndex() + d, 1.);
         }
     }
     closest_point_operator.setFromTriplets(tripletList.begin(), tripletList.end());
+    closest_point_flat_operator.setFromTriplets(flat_tripletList.begin(), flat_tripletList.end());
 }
 
 
@@ -316,21 +351,129 @@ void DeformationSolver::build_constraint_matrix_and_rhs(){
     size_t nf = convex_mesh->nFaces();
     DenseMatrix<double> convex_face_normals(nf, 3);
     convex_geometry->requireFaceNormals(); // assuming outward normals
-    constraint_matrix = -face_data_to_matrix(convex_geometry->faceNormals);
+    constraint_matrix = face_data_to_matrix(convex_geometry->faceNormals);
     constraint_rhs = Vector<double>::Zero(nf);
 }
 
 
-void DeformationSolver::solve_for_bending(){
+VertexData<Vector3> DeformationSolver::solve_for_bending(VertexPositionGeometry* new_geometry){
     size_t num_var = 3 * mesh->nVertices();
-    GRBEnv env = GRBEnv();
-    GRBModel model = GRBModel(env);
-    std::cerr << "Allocating variables and setting up objective..." << std::endl;
-    std::vector<GRBVar> X(num_var);
-    for (size_t i = 0; i < num_var; i++) {
-        X[i] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0., GRB_CONTINUOUS); // lb, ub, obj, vtype, vname=""
-    }
-
-    model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
     
+    // Pre-compute constants from the old geometry; old \theta, e, h_e
+    old_geometry->requireEdgeDihedralAngles();
+    EdgeData<double> rest_dihedral_angles = old_geometry->edgeDihedralAngles;
+    old_geometry->unrequireEdgeDihedralAngles();
+    EdgeData<double> rest_constant(*mesh); // e/h_e
+    for (Edge e : mesh->edges()) {
+        // Get 3D vertex positions
+        Vector3 p1 = old_geometry->inputVertexPositions[e.firstVertex()];
+        Vector3 p2 = old_geometry->inputVertexPositions[e.secondVertex()];
+        // length and area
+        double e_len_sqrd = (p1 - p2).norm2();
+        double area1 = old_geometry->faceArea(e.halfedge().face()),
+               area2 = old_geometry->faceArea(e.halfedge().twin().face());
+        // Save 2-by-2 matrix with edge vectors as colums
+        rest_constant[e] = e_len_sqrd/(area1+area2);
+    };
+
+    // Objective function
+    auto bendingEnergy_func = TinyAD::scalar_function<3>(mesh->vertices());
+    // Add objective term per edge
+    bendingEnergy_func.add_elements<3>(mesh->edges(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
+    {
+        // Evaluate element using either double or TinyAD::Double
+        using T = TINYAD_SCALAR_TYPE(element);
+
+        // Get variable 3D vertex positions
+        Edge e = element.handle;
+        
+        if (e.isBoundary()) return (T)0.0;
+
+        Eigen::Vector3<T> p1 = element.variables(e.firstVertex());
+        Eigen::Vector3<T> p2 = element.variables(e.secondVertex());
+        
+        Eigen::Vector3<T> p3 = element.variables(e.halfedge().next().tipVertex());
+        Eigen::Vector3<T> p4 = element.variables(e.halfedge().twin().next().tipVertex());
+
+        Eigen::Vector3<T> N1 = (p2 - p1).cross(p3 - p1); //faceNormals[e.halfedge().face()];
+        Eigen::Vector3<T> N2 = (p1 - p2).cross(p4 - p2);
+        Eigen::Vector3<T> edgeDir = (p2 - p1).normalized();
+        T dihedral_angle = atan2(edgeDir.dot(N1.cross(N2)), N1.dot(N2));
+
+        return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_constant[e];
+    });
+
+    // Assemble inital x vector from parametrization property.
+    // x_from_data(...) takes a lambda function that maps
+    // each variable handle to its initial 2D value (Eigen::Vector2d).
+    int n = mesh->nVertices();
+    Eigen::VectorXd x = bendingEnergy_func.x_from_data([&] (Vertex v) {
+        return to_eigen(old_geometry->inputVertexPositions[v]);
+    });
+
+    // Projected Newton
+    VertexPositionGeometry *tmp_geometry = new VertexPositionGeometry(*mesh);
+    TinyAD::LinearSolver solver;
+    int max_iters = 10;
+    double convergence_eps = 1e-2,
+           CP_lambda = 0.5;
+    for (int i = 0; i < max_iters; ++i)
+    {
+        auto [f, g, H_proj] = bendingEnergy_func.eval_with_hessian_proj(x);
+
+        bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) {
+            tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
+        });
+        // directly get Closest Point energy stuff
+        assign_closest_points(tmp_geometry);
+
+        Eigen::SparseMatrix<double> A_CP = CP_lambda * closest_point_flat_operator;
+        Eigen::SparseMatrix<double> new_H = H_proj + A_CP.transpose() * A_CP;
+        Eigen::VectorX<double> CP_flat_grad = 2.*CP_lambda*tinyAD_flatten(closest_point_energy_gradient(tmp_geometry));
+        Eigen::VectorX<double> new_g = g + CP_flat_grad;
+
+        TINYAD_DEBUG_OUT("Energy in iteration " << i << ": " << f);
+        Eigen::VectorXd d = TinyAD::newton_direction(g, new_H, solver);
+        if (TinyAD::newton_decrement(d, g) < convergence_eps)
+            break;
+
+        // x = TinyAD::line_search(x, d, f, g, bendingEnergy_func);
+        // manual line search for now
+        double _s_max = 1.0; // Initial step size
+        double _shrink = 0.8;
+        int _max_iters = 64;
+        double _armijo_const = 1e-4;
+        bool try_one = _s_max > 1.0;
+
+        Eigen::VectorX x_new;// = x;
+        double s = _s_max;
+        for (int i = 0; i < _max_iters; ++i)
+        {
+            x_new = _x0 + s * _d;
+            const double f_new = _eval(x_new);
+            TINYAD_ASSERT_EQ(f_new, f_new);
+            if (armijo_condition(_f, f_new, s, _d, _g, _armijo_const))
+                return x_new;
+
+            if (try_one && s > 1.0 && s * _shrink < 1.0)
+                s = 1.0;
+            else
+                s *= _shrink;
+        }
+    }
+    // TINYAD_DEBUG_OUT("Final energy: " << func.eval(x));
+
+    // // Write final x vector to parametrization property.
+    // // x_to_data(...) takes a lambda function that writes the final value
+    // // of each variable (Eigen::Vector2d) back our parametrization property.
+    // func.x_to_data(x, [&] (Vertex v, const Eigen::Vector2d& p) {
+    //     param[v] = to_geometrycentral(p);
+    // });
+    VertexData<Vector3> new_points(*mesh, Vector3::zero());
+    // for (Vertex v : mesh->vertices()){
+    //     new_points[v].x = X[v.getIndex()].get(GRB_DoubleAttr_X);
+    //     new_points[v].y = X[v.getIndex() + nv].get(GRB_DoubleAttr_X);
+    //     new_points[v].z = X[v.getIndex() + 2 * nv].get(GRB_DoubleAttr_X);
+    // } 
+    return new_points;
 }

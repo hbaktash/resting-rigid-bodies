@@ -22,7 +22,8 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STR
 
   # using Clang (linux or apple) or GCC
   message("Using clang/gcc compiler flags")
-  SET(BASE_CXX_FLAGS "-std=c++14 -Wall -Wextra")
+  SET(CMAKE_CXX_STANDARD 17)
+  SET(BASE_CXX_FLAGS "-std=c++17 -Wall -Wextra")
   SET(DISABLED_WARNINGS " -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-deprecated-declarations -Wno-missing-braces -Wno-unused-private-field")
   SET(TRACE_INCLUDES " -H -Wno-error=unused-command-line-argument")
 
@@ -176,6 +177,7 @@ target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include
 # add the args.hxx project which we use for command line args
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
 target_link_libraries(invDesign PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
@@ -189,8 +191,12 @@ target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/includ
 # add the args.hxx project which we use for command line args
 target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
 target_link_libraries(convexFill PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
-
+# message(STATUS "${GUROBI_CXX_LIBRARY}")
+# message(STATUS "${GUROBI_CXX_DEBUG_LIBRARY}")
+# target_link_libraries(convexFill PUBLIC optimized ${GUROBI_CXX_LIBRARY} debug ${GUROBI_CXX_DEBUG_LIBRARY})
+# target_link_libraries(convexFill PUBLIC ${GUROBI_LIBRARY})
 
 # Bullet stuff
 

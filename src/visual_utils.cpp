@@ -81,6 +81,7 @@ void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds
     Vector3 p1 = positions_[i1],
             p2 = positions_[i2];
     // walk on p1-p2 segment
+    seg_count = 3 + (int)((p1 - p2).norm()*9);
     Vector3 curr_point = p1,
             forward_vec = (p2-p1)/(double)seg_count;
     Vector3 next_point = curr_point + forward_vec;
