@@ -45,6 +45,7 @@ using namespace geometrycentral::surface;
 // convertion stuff
 
 Vector<double> vec32vec(Vector3 v);
+Vector3 vec_to_GC_vec3(Vector<double> vec);
 DenseMatrix<double> vertex_data_to_matrix(VertexData<Vector3> positions);
 DenseMatrix<double> face_data_to_matrix(FaceData<Vector3> fdata);
 
@@ -70,7 +71,10 @@ class DeformationSolver{
         VertexData<SurfacePoint> closest_point_assignment;
         SparseMatrix<double> closest_point_operator;
         SparseMatrix<double> closest_point_flat_operator;
-        
+
+        bool one_time_CP_assignment = true;
+        double CP_lambda = 10.0;
+        int filling_max_iter = 50;
         // linear constraints
         DenseMatrix<double> constraint_matrix;
         Vector<double> constraint_rhs;
@@ -89,6 +93,7 @@ class DeformationSolver{
         // closest point energy
         void assign_closest_points(VertexPositionGeometry *new_geometry);
         double closest_point_energy(VertexPositionGeometry *new_geometry);
+        double closest_point_energy(Vector<double> flat_new_pos_mat);
         // gradient of CP energy
         DenseMatrix<double> closest_point_energy_gradient(VertexPositionGeometry *new_geometry);
         
@@ -97,7 +102,7 @@ class DeformationSolver{
         void build_constraint_matrix_and_rhs();
 
         // solver
-        VertexData<Vector3> solve_for_bending(VertexPositionGeometry *new_geometry);
+        DenseMatrix<double> solve_for_bending(int visual_per_step = 0);
         // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
 };
 

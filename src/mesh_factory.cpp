@@ -315,9 +315,9 @@ void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry
       mesh->triangulate(f);
     mesh->compress();
   }
-  for (Edge e: mesh->edges()){
-    double dihedangle= geometry->edgeDihedralAngle(e);
-    if (dihedangle > PI)
-      printf(" edge %d dihedral is large by %f\n", e.getIndex(), dihedangle - PI);
-  }
+  // for (Edge e: mesh->edges()){
+  //   double dihedangle= geometry->edgeDihedralAngle(e);
+  //   if (dihedangle > PI)
+  //     printf(" edge %d dihedral is large by %f\n", e.getIndex(), dihedangle - PI);
+  // }
 }

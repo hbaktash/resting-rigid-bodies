@@ -46,7 +46,7 @@ get_convex_hull(VertexData<Vector3> point_set){
         if (qvertex.id() - 1 > max_ind)
             max_ind = qvertex.id() - 1;
     }
-    if (qhull.vertexCount() > max_ind)
+    if (qhull.vertexCount() > max_ind + 1)
         printf(" vert count is %d, my count: %d, max_ind: %d \n", qhull.vertexCount(), my_count, max_ind);
     std::vector<std::vector<size_t>> hull_faces;
     std::vector<Vector3> poses(qhull.vertexCount());  // 

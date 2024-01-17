@@ -95,8 +95,7 @@ class InverseSolver{
         geometrycentral::SparseMatrix<double> current_Ls;
         VertexPositionGeometry* initial_geometry;
         void save_initial_pos_and_Ls();
-        bool use_old_Ls = false, 
-             use_old_geometry = false, 
+        bool use_old_geometry = false, 
              libigl_ARAP = true;
         void update_Ls();
         DenseMatrix<double> solve_constrained_Laplace(Vector<size_t> interior_indices, DenseMatrix<double> old_pos, DenseMatrix<double> new_pos,

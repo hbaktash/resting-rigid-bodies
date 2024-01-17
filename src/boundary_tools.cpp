@@ -210,12 +210,38 @@ void BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
     // TODO: take care of when f1,f2 on the same side when starting from saddle 
 }
 
+double BoundaryBuilder::get_fair_dice_energy(size_t side_count){
+    double energy = 0., goal_area = 4.*PI/(double)side_count;
+    std::vector<double> face_areas;
+    for (Face f: forward_solver->hullMesh->faces()){
+        if (forward_solver->face_last_face[f] == f)
+            face_areas.push_back(face_region_area[f]);
+    }
+    std::sort(face_areas.begin(), face_areas.end());
+    double nth_largest_area = face_areas[face_areas.size() - std::min(side_count, face_areas.size())];
+    for (Face f: forward_solver->hullMesh->faces()){
+        if (forward_solver->face_last_face[f] == f && 
+                    face_region_area[f] >= nth_largest_area){
+            double diff = goal_area - face_region_area[f];
+            energy += diff * diff;
+        }
+        else if (forward_solver->face_last_face[f] == f){ // noisy stable
+            energy += face_region_area[f] * face_region_area[f]; // 0 goal area
+        }
+    }
+    if (side_count > face_areas.size()){
+        printf(" adding penalty for nnot enough stable faces\n");
+        energy += ((double)(side_count - face_areas.size())) * goal_area * goal_area; // adding penalty for lack of stable faces
+    }
+    return energy;
+}
+
 void BoundaryBuilder::print_area_of_boundary_loops(){
     printf(" Face probs:\n");
     for (Face f: forward_solver->hullMesh->faces()){
         if (face_region_area[f] > 0){
             // face_region_area[f] /= (4.*PI);
-            printf(" f %d: %f\n", f.getIndex(), face_region_area[f]/(4*PI));
+            printf(" f %d: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
         }
     }
     // std::cout << face_region_area.toVector().transpose()<< "\n";

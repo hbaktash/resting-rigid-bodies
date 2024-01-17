@@ -62,7 +62,7 @@ void InverseSolver::set_fair_distribution_for_sink_faces(){
         if (flow_structure[f] == f && boundaryBuilder->face_region_area[f] >= nth_largest_area){
             goal_prob[f] = 1./(double)count;
             old_stable_normals.push_back(face_normal);
-            printf(" face %d goal area: %f \n", f.getIndex(), goal_prob[f]);
+            // printf(" face %d goal area: %f \n", f.getIndex(), goal_prob[f]);
         }
     }
 }
@@ -370,8 +370,7 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
     //     update_fair_distribution(stable_normal_update_thres);
     set_fair_distribution_for_sink_faces(); // TODO: TESTING
 
-    // initialize_interior_vertex_trackers(); // follow inner vertices for greedy updates
-    for (Face f: forwardSolver->hullMesh->faces()){ // TODO fix global G effect
+    for (Face f: forwardSolver->hullMesh->faces()){ 
         Face last_sink_face;
         double goal_multiplier = with_flow_structure ? 
                         (goal_prob[flow_structure[f]]* 4.*PI - boundaryBuilder->face_region_area[flow_structure[f]]):
@@ -494,8 +493,8 @@ InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> n
 
 void InverseSolver::update_Ls(){
     size_t n = forwardSolver->inputMesh->nVertices();
-    printf("old Ls flag: %d\n", use_old_Ls);
-    if (use_old_Ls)
+    printf("old geometry flag: %d\n", use_old_geometry);
+    if (use_old_geometry)
         current_Ls = initial_Ls;
     else {
         printf("recomputing Ls\n");

@@ -16,7 +16,10 @@
 * from Adobe.
 *************************************************************************
 */
- #include "deformation.h"
+
+#include "polyscope/polyscope.h"
+#include "polyscope/surface_mesh.h"
+#include "deformation.h"
 
 
 // vector stuff
@@ -26,17 +29,28 @@ Eigen::Vector3d to_eigen(const geometrycentral::Vector3& _v){
 
 geometrycentral::Vector3 to_geometrycentral(
         const Eigen::Vector3d& _v) {
-    return geometrycentral::Vector3 { _v.x(), _v.y() };
+    return geometrycentral::Vector3 { _v.x(), _v.y(), _v.z() };
 }
 
 Vector<double> tinyAD_flatten(DenseMatrix<double> mat){
     size_t n = mat.rows();
     Vector<double> ans(n*3);
     for (size_t i = 0; i < n; i++){
-        for (size_t j = 0; j < n; j++)
+        for (size_t j = 0; j < 3; j++)
             ans(3*i + j) = mat(i,j);
     }
     return ans;
+}
+
+DenseMatrix<double> unflat_tinyAD(Vector<double> flat_mat){
+    size_t n = flat_mat.size()/3;
+    printf("n %d flat mat size %d\n", n, flat_mat.size());
+    DenseMatrix<double> mat(n, 3);
+    for (size_t i = 0; i < n; i++){
+        for (size_t j = 0; j < 3; j++)
+            mat.coeffRef(i,j) = flat_mat(3*i + j);
+    }
+    return mat;
 }
 
 Vector<double> vec32vec(Vector3 v){
@@ -44,6 +58,14 @@ Vector<double> vec32vec(Vector3 v){
     ans[0] = v.x;
     ans[1] = v.y;
     ans[2] = v.z;
+    return ans;
+}
+
+Vector3 vec_to_GC_vec3(Vector<double> vec){
+    Vector3 ans;
+    ans.x = vec[0];
+    ans.y = vec[1];
+    ans.z = vec[2];
     return ans;
 }
 
@@ -112,6 +134,7 @@ Vector3 barycentric(Vector3 p, Vector3 A, Vector3 B, Vector3 C) {
     ans.y = (d11 * d20 - d01 * d21) / denom;
     ans.z = (d00 * d21 - d01 * d20) / denom;
     ans.x = 1.0f - ans.y - ans.z;
+    return ans;
 }
 
 geometrycentral::DenseMatrix<double> get_ARAP_positions(
@@ -230,6 +253,11 @@ double DeformationSolver::closest_point_energy(VertexPositionGeometry *new_geome
     return energy;
 }
 
+double DeformationSolver::closest_point_energy(Vector<double> flat_new_pos_mat){
+    DenseMatrix<double> convex_points_mat = vertex_data_to_matrix(convex_geometry->inputVertexPositions);
+    return (closest_point_flat_operator*flat_new_pos_mat - tinyAD_flatten(convex_points_mat)).norm();
+    
+}
 
 DenseMatrix<double> DeformationSolver::closest_point_energy_gradient(VertexPositionGeometry *new_geometry){
     VertexData<Vector3> CP_energy_gradients(*mesh, Vector3::zero());
@@ -246,7 +274,7 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
     
     // linear operator corresponding to assignments
     closest_point_operator = Eigen::SparseMatrix<double>(convex_mesh->nVertices(), mesh->nVertices());
-    closest_point_flat_operator = Eigen::SparseMatrix<double>(convex_mesh->nVertices(), 3*mesh->nVertices());
+    closest_point_flat_operator = Eigen::SparseMatrix<double>(3 * convex_mesh->nVertices(), 3*mesh->nVertices());
     std::vector<Eigen::Triplet<double>> tripletList, flat_tripletList;
     tripletList.reserve(3*mesh->nVertices());
     flat_tripletList.reserve(9*mesh->nVertices());
@@ -254,8 +282,9 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
     for (Vertex c_v: convex_mesh->vertices()){
         Face closest_face;
         Edge closest_edge;
-        Vector3 on_edge_projection;
         Vertex closest_vertex;
+        
+        Vector3 on_edge_projection;
         double min_face_dist  = std::numeric_limits<double>::infinity(),
                min_edge_dist   = std::numeric_limits<double>::infinity(),
                min_vertex_dist  = std::numeric_limits<double>::infinity();
@@ -263,30 +292,52 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
         Vector3 c_p = convex_geometry->inputVertexPositions[c_v];
 
         // there should be a smarter way of checking all elements in one loop; maybe even without a flagging them??
-        for (Face f: mesh->faces()){ // check if face-projectable; while keeping track of closest vertex 
+        for (Face f: mesh->faces()){ 
             Vector3 f_normal = new_geometry->faceNormal(f);
-            double face_dist = abs(dot(f_normal, c_p - new_geometry->inputVertexPositions[f.halfedge().vertex()])); // using some point of f
-            if (face_dist < min_face_dist){
+            Halfedge curr_he  = f.halfedge(),
+                    first_he = f.halfedge();
+            // assume outward normals; which is inward w.r.t. p
+            double face_dist = dot(f_normal, c_p - new_geometry->inputVertexPositions[f.halfedge().vertex()]); // using some point of f
+            
+            bool face_is_projectable = true;
+            while (true){ // checking if face-projectable
+                Vertex v1 = curr_he.tailVertex(), v2 = curr_he.tipVertex();
+                Vector3 A = new_geometry->inputVertexPositions[v1], 
+                        B = new_geometry->inputVertexPositions[v2];
+                Vector3 N_PAB = cross(B - A, A - c_p);
+                if (dot(f_normal, N_PAB) <= 0) { // not face-projectable on this face
+                    face_is_projectable = false;
+                    break; // go to next face
+                }
+                curr_he = curr_he.next();
+                if (curr_he == first_he)
+                    break;
+            }
+            if (face_is_projectable && face_dist < min_face_dist){
                 min_face_dist = face_dist;
                 closest_face = f;
             }
+            
         }
         for (Edge e: mesh->edges()){
-            Vector3 A = convex_geometry->inputVertexPositions[e.firstVertex()], 
-                    B = convex_geometry->inputVertexPositions[e.secondVertex()];
+            Vector3 A = new_geometry->inputVertexPositions[e.firstVertex()], 
+                    B = new_geometry->inputVertexPositions[e.secondVertex()];
             Vector3 PB = B - c_p,
                     PA = A - c_p,
                     AB = B - A;
-            Vector3 ortho_p = PB - AB*dot(AB, PB)/dot(AB,AB);
-            double edge_dist =  ortho_p.norm();
-            if (edge_dist < min_edge_dist){
-                closest_edge = e;
-                min_edge_dist = edge_dist;
-                on_edge_projection = c_p + ortho_p;
+            bool edge_is_projectable = dot(PB, AB) >= 0 && dot(PA, -AB) >= 0;
+            if (edge_is_projectable){
+                Vector3 ortho_p = PB - AB*dot(AB, PB)/dot(AB,AB);
+                double edge_dist =  ortho_p.norm();
+                if (edge_dist < min_edge_dist){
+                    closest_edge = e;
+                    min_edge_dist = edge_dist;
+                    on_edge_projection = c_p + ortho_p;
+                }
             }
         }
         for (Vertex v: mesh->vertices()){
-            Vector3 A = convex_geometry->inputVertexPositions[v];
+            Vector3 A = new_geometry->inputVertexPositions[v];
             double vertex_dist = (A - c_p).norm();
             if (vertex_dist < min_vertex_dist){
                 closest_vertex = v;
@@ -295,8 +346,10 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
         }
 
         // assign SurfacePoint and assign barycentric coordinates
+        // printf(" at cv %d fd %f, ed %f, vd %f\n", c_v.getIndex(), min_face_dist, min_edge_dist, min_vertex_dist);
         double min_dist = std::min(min_face_dist, std::min(min_edge_dist, min_vertex_dist));
         if (min_dist == min_face_dist){ // assuming triangle mesh
+            // printf("closest is a face\n");
             Vector3 f_normal = new_geometry->faceNormal(closest_face);
             Vector3 on_face_projection = c_p - f_normal * dot(f_normal, 
                                                               c_p - new_geometry->inputVertexPositions[closest_face.halfedge().vertex()]);
@@ -314,16 +367,17 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
             tripletList.emplace_back(c_v.getIndex(), v2.getIndex(), bary_coor.y);
             tripletList.emplace_back(c_v.getIndex(), v3.getIndex(), bary_coor.z);
             for (size_t d = 0; d < 3; d++){
-                flat_tripletList.emplace_back(c_v.getIndex(), 3*v1.getIndex() + d, bary_coor.x);
-                flat_tripletList.emplace_back(c_v.getIndex(), 3*v1.getIndex() + d, bary_coor.y);
-                flat_tripletList.emplace_back(c_v.getIndex(), 3*v1.getIndex() + d, bary_coor.z);
+                flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*v1.getIndex() + d, bary_coor.x);
+                flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*v1.getIndex() + d, bary_coor.y);
+                flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*v1.getIndex() + d, bary_coor.z);
             }
         }
         else if (min_dist == min_edge_dist){
+            // printf("closest is an edge\n");
             Vertex v1 = closest_edge.firstVertex(),
                    v2 = closest_edge.secondVertex();
-            Vector3 A = convex_geometry->inputVertexPositions[v1], 
-                    B = convex_geometry->inputVertexPositions[v2];
+            Vector3 A = new_geometry->inputVertexPositions[v1], 
+                    B = new_geometry->inputVertexPositions[v2];
             double tVal = (on_edge_projection - A).norm()/(A - B).norm();
             closest_point_assignment[c_v] = SurfacePoint(closest_edge, tVal);
 
@@ -331,15 +385,16 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
             tripletList.emplace_back(c_v.getIndex(), v1.getIndex(), 1. - tVal);
             tripletList.emplace_back(c_v.getIndex(), v2.getIndex(), tVal);
             for (size_t d = 0; d < 3; d++){
-                flat_tripletList.emplace_back(c_v.getIndex(), 3*v1.getIndex() + d, 1. - tVal);
-                flat_tripletList.emplace_back(c_v.getIndex(), 3*v2.getIndex() + d, tVal);
+                flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*v1.getIndex() + d, 1. - tVal);
+                flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*v2.getIndex() + d, tVal);
             }
         }
         else {// min_dist == min_vertex_dist
+            // printf("closest is a vertex\n");
             closest_point_assignment[c_v] = SurfacePoint(closest_vertex);   
             tripletList.emplace_back(c_v.getIndex(), closest_vertex.getIndex(), 1.);
             for (size_t d = 0; d < 3; d++)
-                flat_tripletList.emplace_back(c_v.getIndex(), 3*closest_vertex.getIndex() + d, 1.);
+                flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*closest_vertex.getIndex() + d, 1.);
         }
     }
     closest_point_operator.setFromTriplets(tripletList.begin(), tripletList.end());
@@ -356,10 +411,11 @@ void DeformationSolver::build_constraint_matrix_and_rhs(){
 }
 
 
-VertexData<Vector3> DeformationSolver::solve_for_bending(VertexPositionGeometry* new_geometry){
+DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     size_t num_var = 3 * mesh->nVertices();
     
     // Pre-compute constants from the old geometry; old \theta, e, h_e
+    printf(" pre computing rest constants\n");
     old_geometry->requireEdgeDihedralAngles();
     EdgeData<double> rest_dihedral_angles = old_geometry->edgeDihedralAngles;
     old_geometry->unrequireEdgeDihedralAngles();
@@ -376,15 +432,17 @@ VertexData<Vector3> DeformationSolver::solve_for_bending(VertexPositionGeometry*
         rest_constant[e] = e_len_sqrd/(area1+area2);
     };
 
+    printf(" adding objective terms\n");
     // Objective function
     auto bendingEnergy_func = TinyAD::scalar_function<3>(mesh->vertices());
     // Add objective term per edge
-    bendingEnergy_func.add_elements<3>(mesh->edges(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
+    // double edge_count = 1.;//(double) mesh->nEdges();
+    bendingEnergy_func.add_elements<4>(mesh->edges(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
     {
         // Evaluate element using either double or TinyAD::Double
         using T = TINYAD_SCALAR_TYPE(element);
 
-        // Get variable 3D vertex positions
+        // Get variables 3D vertex positions
         Edge e = element.handle;
         
         if (e.isBoundary()) return (T)0.0;
@@ -406,60 +464,86 @@ VertexData<Vector3> DeformationSolver::solve_for_bending(VertexPositionGeometry*
     // Assemble inital x vector from parametrization property.
     // x_from_data(...) takes a lambda function that maps
     // each variable handle to its initial 2D value (Eigen::Vector2d).
+    printf(" initializing variables\n");
     int n = mesh->nVertices();
     Eigen::VectorXd x = bendingEnergy_func.x_from_data([&] (Vertex v) {
-        return to_eigen(old_geometry->inputVertexPositions[v]);
+        return to_eigen(old_geometry->inputVertexPositions[v.getIndex()]);
     });
 
     // Projected Newton
     VertexPositionGeometry *tmp_geometry = new VertexPositionGeometry(*mesh);
     TinyAD::LinearSolver solver;
-    int max_iters = 10;
-    double convergence_eps = 1e-2,
-           CP_lambda = 0.5;
-    for (int i = 0; i < max_iters; ++i)
+    double convergence_eps = 1e-4;
+    printf(" starting opt\n");
+    for (int i = 0; i < filling_max_iter; ++i)
     {
-        auto [f, g, H_proj] = bendingEnergy_func.eval_with_hessian_proj(x);
-
+        printf(" Hessian eval\n ");
+        auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x);
+        // printf("fetching data from TinyAD\n");
         bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) {
             tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
         });
+        if (visual_per_step != 0){
+            if (i % visual_per_step == 0){
+                printf(" visualizing step %d\n", i);
+                polyscope::registerSurfaceMesh("temp sol "+std::to_string(i), tmp_geometry->inputVertexPositions, mesh->getFaceVertexList())->setEnabled(false);
+            }
+        }
         // directly get Closest Point energy stuff
-        assign_closest_points(tmp_geometry);
+        if (!one_time_CP_assignment || i == 0){
+            printf(" assigning  closest points\n");
+            assign_closest_points(tmp_geometry);
+        }
+        printf(" finding CP terms\n");
+        double CP_energy = closest_point_energy(tmp_geometry);
+        Eigen::SparseMatrix<double> A_CP = closest_point_flat_operator;
+        Eigen::VectorX<double> CP_flat_g = 2.*tinyAD_flatten(closest_point_energy_gradient(tmp_geometry));
+        Eigen::SparseMatrix<double> H_CP = A_CP.transpose() * A_CP;
+        // CP_lambda *= 1./(double)convex_mesh->nVertices();
+        // printf(" adding CP terms n %d, g size %d, H size %d, %d\n", mesh->nVertices(), CP_flat_g.size(), H_CP.rows(), H_CP.cols());
+        // printf(" CP normas non_flat_A_CP %f A_CP %f g %f, H %f\n", closest_point_operator.norm(), A_CP.norm(), CP_flat_g.norm(), H_CP.norm());
+        Eigen::SparseMatrix<double> total_H = bending_H_proj + CP_lambda * H_CP;
+        Eigen::VectorX<double> total_g = bending_g + CP_lambda * CP_flat_g;
+        double total_energy = bending_f + CP_lambda * CP_energy;
 
-        Eigen::SparseMatrix<double> A_CP = CP_lambda * closest_point_flat_operator;
-        Eigen::SparseMatrix<double> new_H = H_proj + A_CP.transpose() * A_CP;
-        Eigen::VectorX<double> CP_flat_grad = 2.*CP_lambda*tinyAD_flatten(closest_point_energy_gradient(tmp_geometry));
-        Eigen::VectorX<double> new_g = g + CP_flat_grad;
-
-        TINYAD_DEBUG_OUT("Energy in iteration " << i << ": " << f);
-        Eigen::VectorXd d = TinyAD::newton_direction(g, new_H, solver);
-        if (TinyAD::newton_decrement(d, g) < convergence_eps)
-            break;
+        TINYAD_DEBUG_OUT("Energy in iteration " << i << ": bending= " << bending_f << " CP= " << CP_lambda * CP_energy<< "\n \t\t\t\t total:" << total_energy);
+        // printf(" finding newton step\n");
+        Eigen::VectorXd d = TinyAD::newton_direction(total_g, total_H, solver);
+        // printf(" d norm: %f\n", d.norm());
+        // // printf(" check decrement size: %f\n", newton_dec);
+        // // if (newton_dec < convergence_eps)
+        // //     break;
 
         // x = TinyAD::line_search(x, d, f, g, bendingEnergy_func);
         // manual line search for now
-        double _s_max = 1.0; // Initial step size
+        // printf(" line search\n");        
+        double _s_max = 0.5; // Initial step size
         double _shrink = 0.8;
-        int _max_iters = 64;
+        int _max_iters = 200; // 64
         double _armijo_const = 1e-4;
         bool try_one = _s_max > 1.0;
 
-        Eigen::VectorX x_new;// = x;
+        Eigen::VectorX<double> x_new = x;
         double s = _s_max;
-        for (int i = 0; i < _max_iters; ++i)
+        double f_new = total_energy;
+        double d_dot_g = d.dot(total_g);
+        int j = 0;
+        for (j = 0; j < _max_iters; ++j)
         {
-            x_new = _x0 + s * _d;
-            const double f_new = _eval(x_new);
-            TINYAD_ASSERT_EQ(f_new, f_new);
-            if (armijo_condition(_f, f_new, s, _d, _g, _armijo_const))
-                return x_new;
-
-            if (try_one && s > 1.0 && s * _shrink < 1.0)
-                s = 1.0;
+            x_new = x + s * d;
+            f_new = bendingEnergy_func.eval(x_new) + 
+                                 CP_lambda * closest_point_energy(x_new);
+            if (f_new <= total_energy + _armijo_const * s * d_dot_g)
+                break; //  x new is good
             else
                 s *= _shrink;
         }
+        TINYAD_DEBUG_OUT("line ended at iter _" << j << "_ s: " << s << " \n                  fnew: " << f_new);
+        x = x_new;
+        double step_norm = s * d.norm();
+        printf(" step norm is %f\n", step_norm);
+        if (step_norm < convergence_eps)
+            break;
     }
     // TINYAD_DEBUG_OUT("Final energy: " << func.eval(x));
 
@@ -469,11 +553,6 @@ VertexData<Vector3> DeformationSolver::solve_for_bending(VertexPositionGeometry*
     // func.x_to_data(x, [&] (Vertex v, const Eigen::Vector2d& p) {
     //     param[v] = to_geometrycentral(p);
     // });
-    VertexData<Vector3> new_points(*mesh, Vector3::zero());
-    // for (Vertex v : mesh->vertices()){
-    //     new_points[v].x = X[v.getIndex()].get(GRB_DoubleAttr_X);
-    //     new_points[v].y = X[v.getIndex() + nv].get(GRB_DoubleAttr_X);
-    //     new_points[v].z = X[v.getIndex() + 2 * nv].get(GRB_DoubleAttr_X);
-    // } 
-    return new_points;
+    DenseMatrix<double> new_points_mat = unflat_tinyAD(x); 
+    return new_points_mat;
 }

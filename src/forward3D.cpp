@@ -85,7 +85,7 @@ void Forward3DSolver::update_hull_index_arrays(){
 }
 
 void Forward3DSolver::update_convex_hull(bool with_projection){
-    printf(" -- updating convex hull -- \n");
+    // printf(" -- updating convex hull -- \n");
     if (!with_projection || first_hull){ // just update and take the new hull
         std::vector<std::vector<size_t>> hull_faces; 
         std::vector<size_t> hull_vertex_mapping;
@@ -152,7 +152,7 @@ void Forward3DSolver::update_convex_hull(bool with_projection){
             }
         }
     }
-    printf(" -- convex hull updated -- \n");
+    // printf(" -- convex hull updated -- \n");
     
     // updating index vectors
     update_hull_index_arrays();
@@ -637,7 +637,7 @@ void Forward3DSolver::build_face_last_faces(){
 
 // just call all the pre-compute initializations; not face-last-face
 void Forward3DSolver::initialize_pre_computes(){
-    printf("precomputes:\n");
+    // printf("precomputes:\n");
     // printf("  vertex stability:\n");
     compute_vertex_stabilizablity();
     // printf("  vertex gauss curvature:\n");
@@ -646,9 +646,8 @@ void Forward3DSolver::initialize_pre_computes(){
     compute_edge_stable_normals();
     // printf("  building face next faces:\n");
     build_face_next_faces(); // 
-    printf("precomputes done!\n");
+    // printf("precomputes done!\n");
     inputGeometry->refreshQuantities();
     hullGeometry->refreshQuantities();
     updated = true;
-
 }

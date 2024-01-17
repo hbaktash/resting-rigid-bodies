@@ -77,5 +77,6 @@ class BoundaryBuilder {
                                         double f1_area_sign, Vector3 f1_normal, Vector3 f2_normal);
 
         void print_area_of_boundary_loops();
+        double get_fair_dice_energy(size_t side_count);
         
 };

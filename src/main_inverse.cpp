@@ -508,9 +508,7 @@ void myCallback() {
   if (ImGui::Checkbox("structured opt", &structured_opt));
   if (ImGui::Checkbox("update structured at every step", &always_update_structure));
   if (ImGui::Checkbox("decrease convex hull points", &with_hull_projection));
-  if (ImGui::Checkbox("use initial Laplacian", &use_initial_Ls)) inverseSolver->use_old_Ls = use_initial_Ls;
   if (ImGui::Checkbox("use initial geomtery", &use_initial_geometry)) {
-    inverseSolver->use_old_Ls = use_initial_geometry;
     inverseSolver->use_old_geometry = use_initial_geometry;
   }
   if (ImGui::SliderInt("ARAP max iters", &ARAP_max_iters, 1, 30)) inverseSolver->arap_max_iter = ARAP_max_iters;
