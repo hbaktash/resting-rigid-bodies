@@ -53,6 +53,24 @@ DenseMatrix<double> unflat_tinyAD(Vector<double> flat_mat){
     return mat;
 }
 
+SparseMatrix<double> tinyADify_barrier_hess(std::vector<DenseMatrix<double>> hessians){
+    size_t n = hessians.size();
+    std::vector<Eigen::Triplet<double>> tripletList;
+    tripletList.reserve(9*n);
+
+    for (size_t i = 0; i < n; i++){
+        DenseMatrix<double> hess_i = hessians[i];
+        for (size_t k = 0; k < 3; k++){
+            for (size_t l = 0; l < 3; l++)
+                tripletList.emplace_back(3 * i + k, 3 * i + l, hess_i(k, l));
+        }
+    }
+    Eigen::SparseMatrix<double> tinyADfied_hess(3*n, 3*n);
+    tinyADfied_hess.setFromTriplets(tripletList.begin(), tripletList.end());
+    return tinyADfied_hess;
+}
+
+
 Vector<double> vec32vec(Vector3 v){
     Vector<double> ans(3);
     ans[0] = v.x;
@@ -256,7 +274,6 @@ double DeformationSolver::closest_point_energy(VertexPositionGeometry *new_geome
 double DeformationSolver::closest_point_energy(Vector<double> flat_new_pos_mat){
     DenseMatrix<double> convex_points_mat = vertex_data_to_matrix(convex_geometry->inputVertexPositions);
     return (closest_point_flat_operator*flat_new_pos_mat - tinyAD_flatten(convex_points_mat)).norm();
-    
 }
 
 DenseMatrix<double> DeformationSolver::closest_point_energy_gradient(VertexPositionGeometry *new_geometry){
@@ -404,10 +421,51 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
 
 void DeformationSolver::build_constraint_matrix_and_rhs(){
     size_t nf = convex_mesh->nFaces();
-    DenseMatrix<double> convex_face_normals(nf, 3);
-    convex_geometry->requireFaceNormals(); // assuming outward normals
-    constraint_matrix = face_data_to_matrix(convex_geometry->faceNormals);
+    constraint_matrix = DenseMatrix<double>::Zero(nf, 3);
     constraint_rhs = Vector<double>::Zero(nf);
+    for (Face f: convex_mesh->faces()){
+        Vector3 face_normal = convex_geometry->faceNormal(f);
+        constraint_matrix.row(f.getIndex()) = vec32vec(face_normal);
+        Vector3 point_on_face_normal = convex_geometry->inputVertexPositions[f.halfedge().vertex()];
+        constraint_rhs(f.getIndex()) = dot(face_normal, point_on_face_normal);
+    }
+}
+
+std::tuple<double, DenseMatrix<double>, std::vector<DenseMatrix<double>>> 
+DeformationSolver::get_log_barrier_stuff(DenseMatrix<double> new_pos_mat){
+    double energy = 0.;
+    size_t n = new_pos_mat.rows(),
+           nf = convex_mesh->nFaces();
+    assert(new_pos_mat.cols() == 3);
+    DenseMatrix<double> NP = constraint_matrix * new_pos_mat.transpose(); // nf by n; col j is N*P_j
+    DenseMatrix<double> repeated_rhs = constraint_rhs.replicate(1, n);
+    assert(repeated_rhs.cols() == n); // same as the number of new pos vertices
+    DenseMatrix<double> diff_ij = repeated_rhs - NP; // col j is N*P_j - rhs; i.e. -f_i(P_j) which should be positive
+    // slow?
+    assert((diff_ij.array() > DenseMatrix<double>::Zero(diff_ij.rows(), diff_ij.cols()).array()).all()); // check interior-ness before entering this function?
+    // slow?
+    DenseMatrix<double> energy_ij = diff_ij.array().log().matrix(); // check the cost for this; why should I .array() it??
+    energy = -energy_ij.sum();
+    
+    // gradient
+    DenseMatrix<double> grads = DenseMatrix<double>::Zero(n, 3);
+    for (size_t j = 0; j < n; j++){
+        grads.row(j) = (diff_ij.col(j).cwiseInverse().asDiagonal() * constraint_matrix).colwise().sum(); // sum over N_i / (diff_ij)
+    }
+
+    // Hessian is a diagonal matrix; so using matrix per vertex
+    std::vector<DenseMatrix<double>> hessians(n);
+    for (size_t j = 0; j < n; j++){
+        hessians[j] = DenseMatrix<double>::Zero(3,3);
+        for (size_t i = 0; i < nf; i++){
+            DenseMatrix<double> g_gT = grads.row(j) * grads.row(j).transpose();
+            assert(g_gT.cols() == 3 && g_gT.rows() == 3);
+            double diff_ij_sqr = diff_ij.coeff(i,j) * diff_ij.coeff(i,j);
+            hessians[j] += diff_ij_sqr * g_gT; // sum over N_i / (diff_ij)
+        }
+    }
+
+    return std::tuple<double, DenseMatrix<double>, std::vector<DenseMatrix<double>>>(energy, grads, hessians);
 }
 
 
@@ -463,7 +521,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
 
     // Assemble inital x vector from parametrization property.
     // x_from_data(...) takes a lambda function that maps
-    // each variable handle to its initial 2D value (Eigen::Vector2d).
+    // each variable handle to its initial 3D value (Eigen::Vector3d).
     printf(" initializing variables\n");
     int n = mesh->nVertices();
     Eigen::VectorXd x = bendingEnergy_func.x_from_data([&] (Vertex v) {
@@ -478,9 +536,9 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     for (int i = 0; i < filling_max_iter; ++i)
     {
         printf(" Hessian eval\n ");
-        auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x);
-        // printf("fetching data from TinyAD\n");
-        bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) {
+        auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x);//
+
+        bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) { // don't really need this
             tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
         });
         if (visual_per_step != 0){
@@ -506,21 +564,28 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         Eigen::VectorX<double> total_g = bending_g + CP_lambda * CP_flat_g;
         double total_energy = bending_f + CP_lambda * CP_energy;
 
-        TINYAD_DEBUG_OUT("Energy in iteration " << i << ": bending= " << bending_f << " CP= " << CP_lambda * CP_energy<< "\n \t\t\t\t total:" << total_energy);
-        // printf(" finding newton step\n");
+        // barrier stuff
+        DenseMatrix<double> x_in_dense_format = vertex_data_to_matrix(tmp_geometry->inputVertexPositions);
+        auto [barrier_energy, barrier_grad, barrier_hessian] = get_log_barrier_stuff(x_in_dense_format); // thank u new c++
+        Eigen::SparseMatrix<double> barrier_H = tinyADify_barrier_hess(barrier_hessian);
+        Eigen::VectorX<double> barrier_g = tinyAD_flatten(barrier_grad);
+        // TODO: what to do about scheduling
+        // TODO: start an iter for barrier..
+
+
+        TINYAD_DEBUG_OUT("Energy in iteration " << i << ": bending= " << bending_f << "\n\t\t\t\tCP= " << CP_lambda << " * "<< CP_energy<< "\n\t\t\t\t\t total:" << total_energy);
         Eigen::VectorXd d = TinyAD::newton_direction(total_g, total_H, solver);
-        // printf(" d norm: %f\n", d.norm());
         // // printf(" check decrement size: %f\n", newton_dec);
         // // if (newton_dec < convergence_eps)
-        // //     break;
+        // // break;
 
         // x = TinyAD::line_search(x, d, f, g, bendingEnergy_func);
-        // manual line search for now
-        // printf(" line search\n");        
+        // line search
+        // printf(" line search\n");
         double _s_max = 0.5; // Initial step size
         double _shrink = 0.8;
         int _max_iters = 200; // 64
-        double _armijo_const = 1e-4;
+        double _armijo_const = 0.; //1e-4;
         bool try_one = _s_max > 1.0;
 
         Eigen::VectorX<double> x_new = x;
@@ -540,6 +605,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         }
         TINYAD_DEBUG_OUT("line ended at iter _" << j << "_ s: " << s << " \n                  fnew: " << f_new);
         x = x_new;
+        CP_lambda *= CP_mu;
         double step_norm = s * d.norm();
         printf(" step norm is %f\n", step_norm);
         if (step_norm < convergence_eps)

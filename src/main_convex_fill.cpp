@@ -113,7 +113,8 @@ int ARAP_max_iters = 10;
 
 // deformation
 DeformationSolver *deformationSolver;
-float CP_lambda = 1000.;
+float CP_lambda_exp = 1.,
+      CP_mu = 1.;
 int filling_max_iter = 20;
 
 // example choice
@@ -385,9 +386,10 @@ void take_uni_mass_opt_vertices_step(){
                                                               forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
 
       // deforming
-      deformationSolver = new DeformationSolver(mesh, geometry, 
+      deformationSolver = new DeformationSolver(mesh, inverseSolver->initial_geometry, // TODO: or use the ex inputGeometry?
                                                 forwardSolver->hullMesh, forwardSolver->hullGeometry);   
-      deformationSolver->CP_lambda = CP_lambda;
+      deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
+      deformationSolver->CP_mu = CP_mu;
       deformationSolver->filling_max_iter = filling_max_iter;
       DenseMatrix<double> new_points = deformationSolver->solve_for_bending(1);
       for (Vertex v: forwardSolver->inputMesh->vertices())
@@ -444,7 +446,7 @@ void take_uni_mass_opt_vertices_step(){
   update_solver_and_boundaries();
   boundary_builder->print_area_of_boundary_loops();
   printf(" fair dice energy: %f\n", boundary_builder->get_fair_dice_energy(fair_sides_count));
-  update_visuals_with_G();
+  // update_visuals_with_G();
 }
 
 
@@ -482,7 +484,7 @@ void myCallback() {
               all_polygons_current_item2 = tmp_str;
               init_convex_shape_to_fill(all_polygons_current_item2);
               deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
-              //
+              // 
           }
           if (is_selected)
               ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
@@ -493,13 +495,15 @@ void myCallback() {
   if (ImGui::Button("deform into convex shape")){
     init_convex_shape_to_fill(all_polygons_current_item2);
     deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);   
-    deformationSolver->CP_lambda = CP_lambda;
+    deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
     deformationSolver->filling_max_iter = filling_max_iter;
+    deformationSolver->CP_mu = CP_mu;
     deformationSolver->one_time_CP_assignment = one_time_CP_assignment;
-    deformationSolver->solve_for_bending(3);
+    deformationSolver->solve_for_bending(1);
   }
   if (ImGui::Checkbox("one time CP assignment", &one_time_CP_assignment)) deformationSolver->one_time_CP_assignment = one_time_CP_assignment;
-  if (ImGui::SliderFloat("CP lambda", &CP_lambda, 0., 20.0)) deformationSolver->CP_lambda = CP_lambda;
+  if (ImGui::SliderFloat("CP lambda log10/initial value", &CP_lambda_exp, 0., 10.)) deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
+  if (ImGui::SliderFloat("CP mu (growth per iter)", &CP_mu, 1., 1.5)) deformationSolver->CP_mu = CP_mu;
   if (ImGui::SliderInt("filling iters", &filling_max_iter, 0., 200.0)) deformationSolver->filling_max_iter = filling_max_iter;
 
   if (ImGui::Button("uniform mass G")){
@@ -539,8 +543,8 @@ int main(int argc, char **argv) {
   update_solver();
   init_visuals();
 
-  init_convex_shape_to_fill(all_polygons_current_item2);
-  deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
+  // init_convex_shape_to_fill(all_polygons_current_item2);
+  // deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
               
   // convex_hull(forwardSolver->hullGeometry->inputVertexPositions);
   // build the solver

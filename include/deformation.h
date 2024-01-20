@@ -49,6 +49,11 @@ Vector3 vec_to_GC_vec3(Vector<double> vec);
 DenseMatrix<double> vertex_data_to_matrix(VertexData<Vector3> positions);
 DenseMatrix<double> face_data_to_matrix(FaceData<Vector3> fdata);
 
+Vector<double> tinyAD_flatten(DenseMatrix<double> mat);
+DenseMatrix<double> unflat_tinyAD(Vector<double> flat_mat);
+
+SparseMatrix<double> tinyADify_barrier_hess(std::vector<DenseMatrix<double>> hessians);
+
 // Gradient stuff
 // from: https://www.sciencedirect.com/science/article/pii/S0167839607000891 
 // Diherdral angle derivative; the angle <BAC on unit sphere
@@ -73,7 +78,10 @@ class DeformationSolver{
         SparseMatrix<double> closest_point_flat_operator;
 
         bool one_time_CP_assignment = true;
-        double CP_lambda = 10.0;
+        double CP_lambda = 10.0,
+               CP_mu = 1.; // grow the CP lambda; since we want it to be zero in the end
+        double barrier_init_lambda = 1e2,
+               barrier_decay = 0.8;
         int filling_max_iter = 50;
         // linear constraints
         DenseMatrix<double> constraint_matrix;
@@ -100,6 +108,7 @@ class DeformationSolver{
 
         // constraints
         void build_constraint_matrix_and_rhs();
+        std::tuple<double, DenseMatrix<double>, std::vector<DenseMatrix<double>>> get_log_barrier_stuff(DenseMatrix<double> new_pos_mat);
 
         // solver
         DenseMatrix<double> solve_for_bending(int visual_per_step = 0);
