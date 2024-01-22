@@ -20,6 +20,7 @@
 
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
+#include "geometrycentral/surface/remeshing.h"
 
 #include "geometry_utils.h"
 
@@ -33,4 +34,4 @@ std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionG
 generate_polyhedra(std::string poly_str);
 
 void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
-                     bool triangulate = false);
+                     bool triangulate = false, bool do_remesh = false, double remesh_edge_scale = 3.);

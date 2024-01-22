@@ -97,7 +97,8 @@ bool compute_global_G_effect = true,
      with_hull_projection = false,
      use_initial_geometry = false,
      first_time = false;
-
+bool do_remesh = false;
+float scale_for_remesh = 4.5;
 polyscope::PointCloud *test_pc;
 
 int fair_sides_count = 6; // for optimization
@@ -113,9 +114,12 @@ int ARAP_max_iters = 10;
 
 // deformation
 DeformationSolver *deformationSolver;
+float scale_for_feasi = 3.4;
 float CP_lambda_exp = 1.,
-      CP_mu = 1.;
-int filling_max_iter = 20;
+      CP_mu = 1.1,
+      barrier_lambda_exp = 0.,
+      barrier_mu = 0.7;
+int filling_max_iter = 50;
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc")};
@@ -197,7 +201,7 @@ void init_convex_shape_to_fill(std::string poly_str, bool triangulate = false){
   convex_to_fill_mesh = cv_mesh_ptr.release();
   convex_to_fill_geometry = cv_geometry_ptr.release();
   preprocess_mesh(convex_to_fill_mesh, convex_to_fill_geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0);
-  convex_to_fill_geometry->inputVertexPositions *= 3.;
+  convex_to_fill_geometry->inputVertexPositions *= scale_for_feasi;
   // convex_to_fill_geometry->inputVertexPositions += Vector3::constant(0.5);
 
   // Register the mesh with polyscope
@@ -205,7 +209,7 @@ void init_convex_shape_to_fill(std::string poly_str, bool triangulate = false){
     "fillable hull",
     convex_to_fill_geometry->inputVertexPositions, convex_to_fill_mesh->getFaceVertexList(),
     polyscopePermutations(*convex_to_fill_mesh));
-  psHullFillMesh->setTransparency(0.75);
+  psHullFillMesh->setTransparency(0.35);
 }
 
 
@@ -214,7 +218,7 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
   std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
   mesh = mesh_ptr.release();
   geometry = geometry_ptr.release();
-  preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0);
+  preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0, do_remesh, scale_for_remesh);
   first_time = true;
 }
 
@@ -367,7 +371,7 @@ void take_uni_mass_opt_vertices_step(){
   double opt_step_size = hull_update_line_search(total_uni_mass_vertex_grads);
 
   polyscope::registerSurfaceMesh("pre-step hull", forwardSolver->hullGeometry->inputVertexPositions,
-                                                  forwardSolver->hullMesh->getFaceVertexList());
+                                                  forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
   polyscope::registerSurfaceMesh("pre-step mesh", forwardSolver->inputGeometry->inputVertexPositions,
                                                   forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
   
@@ -388,9 +392,13 @@ void take_uni_mass_opt_vertices_step(){
       // deforming
       deformationSolver = new DeformationSolver(mesh, inverseSolver->initial_geometry, // TODO: or use the ex inputGeometry?
                                                 forwardSolver->hullMesh, forwardSolver->hullGeometry);   
+      deformationSolver->one_time_CP_assignment = one_time_CP_assignment;
       deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
       deformationSolver->CP_mu = CP_mu;
+      deformationSolver->barrier_init_lambda = pow(10, barrier_lambda_exp);
+      deformationSolver->barrier_decay = barrier_mu;
       deformationSolver->filling_max_iter = filling_max_iter;
+    
       DenseMatrix<double> new_points = deformationSolver->solve_for_bending(1);
       for (Vertex v: forwardSolver->inputMesh->vertices())
         forwardSolver->inputGeometry->inputVertexPositions[v] = vec_to_GC_vec3(new_points.row(v.getIndex()));
@@ -444,6 +452,7 @@ void take_uni_mass_opt_vertices_step(){
   forwardSolver->set_uniform_G();
   G = forwardSolver->get_G();
   update_solver_and_boundaries();
+  update_visuals_with_G();
   boundary_builder->print_area_of_boundary_loops();
   printf(" fair dice energy: %f\n", boundary_builder->get_fair_dice_energy(fair_sides_count));
   // update_visuals_with_G();
@@ -454,6 +463,8 @@ void take_uni_mass_opt_vertices_step(){
 // Use ImGUI commands to build whatever you want here, see
 // https://github.com/ocornut/imgui/blob/master/imgui.h
 void myCallback() {
+  if (ImGui::Checkbox("do remeshing", &do_remesh));
+  if (ImGui::SliderFloat("remesh edge len scale", &scale_for_remesh, 1., 10.));
   if (ImGui::BeginCombo("##combo1", all_polygons_current_item.c_str())){ // The second parameter is the label previewed before opening the combo.
       for (std::string tmp_str: all_polyhedra_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
           bool is_selected = (all_polygons_current_item == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
@@ -477,6 +488,7 @@ void myCallback() {
       ImGui::EndCombo();
   }
 
+  if (ImGui::SliderFloat("scale for feasibility", &scale_for_feasi, 1., 10.));
   if (ImGui::BeginCombo("##combo2", all_polygons_current_item2.c_str())){ // The second parameter is the label previewed before opening the combo.
       for (std::string tmp_str: all_polyhedra_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
           bool is_selected = (all_polygons_current_item2 == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
@@ -495,16 +507,21 @@ void myCallback() {
   if (ImGui::Button("deform into convex shape")){
     init_convex_shape_to_fill(all_polygons_current_item2);
     deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);   
-    deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
-    deformationSolver->filling_max_iter = filling_max_iter;
-    deformationSolver->CP_mu = CP_mu;
     deformationSolver->one_time_CP_assignment = one_time_CP_assignment;
+    deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
+    deformationSolver->CP_mu = CP_mu;
+    deformationSolver->barrier_init_lambda = pow(10, barrier_lambda_exp);
+    deformationSolver->barrier_decay = barrier_mu;
+    deformationSolver->filling_max_iter = filling_max_iter;
     deformationSolver->solve_for_bending(1);
   }
   if (ImGui::Checkbox("one time CP assignment", &one_time_CP_assignment)) deformationSolver->one_time_CP_assignment = one_time_CP_assignment;
-  if (ImGui::SliderFloat("CP lambda log10/initial value", &CP_lambda_exp, 0., 10.)) deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
-  if (ImGui::SliderFloat("CP mu (growth per iter)", &CP_mu, 1., 1.5)) deformationSolver->CP_mu = CP_mu;
-  if (ImGui::SliderInt("filling iters", &filling_max_iter, 0., 200.0)) deformationSolver->filling_max_iter = filling_max_iter;
+  if (ImGui::SliderFloat("CP lambda log10/initial value", &CP_lambda_exp, 0., 5.)) deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
+  if (ImGui::SliderFloat("CP growth mu ", &CP_mu, 1., 1.5)) deformationSolver->CP_mu = CP_mu;
+  if (ImGui::SliderFloat("Barrier lambda log10/initial value", &barrier_lambda_exp, 0., 5.)) deformationSolver->barrier_init_lambda = pow(10, barrier_lambda_exp);
+  if (ImGui::SliderFloat("Barrier decay mu ", &barrier_mu, 0., 1.)) deformationSolver->barrier_decay = barrier_mu;
+  
+  if (ImGui::SliderInt("filling iters", &filling_max_iter, 0, 200)) deformationSolver->filling_max_iter = filling_max_iter;
 
   if (ImGui::Button("uniform mass G")){
     G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
@@ -543,8 +560,8 @@ int main(int argc, char **argv) {
   update_solver();
   init_visuals();
 
-  // init_convex_shape_to_fill(all_polygons_current_item2);
-  // deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
+  init_convex_shape_to_fill(all_polygons_current_item2);
+  deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
               
   // convex_hull(forwardSolver->hullGeometry->inputVertexPositions);
   // build the solver

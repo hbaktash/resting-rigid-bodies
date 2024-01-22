@@ -19,7 +19,6 @@
 #include "mesh_factory.h"
 #include "geometrycentral/surface/meshio.h"
 
-
 Vector3 spherical_to_xyz(double r, double phi, double theta){
   return Vector3({r*cos(phi)*sin(theta), r*cos(phi)*cos(theta), r*sin(phi)});
 }
@@ -307,13 +306,20 @@ generate_polyhedra(std::string poly_str){
 
 
 // generate simple examples
-void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, bool triangulate){
+void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, bool triangulate, bool do_remesh, double remesh_edge_scale){
   // readManifoldSurfaceMesh()
   center_and_normalize(mesh, geometry);
   if (triangulate) {
     for (Face f: mesh->faces())
       mesh->triangulate(f);
     mesh->compress();
+  }
+
+  if (do_remesh){
+    double some_e_len = geometry->edgeLength(mesh->edge(0));
+    RemeshOptions options = defaultRemeshOptions;
+    options.targetEdgeLength = some_e_len * remesh_edge_scale;
+    remesh(*mesh, *geometry, options);
   }
   // for (Edge e: mesh->edges()){
   //   double dihedangle= geometry->edgeDihedralAngle(e);

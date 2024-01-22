@@ -238,11 +238,16 @@ double BoundaryBuilder::get_fair_dice_energy(size_t side_count){
 
 void BoundaryBuilder::print_area_of_boundary_loops(){
     printf(" Face probs:\n");
+    std::vector<double> probs;
     for (Face f: forward_solver->hullMesh->faces()){
         if (face_region_area[f] > 0){
             // face_region_area[f] /= (4.*PI);
-            printf(" f %d: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
+            probs.push_back(face_region_area[f]/(4.*PI));
+            // printf(" f %d: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
         }
     }
-    // std::cout << face_region_area.toVector().transpose()<< "\n";
+    std::sort(probs.begin(), probs.end());
+    printf("sorted probs: \n");
+    for (double prob: probs)
+        printf("  -%f\n", prob);
 }

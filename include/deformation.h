@@ -79,8 +79,8 @@ class DeformationSolver{
 
         bool one_time_CP_assignment = true;
         double CP_lambda = 10.0,
-               CP_mu = 1.; // grow the CP lambda; since we want it to be zero in the end
-        double barrier_init_lambda = 1e2,
+               CP_mu = 1.1; // grow the CP lambda; since we want it to be zero in the end
+        double barrier_init_lambda = 10.,
                barrier_decay = 0.8;
         int filling_max_iter = 50;
         // linear constraints
@@ -109,6 +109,8 @@ class DeformationSolver{
         // constraints
         void build_constraint_matrix_and_rhs();
         std::tuple<double, DenseMatrix<double>, std::vector<DenseMatrix<double>>> get_log_barrier_stuff(DenseMatrix<double> new_pos_mat);
+        bool check_feasibility(DenseMatrix<double> new_pos_mat);
+        double get_log_barrier_energy(DenseMatrix<double> new_pos_mat);
 
         // solver
         DenseMatrix<double> solve_for_bending(int visual_per_step = 0);
