@@ -33,10 +33,17 @@ Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B){
 }
 
 Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPositionGeometry* inputGeo_,
-                             Vector3 inputG_){
+                             Vector3 inputG_, bool concave_input){
     inputMesh = inputMesh_;
     inputGeometry = inputGeo_;
-    update_convex_hull();
+    if (concave_input){
+        update_convex_hull();
+    }
+    else {
+        hullMesh = inputMesh_;
+        hullGeometry = inputGeo_;
+        trivial_initialize_index_trackers();
+    }
     // hullMesh = inputMesh_;
     // hullGeometry = inputGeo_;
     G = inputG_;
@@ -67,6 +74,17 @@ void Forward3DSolver::set_uniform_G(){
 //
 Vector3 Forward3DSolver::get_G(){
     return G; 
+}
+
+void Forward3DSolver::trivial_initialize_index_trackers(){
+    // hull_indices = .resize(hullMesh->nVertices());
+    // interior_indices = Vector<size_t>::Zero(0);
+    org_hull_indices = VertexData<size_t>(*hullMesh);
+    on_hull_index = VertexData<size_t>(*inputMesh, INVALID_IND);    
+    for (Vertex hull_v: hullMesh->vertices())
+        org_hull_indices[hull_v] = hull_v.getIndex();
+    for (Vertex org_v: inputMesh->vertices())
+        on_hull_index[org_v] = org_v.getIndex();
 }
 
 void Forward3DSolver::update_hull_index_arrays(){
@@ -324,7 +342,7 @@ bool Forward3DSolver::face_is_stable(Face f){
         // assume outward normals!
         Vector3 N_ABC = hullGeometry->faceNormal(f),// cross(B - A, C - B),
                 N_GAB  = cross(A - B, G - A);
-        if (dot(N_ABC, N_GAB) >= 0)
+        if (dot(N_ABC, N_GAB) > 0)
             return false;
         curr_he = curr_he.next();
         if (curr_he == first_he)
@@ -335,6 +353,7 @@ bool Forward3DSolver::face_is_stable(Face f){
 
 
 void Forward3DSolver::vertex_to_next(Vertex v){
+    // printf(" doing vertex to next\n");
     Vector3 p = hullGeometry->inputVertexPositions[v],
             unit_g_vec = curr_g_vec.normalize();
     Vector3 Gp = p - G;
@@ -344,7 +363,7 @@ void Forward3DSolver::vertex_to_next(Vertex v){
     Vector3 pG_proj = G_proj - p; // the projected PG vector
 
     // find the vertex with the least angle made with projected PG
-    double min_angle = PI; // since convex, max angle will be PI
+    double max_dot_cos = -1.; // since convex, max angle will be PI
     Vertex best_v = Vertex(); // next vertex that hits the ground
     // NOTE: from here projections refer to projection on the rotation axis plane
     Vector3 best_p2_proj; // to help with finding next g_vec after the loop
@@ -352,9 +371,9 @@ void Forward3DSolver::vertex_to_next(Vertex v){
         Vector3 p2 = hullGeometry->inputVertexPositions[v2];
         Vector3 p2_proj = project_on_plane(p2, p, rotation_plane_normal); // project neigh vertices onto the rotation axis plane
         Vector3 pp2_proj = p2_proj - p;
-        double tmp_angle = acos(dot(pG_proj, pp2_proj)/(norm(pG_proj)*norm(pp2_proj)));
-        if (tmp_angle <= min_angle){
-            min_angle = tmp_angle;
+        double tmp_dot_cos = dot(pG_proj, pp2_proj)/(norm(pG_proj)*norm(pp2_proj));
+        if (tmp_dot_cos > max_dot_cos){ // robust?
+            max_dot_cos = tmp_dot_cos;
             best_v = v2;
             best_p2_proj = p2_proj;
         }
@@ -372,12 +391,16 @@ void Forward3DSolver::vertex_to_next(Vertex v){
 
 
 void Forward3DSolver::edge_to_next(Edge e){
+    // printf("doing edge to next\n");
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 p1 = hullGeometry->inputVertexPositions[v1], p2 = hullGeometry->inputVertexPositions[v2];
-    if (dot(G - p1, p2-p1) < 0){ // if the Gp1p2 angle is wide
+    // std::cout << " p1: " << p1 << "\n p2:" << p2 << "\n";
+    // std::cout << "   G: "<<G << "\n";
+    // std::cout << "   G + currG: "<<G + curr_g_vec << "\n";
+    if (dot(G - p1, p2-p1) < 0.){ // if the Gp1p2 angle is wide
         vertex_to_next(v1); // rolls to the v1 vertex
     }
-    else if (dot(G - p2, p1-p2) < 0){ // if the Gp2p1 angle is wide
+    else if (dot(G - p2, p1-p2) < 0.){ // if the Gp2p1 angle is wide
         vertex_to_next(v2); // rolls to the v2 vertex
     }
     else { // rolls to a neighboring face
@@ -428,6 +451,8 @@ void Forward3DSolver::face_to_next(Face f){
         return;
     }
     Vector3 unit_g_vec = curr_g_vec.normalize();
+    if (dot(G - hullGeometry->inputVertexPositions[f.halfedge().vertex()], curr_g_vec) >= 0)
+        printf("____G is outside_____!! \n");
     // project G_proj on the same plane as the face plane
     assert(hullGeometry->faceNormal(f) == curr_g_vec); // assume outward normals
     Vector3 G_proj = project_on_plane(G, hullGeometry->inputVertexPositions[f.halfedge().tailVertex()], unit_g_vec);
@@ -443,28 +468,50 @@ void Forward3DSolver::face_to_next(Face f){
                 p0 = hullGeometry->inputVertexPositions[v0],
                 p2 = hullGeometry->inputVertexPositions[v2];
         // first check if we are on the "exterior" side of v0v1
-        Vector3 on_plane_edge_normal = cross(unit_g_vec, p0 - p1);
-        // use p2 as a point on the interior side
-        double p2_dot = dot(p2-p0, on_plane_edge_normal),
-               G_proj_dot = dot(G_proj - p0, on_plane_edge_normal);
-        double angle_Gv0v1 = acos(dot(G_proj - p0, p1 - p0)/(norm(G_proj - p0)*norm(p1 - p0))),
-               angle_Gv1v0 = acos(dot(G_proj - p1, p0 - p1)/(norm(G_proj - p1)*norm(p0 - p1))),
-               angle_Gv1v2 = acos(dot(G_proj - p1, p2 - p1)/(norm(G_proj - p1)*norm(p2 - p1)));
-        if (p2_dot * G_proj_dot <= 0 && angle_Gv0v1 <= PI/2. && angle_Gv1v0 <= PI/2.){ // G' is on the exterior side; and angles are acute
+        
+        bool rolling_through_e0 = false;
+        Vector3 N_Gp0p1 = cross(p0 - G, p1 - p0);
+        if (dot(unit_g_vec, N_Gp0p1) <= 0)
+            rolling_through_e0 = true;
+
+        bool rolling_through_e1 = false;
+        Vector3 N_Gp1p2 = cross(p1 - G, p2 - p1);
+        if (dot(unit_g_vec, N_Gp1p2) <= 0)
+            rolling_through_e1 = true;
+        
+        bool e0_is_singular = edge_is_stable(curr_he.edge()),
+             e1_is_singular = edge_is_stable(curr_he.next().edge());
+        
+        // // Old version
+        // Vector3 on_plane_edge_normal = cross(unit_g_vec, p0 - p1);
+        // // use p2 as a point on the interior side
+        // double p2_dot = dot(p2-p0, on_plane_edge_normal),
+        //        G_proj_dot = dot(G_proj - p0, on_plane_edge_normal);
+        // double angle_Gv0v1 = acos(dot(G_proj - p0, p1 - p0)/(norm(G_proj - p0)*norm(p1 - p0))),
+        //        angle_Gv1v0 = acos(dot(G_proj - p1, p0 - p1)/(norm(G_proj - p1)*norm(p0 - p1))),
+        //        angle_Gv1v2 = acos(dot(G_proj - p1, p2 - p1)/(norm(G_proj - p1)*norm(p2 - p1)));
+        // if (p2_dot * G_proj_dot <= 0 && angle_Gv0v1 <= PI/2. && angle_Gv1v0 <= PI/2.){ // G' is on the exterior side; and angles are acute
+        if (rolling_through_e0 && e0_is_singular) {
             Face next_face = curr_he.twin().face();
             curr_f = next_face;
             curr_v = Vertex();
             curr_e = Edge();
             curr_g_vec = hullGeometry->faceNormal(next_face);
+            // printf("got to face!!\n");
             break;
         }
-        if (angle_Gv1v0 >= PI/2. && angle_Gv1v2 >= PI/2.){
+        // if (angle_Gv1v0 >= PI/2. && angle_Gv1v2 >= PI/2.){
+        if ((rolling_through_e0 || rolling_through_e1) && !e0_is_singular && !e1_is_singular) {
             // printf("got to vertex!!\n");
             vertex_to_next(v1);
             break;
         }   
         // go to next he
         curr_he = curr_he.next();
+        // std::cout << "at face "  <<  f.getIndex() << " " << v0.getIndex() << " " << v1.getIndex() << " " << v2.getIndex() << "\n";
+        // std::cout <<    "poses: " << p0 << "\n \t\t" << p1 << "\n \t\t" << p2 << "\n";
+        // std::cout <<    "G loc: " << G << "\n";
+        // std::cout << "quantities: " << rolling_through_e0 << " "<< rolling_through_e1 << " " << e0_is_singular << " " << e1_is_singular << "\n";
         if (curr_he == first_he){
             throw std::logic_error("Face should be either stable or something should happen in the previous loop!\n");
         }
@@ -582,6 +629,7 @@ void Forward3DSolver::compute_vertex_stabilizablity(){
 // deterministically find the next rolling face 
 void Forward3DSolver::build_face_next_faces(){
     face_next_face = FaceData<Face>(*hullMesh);
+
     for (Face f: hullMesh->faces()){
         // printf("at face %d\n", f.getIndex());
         initialize_state(Vertex(), Edge(), f, hullGeometry->faceNormal(f)); // assuming outward normals

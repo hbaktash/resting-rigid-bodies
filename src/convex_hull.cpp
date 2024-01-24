@@ -110,6 +110,22 @@ get_convex_hull(VertexData<Vector3> point_set){
 }
 
 
+
+std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>
+get_convex_hull_mesh(VertexData<Vector3> point_set) {
+    std::vector<std::vector<size_t>> hull_faces; 
+    std::vector<size_t> hull_vertex_mapping;
+    std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean
+    std::tie(hull_faces, hull_vertex_mapping, hull_poses) = get_convex_hull(point_set);
+    ManifoldSurfaceMesh* hull_mesh = new ManifoldSurfaceMesh(hull_faces);
+    VertexPositionGeometry* hull_geometry = new VertexPositionGeometry(*hull_mesh);
+    for (Vertex hull_v: hull_mesh->vertices())
+        hull_geometry->inputVertexPositions[hull_v] = hull_poses[hull_v.getIndex()];
+    return std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>(hull_mesh, hull_geometry);
+}
+
+
+
 Vector3 project_back_into_hull(VertexPositionGeometry *hull_geometry, Vector3 p){
     // find closest face on hull
     

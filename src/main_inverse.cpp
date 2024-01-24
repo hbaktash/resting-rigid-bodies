@@ -519,6 +519,7 @@ void myCallback() {
 
 int main(int argc, char **argv) {
   // build mesh
+  polyscope::init();
   vis_utils = VisualUtils();
   generate_polyhedron_example(all_polygons_current_item);
   G = {0.,0,0};
@@ -527,7 +528,6 @@ int main(int argc, char **argv) {
   // build the solver
 
   // Initialize polyscope
-  polyscope::init();
   color_faces();
   vis_utils.visualize_colored_polyhedra(face_colors);
   visualize_gauss_map();

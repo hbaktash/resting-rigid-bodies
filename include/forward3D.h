@@ -53,6 +53,7 @@ class Forward3DSolver {
     VertexData<size_t> org_hull_indices; //hull vertex indices in the original mesh
     VertexData<size_t> on_hull_index; // index of an interior vertex on the hull; INVALID_IND if not on hull
     Vector<size_t> hull_indices, interior_indices;
+    void trivial_initialize_index_trackers();
 
     // current state; for simulation 
     Vertex curr_v;
@@ -69,7 +70,7 @@ class Forward3DSolver {
     // constructors
     Forward3DSolver() {}
     // TODO; make constructor for non_convex input
-    Forward3DSolver(ManifoldSurfaceMesh* inputMesh, VertexPositionGeometry* inputGeo, Vector3 G);
+    Forward3DSolver(ManifoldSurfaceMesh* inputMesh, VertexPositionGeometry* inputGeo, Vector3 G, bool concave_input = true);
 
     // setter/getter for G
     void set_G(Vector3 new_G);

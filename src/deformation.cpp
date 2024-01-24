@@ -560,17 +560,25 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     double convergence_eps = 1e-5;
     double barrier_lambda = barrier_init_lambda;
     printf(" starting opt\n");
+    // polyscope::frameTick();
+    auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
+    tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
+    tmp_PSmesh->setEdgeWidth(1.);
+    tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
+    tmp_PSmesh->setEnabled(true);
+    // polyscope::show(); // close window to start animations
     for (int i = 0; i < filling_max_iter; ++i) {
-        
         // visuals
         if (visual_per_step != 0){
             if (i % visual_per_step == 0){
                 printf(" visualizing step %d\n", i);
-                auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol "+std::to_string(i), tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
-                tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
-                tmp_PSmesh->setEdgeWidth(1.);
-                tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
-                tmp_PSmesh->setEnabled(false);
+                // auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol "+std::to_string(i), tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
+                // tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
+                // tmp_PSmesh->setEdgeWidth(1.);
+                // tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
+                // tmp_PSmesh->setEnabled(false);
+                tmp_PSmesh->updateVertexPositions(tmp_geometry->inputVertexPositions);
+                polyscope::frameTick();
             }
         }
 
@@ -641,6 +649,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         if (step_norm < convergence_eps)
             break;
     }
+    // polyscope::show();
     DenseMatrix<double> new_points_mat = unflat_tinyAD(x); 
     return new_points_mat;
 }

@@ -25,6 +25,7 @@
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
 #include "polyscope/point_cloud.h"
+#include "polyscope/curve_network.h"
 
 #include "forward3D.h"
 #include "boundary_tools.h"

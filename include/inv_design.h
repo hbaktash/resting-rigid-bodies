@@ -45,7 +45,7 @@ class InverseSolver{
 
         // distribution goals
         void set_fair_distribution();
-        void set_fair_distribution_for_sink_faces();
+        void set_fair_distribution_for_sink_faces(size_t goal_stable_count);
         // smarter distribution update
         std::vector<Vector3> old_stable_normals;
         void update_fair_distribution(double normal_threshold);
@@ -78,10 +78,11 @@ class InverseSolver{
         bool compute_global_G_effect = true;
         FaceData<VertexData<Vector3>> uni_mass_d_pf_dv;
         // after chain and product rule
-        void find_uni_mass_d_pf_dv(bool check_FD = false);
+        void find_uni_mass_d_pf_dv(bool frozen_G = false, bool check_FD = false);
         // accumulate over all faces
         FaceData<Face> flow_structure;
-        VertexData<Vector3> find_uni_mass_total_vertex_grads(bool with_flow_structure = false,
+        VertexData<Vector3> find_uni_mass_total_vertex_grads(size_t goal_stable_count,
+                                                             bool with_flow_structure = false,
                                                              double stable_normal_update_thres = -1.);
         
         // pre-step for updates 

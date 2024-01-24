@@ -22,7 +22,7 @@
 
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
-// #include "polyscope/curve_network.h"
+#include "polyscope/curve_network.h"
 #include "polyscope/point_cloud.h"
 
 #include "args/args.hxx"
@@ -56,7 +56,6 @@ polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, *dummy_psMesh2, *dummy_psMe
 
 polyscope::PointCloud *psG, *curr_state_pt; // point cloud with single G
 
-polyscope::SurfaceGraphQuantity* curr_state_segment;
 
 float pt_cloud_radi_scale = 0.1,
       curve_radi_scale = 0.1,
@@ -73,9 +72,6 @@ static const char* all_polygons_current_item_c_str = "cube";
 
 void visualize_boundary_curves(){
   std::vector<std::vector<size_t>> dummy_face{{1,1,1}};
-  dummy_psMesh1 = polyscope::registerSurfaceMesh(
-      "dummy mesh1",
-      geometry->inputVertexPositions, dummy_face);
   auto positions = forwardSolver.hullGeometry->inputVertexPositions.toVector();
   std::vector<std::array<size_t, 2>> edgeInds;
   for (Edge e: forwardSolver.hullMesh->edges()){
@@ -83,7 +79,7 @@ void visualize_boundary_curves(){
       edgeInds.push_back({e.firstVertex().getIndex(), e.secondVertex().getIndex()});
     }
   }
-  dummy_psMesh1->addSurfaceGraphQuantity("convex boundary", positions, edgeInds);
+  auto convex_bnd_net = polyscope::registerCurveNetwork("convex boundary", positions, edgeInds);
 }
 
 
@@ -106,14 +102,6 @@ void visualize_edge_probabilities(){
   forwardSolver.compute_final_edge_probabilities();
 
   // initial probs
-  std::vector<std::vector<size_t>> dummy_face{{1,1,1}};
-  dummy_psMesh2 = polyscope::registerSurfaceMesh(
-      "initial prob",
-      geometry->inputVertexPositions, dummy_face);
-  
-  dummy_psMesh3 = polyscope::registerSurfaceMesh(
-      "final prob",
-      geometry->inputVertexPositions, dummy_face);
   // auto positions = forwardSolver.hullGeometry->inputVertexPositions.toVector();
   // std::vector<std::array<size_t, 2>> edgeInds;
   for (Edge e: forwardSolver.hullMesh->edges()){
@@ -125,15 +113,15 @@ void visualize_edge_probabilities(){
               p2 = forwardSolver.hullGeometry->inputVertexPositions[e.secondVertex()];
       positions.push_back(p1); positions.push_back(p2);
       // initial prob visualize
-      polyscope::SurfaceGraphQuantity* psSegment =  dummy_psMesh2->addSurfaceGraphQuantity("initial prob e" + std::to_string(e.getIndex()), positions, edgeInds);
-      psSegment->setRadius(forwardSolver.initial_edge_probabilities[e]*curve_radi_scale);
-      psSegment->setColor({1., forwardSolver.initial_edge_probabilities[e], 1.});
-      psSegment->setEnabled(true);
+      auto psSegmentNet = polyscope::registerCurveNetwork("initial prob e" + std::to_string(e.getIndex()), positions, edgeInds);
+      psSegmentNet->setRadius(forwardSolver.initial_edge_probabilities[e]*curve_radi_scale);
+      psSegmentNet->setColor({1., forwardSolver.initial_edge_probabilities[e], 1.});
+      psSegmentNet->setEnabled(true);
       // final prob visualize
-      polyscope::SurfaceGraphQuantity* psSegment2 =  dummy_psMesh3->addSurfaceGraphQuantity("final prob e" + std::to_string(e.getIndex()), positions, edgeInds);
-      psSegment2->setRadius(forwardSolver.final_edge_probabilities[e]*curve_radi_scale);
-      psSegment2->setColor({1., 1., forwardSolver.final_edge_probabilities[e]});
-      psSegment2->setEnabled(true);
+      auto psSegment2Net =  polyscope::registerCurveNetwork("final prob e" + std::to_string(e.getIndex()), positions, edgeInds);
+      psSegment2Net->setRadius(forwardSolver.final_edge_probabilities[e]*curve_radi_scale);
+      psSegment2Net->setColor({1., 1., forwardSolver.final_edge_probabilities[e]});
+      psSegment2Net->setEnabled(true);
     }
   }
   
@@ -264,10 +252,10 @@ void visualize_contact_point(){
       Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[v1],
               p2 = forwardSolver.hullGeometry->inputVertexPositions[v2];
       positions.push_back(p1); positions.push_back(p2);
-      curr_state_segment =  dummy_forward_vis->addSurfaceGraphQuantity("current contact edge", positions, edgeInds);
-      curr_state_segment->setRadius(curve_radi_scale/1.5);
-      curr_state_segment->setColor({0., 0., 1.});
-      curr_state_segment->setEnabled(true);
+      auto curr_state_segment_net = polyscope::registerCurveNetwork("current contact edge", positions, edgeInds);
+      curr_state_segment_net->setRadius(curve_radi_scale/1.5);
+      curr_state_segment_net->setColor({0., 0., 1.});
+      curr_state_segment_net->setEnabled(true);
   }
 }
 

@@ -39,6 +39,7 @@
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
+
 // == Geometry-central data
 std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr, cv_mesh_ptr;
 std::unique_ptr<VertexPositionGeometry> geometry_ptr, cv_geometry_ptr;
@@ -91,6 +92,7 @@ bool test_guess = true;
 bool compute_global_G_effect = true,
      line_search = false,
      deform_after = true,
+     frozen_G = false,
      structured_opt = true,
      one_time_CP_assignment = true,
      always_update_structure = true,
@@ -114,13 +116,15 @@ int ARAP_max_iters = 10;
 
 // deformation
 DeformationSolver *deformationSolver;
+bool animate = false,
+     v2_dice_animate = false;
 float scale_for_feasi = 3.4;
 float CP_lambda_exp = 1.,
       CP_mu = 1.1,
       barrier_lambda_exp = 0.,
       barrier_mu = 0.7;
 int filling_max_iter = 50;
-
+int hull_opt_steps = 30;
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc")};
 std::string all_polygons_current_item = "sliced tet",
@@ -128,12 +132,14 @@ std::string all_polygons_current_item = "sliced tet",
 static const char* all_polygons_current_item_c_str = "bunnylp";
 
 
-void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
+void draw_stable_patches_on_gauss_map(bool on_height_surface = false, 
+                                      BoundaryBuilder *bnd_builder = boundary_builder,
+                                      Forward3DSolver *tmp_solver = forwardSolver){
   if (!forwardSolver->updated)
-    forwardSolver->initialize_pre_computes();
+    tmp_solver->initialize_pre_computes();
   // std::vector<Vector3> boundary_normals;
   if (draw_boundary_patches){
-    auto net_pair = build_and_draw_stable_patches_on_gauss_map(boundary_builder, dummy_psMesh_for_regions,
+    auto net_pair = build_and_draw_stable_patches_on_gauss_map(bnd_builder, dummy_psMesh_for_regions,
                                                vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
                                                on_height_surface);
     if (test_guess)
@@ -195,7 +201,7 @@ void update_solver(){
 }
 
 
-void init_convex_shape_to_fill(std::string poly_str, bool triangulate = false){
+void init_convex_shape_to_fill(std::string poly_str, bool triangulate = true){
     // readManifoldSurfaceMesh()
   std::tie(cv_mesh_ptr, cv_geometry_ptr) = generate_polyhedra(poly_str);
   convex_to_fill_mesh = cv_mesh_ptr.release();
@@ -223,12 +229,12 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
 }
 
 
-void color_faces(){
+void color_faces(Forward3DSolver *fwd_solver){
   if (recolor_faces){
     // printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
-    face_colors = generate_random_colors(forwardSolver->hullMesh);
-    for (Face f: forwardSolver->hullMesh->faces()){
-      if (!forwardSolver->face_is_stable(f))
+    face_colors = generate_random_colors(fwd_solver->hullMesh);
+    for (Face f: fwd_solver->hullMesh->faces()){
+      if (!fwd_solver->face_is_stable(f))
         face_colors[f] = default_face_color;
     }
     recolor_faces = false;
@@ -247,20 +253,19 @@ void update_solver_and_boundaries(){
 }
 
 
-void update_visuals_with_G(){
+void update_visuals_with_G(Forward3DSolver *tmp_solver = nullptr, BoundaryBuilder *bnd_builder = boundary_builder){
+  if (tmp_solver != nullptr)
+    vis_utils.forwardSolver = tmp_solver;
   
   vis_utils.draw_G();
   if (gm_is_drawn)
     vis_utils.plot_height_function();
   // stuff on the polyhedra
   auto t1 = clock();
-  // visualize_edge_stability();
-  // visualize_face_stability();
-  // visualize_stable_vertices();
   
   // coloring stuff
   recolor_faces = true;// so bad lol
-  color_faces();
+  color_faces(tmp_solver);
   vis_utils.visualize_colored_polyhedra(face_colors);
   // // Gauss map stuff
   if(color_arcs){
@@ -270,15 +275,8 @@ void update_visuals_with_G(){
   vis_utils.show_edge_equilibria_on_gauss_map();
   vis_utils.draw_stable_face_normals_on_gauss_map();
   // printf("GM visuals took %d\n", clock() - t1);
-  t1 = clock();
-  // initialize_boundary_builder();
-  // printf("boundary took %d\n", clock() - t1);
-  t1 = clock();
   if (draw_boundary_patches)
-    draw_stable_patches_on_gauss_map(gm_is_drawn);
-  // printf("boundary visuals took %d\n", clock() - t1);
-  // initiate_markov_model();
-  // visualize_sudo_faces();
+    draw_stable_patches_on_gauss_map(gm_is_drawn, bnd_builder);
 }
 
 void update_hull_of_hull(VertexData<Vector3> positions){
@@ -294,43 +292,45 @@ void update_hull_of_hull(VertexData<Vector3> positions){
 }
 
 // hull update stuff
-double hull_update_line_search(VertexData<Vector3> grad){
+double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver *fwd_solver, bool frozen_G){
   printf(" ---- hull update line search ----\n");
   double grad_norm2 = 0.;
   for (Vector3 v3: grad.toVector())
     grad_norm2 += v3.norm2();
   
-  VertexData<Vector3> initial_poses = forwardSolver->hullGeometry->inputVertexPositions;
-  std::vector<std::vector<size_t>> old_face_list = forwardSolver->hullMesh->getFaceVertexList();
-  ManifoldSurfaceMesh *tmp_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
+  VertexData<Vector3> initial_poses = fwd_solver->hullGeometry->inputVertexPositions;
+  std::vector<std::vector<size_t>> old_face_list = fwd_solver->hullMesh->getFaceVertexList();
   //TODO: revert the current solver
-  VertexData<Vector3> tmp_poses = forwardSolver->hullGeometry->inputVertexPositions;
-  Forward3DSolver *tmp_solver = new Forward3DSolver(tmp_mesh, forwardSolver->hullGeometry,
-                                                    forwardSolver->get_G());
+  ManifoldSurfaceMesh *tmp_mesh = new ManifoldSurfaceMesh(old_face_list);
+  VertexPositionGeometry *tmp_geo = new VertexPositionGeometry(*tmp_mesh, vertex_data_to_matrix(initial_poses));
+  Forward3DSolver *tmp_solver = new Forward3DSolver(tmp_mesh, tmp_geo,
+                                                    fwd_solver->get_G(), false);
   BoundaryBuilder *tmp_builder = new BoundaryBuilder(tmp_solver);
-
-  tmp_solver->update_convex_hull(false); // changes tmp folver's hull mesh ..
   tmp_solver->updated = false;
   tmp_solver->initialize_pre_computes();
   tmp_builder->build_boundary_normals();
+
   double s_min_dice_energy = tmp_builder->get_fair_dice_energy(fair_sides_count);
-  printf(" current fair dice energy %f\n", s_min_dice_energy);
+  printf(" current fair dice energy: %f\n", s_min_dice_energy);
   double s_max = step_size3,
          s_min = 0.,
-         decay = 0.8,
-         _armijo_const = 1e-4;
-  int max_iters = 100;
-  double s = s_max/2.; //
+         decay = 0.9,
+         _armijo_const = 0.; //1e-4;
+  int max_iters = 200;
+  double s = s_max; //
 
   double tmp_fair_dice_energy;
   int j;
   for (j = 0; j < max_iters; j++) {
       // update stuff
       // printf(" ^^ at line search iter: %d  s = %f\n", j, s);
-      tmp_solver->inputGeometry->inputVertexPositions = initial_poses + s * grad; // old solver's hull mesh
-      tmp_solver->update_convex_hull(false); // changes tmp folver's "hull" mesh ..
+      auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(initial_poses + s * grad); // changes tmp folver's "hull" mesh ..
+      tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, fwd_solver->get_G(), false);
+      if (!frozen_G)
+        tmp_solver->set_uniform_G();
       tmp_solver->updated = false;
       tmp_solver->initialize_pre_computes();
+      tmp_builder = new BoundaryBuilder(tmp_solver);
       tmp_builder->build_boundary_normals();
       
       tmp_fair_dice_energy = tmp_builder->get_fair_dice_energy(fair_sides_count);
@@ -342,19 +342,20 @@ double hull_update_line_search(VertexData<Vector3> grad){
           s *= decay;
   }
   printf("line search for dice ended at iter %d, s: %f, \n \t\t\t\t\t fnew: %f \n", j, s, tmp_fair_dice_energy);
-  forwardSolver->hullGeometry->inputVertexPositions = initial_poses; // back to normal
-  return s;
+  return j != max_iters ? s : 0.;
 } 
 
 
-void take_uni_mass_opt_vertices_step(){
-  printf("finding uniform mass\n");
-  forwardSolver->set_uniform_G();
+void take_uni_mass_opt_vertices_step(bool frozen_G = false){
+  if (!frozen_G){
+    printf("finding uniform mass\n");
+    forwardSolver->set_uniform_G();
+  }
   printf("initalize precomputes\n");
   forwardSolver->initialize_pre_computes();
-  printf("finding derivatives\n");
-  inverseSolver->find_uni_mass_d_pf_dv();
-  printf(" uni mass derivatives found!\n");
+  printf("finding vertex derivatives\n");
+  inverseSolver->find_uni_mass_d_pf_dv(frozen_G);
+  printf(" vertex derivatives found!\n");
   if (structured_opt){ // if updating the flow structure
     boundary_builder->build_boundary_normals(); // face-last-face is called 
     // boundary_builder->print_area_of_boundary_loops();
@@ -368,7 +369,7 @@ void take_uni_mass_opt_vertices_step(){
   printf(" finding total per vertex derivatives\n");
   VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt, stable_normal_update_thresh);
   printf(" total per vertex derivatives found!\n");
-  double opt_step_size = hull_update_line_search(total_uni_mass_vertex_grads);
+  double opt_step_size = hull_update_line_search(total_uni_mass_vertex_grads, forwardSolver, frozen_G);
 
   polyscope::registerSurfaceMesh("pre-step hull", forwardSolver->hullGeometry->inputVertexPositions,
                                                   forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
@@ -436,26 +437,90 @@ void take_uni_mass_opt_vertices_step(){
     forwardSolver->inputGeometry->inputVertexPositions = forwardSolver->inputGeometry->inputVertexPositions + trivial_updates;
   }
   polyscope::registerSurfaceMesh("post-deform pre-hull-update hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                              forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
+                                 forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
   forwardSolver->update_convex_hull(with_hull_projection);
   // update hull with new positions
   
   polyscope::registerSurfaceMesh("post-deformation mesh", forwardSolver->inputGeometry->inputVertexPositions,
-                                               forwardSolver->inputMesh->getFaceVertexList());
+                                 forwardSolver->inputMesh->getFaceVertexList());
   polyscope::registerSurfaceMesh("post-deform & hull update hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                              forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
+                                 forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
   
   // PC
   // polyscope::PointCloud* post_pc = polyscope::registerPointCloud("post-step hull points", forwardSolver->hullGeometry->inputVertexPositions);
   // pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1., false);
   // pre_pc->setPointColor(glm::vec3({0.1,0.1, 0.8}));
-  forwardSolver->set_uniform_G();
-  G = forwardSolver->get_G();
+  if (!frozen_G){
+    forwardSolver->set_uniform_G();
+    G = forwardSolver->get_G();
+  }
   update_solver_and_boundaries();
   update_visuals_with_G();
   boundary_builder->print_area_of_boundary_loops();
   printf(" fair dice energy: %f\n", boundary_builder->get_fair_dice_energy(fair_sides_count));
   // update_visuals_with_G();
+}
+
+
+void version2_dice_pipeline(size_t step_count = 1){
+  // forwardSolver->set_uniform_G();
+  ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
+  VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
+  Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G);
+  tmp_solver->set_uniform_G(); // frozen G matters here or not ???
+  printf("initalize precomputes\n");
+  tmp_solver->initialize_pre_computes();
+  printf("finding vertex derivatives\n");
+  
+  polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
+                                                  tmp_solver->inputMesh->getFaceVertexList());
+  
+  BoundaryBuilder *tmp_bnd_builder;
+  InverseSolver *tmp_inv_solver;
+  tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
+  tmp_inv_solver = new InverseSolver(tmp_bnd_builder);
+
+  for (size_t iter = 0; iter < step_count; iter++){
+    tmp_inv_solver->find_uni_mass_d_pf_dv(frozen_G);
+    printf(" vertex derivatives found!\n");
+    if (structured_opt){ // if updating the flow structure
+      tmp_bnd_builder->build_boundary_normals(); // face-last-face is called 
+      // boundary_builder->print_area_of_boundary_loops();
+      if (first_time || always_update_structure){
+        tmp_inv_solver->flow_structure = tmp_solver->face_last_face;
+        if (first_time) stable_normal_update_thresh = -1.;
+        else stable_normal_update_thresh = 0.1;
+        first_time = false;
+      }
+    }
+    VertexData<Vector3> vertex_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
+                                                                                        structured_opt, stable_normal_update_thresh);
+    double opt_step_size = hull_update_line_search(vertex_grads, tmp_solver, frozen_G);
+    
+    auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(tmp_solver->hullGeometry->inputVertexPositions + opt_step_size * vertex_grads);
+    tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, tmp_solver->get_G(), false); 
+    // TODO: is this ok?
+  
+    // visuals
+    polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
+                                                  tmp_solver->inputMesh->getFaceVertexList());
+    polyscope::frameTick();
+
+
+    if (!frozen_G){
+      tmp_solver->set_uniform_G();
+    }
+    tmp_solver->updated = false;
+    tmp_solver->initialize_pre_computes();
+    tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
+    tmp_inv_solver = new InverseSolver(tmp_bnd_builder);
+  
+    tmp_bnd_builder->build_boundary_normals();
+    update_visuals_with_G(tmp_solver, tmp_bnd_builder);
+    printf(" fair dice energy iter %d: %f\n", iter, tmp_bnd_builder->get_fair_dice_energy(fair_sides_count));
+    // update_visuals_with_G();
+  }
+  tmp_bnd_builder->print_area_of_boundary_loops();
 }
 
 
@@ -477,7 +542,7 @@ void myCallback() {
               // color_faces();
 
               // //
-              // visualize_gauss_map();//
+              visualize_gauss_map();//
               // G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
               // update_solver_and_boundaries();
               // update_visuals_with_G();
@@ -513,7 +578,10 @@ void myCallback() {
     deformationSolver->barrier_init_lambda = pow(10, barrier_lambda_exp);
     deformationSolver->barrier_decay = barrier_mu;
     deformationSolver->filling_max_iter = filling_max_iter;
-    deformationSolver->solve_for_bending(1);
+    animate = true;
+    // TODO: check what should be done here
+    // deformationSolver->solve_for_bending(1);
+    
   }
   if (ImGui::Checkbox("one time CP assignment", &one_time_CP_assignment)) deformationSolver->one_time_CP_assignment = one_time_CP_assignment;
   if (ImGui::SliderFloat("CP lambda log10/initial value", &CP_lambda_exp, 0., 5.)) deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
@@ -531,7 +599,7 @@ void myCallback() {
   if (ImGui::Checkbox("draw artificial R3 boundaries", &test_guess)) draw_stable_patches_on_gauss_map();
   
   if (ImGui::Button("take fair step (joint gradient)")) {
-    take_uni_mass_opt_vertices_step();
+    take_uni_mass_opt_vertices_step(frozen_G);
   }
   if (ImGui::SliderFloat("starting step size", &step_size3, 0., 1.0));
   if (ImGui::SliderInt("fair dice side count", &fair_sides_count, 1, 10));
@@ -549,32 +617,49 @@ void myCallback() {
   if (ImGui::SliderInt("ARAP max iters", &ARAP_max_iters, 1, 30)) inverseSolver->arap_max_iter = ARAP_max_iters;
   if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
 
+  if (ImGui::Button("optimize hull (w.r.t. dice energy)")) {
+    v2_dice_animate = true;
+  }
+  if (ImGui::SliderInt("hull optimize step count", &hull_opt_steps, 1, 200));
+  
 }
 
 
 int main(int argc, char **argv) {
   // build mesh
   vis_utils = VisualUtils();
+  polyscope::init();
+
   generate_polyhedron_example(all_polygons_current_item);
   G = {0.,0,0};
   update_solver();
   init_visuals();
 
-  init_convex_shape_to_fill(all_polygons_current_item2);
-  deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
-              
-  // convex_hull(forwardSolver->hullGeometry->inputVertexPositions);
-  // build the solver
-
   // Initialize polyscope
-  polyscope::init();
   // Set the callback function
-  polyscope::state::userCallback = myCallback;
   polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
   polyscope::view::upDir = polyscope::view::UpDir::NegZUp;
+  init_convex_shape_to_fill(all_polygons_current_item2);
+  deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
+  polyscope::state::userCallback = myCallback;
+
+  // polyscope::show();
+  while (true) {
+    if (animate){
+      deformationSolver->solve_for_bending(1);
+      animate = false;
+    }
+    if (v2_dice_animate){
+      version2_dice_pipeline(hull_opt_steps);
+      v2_dice_animate = false;
+    }
+    polyscope::frameTick();
+  }
+  
+  // convex_hull(forwardSolver->hullGeometry->inputVertexPositions);
+  // build the solver
   
   // Give control to the polyscope gui
-  polyscope::show();
   
 
   return EXIT_SUCCESS;

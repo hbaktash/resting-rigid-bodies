@@ -54,10 +54,10 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius,
     curr_point = next_point;
     next_point += forward_vec;
   }
-  polyscope::SurfaceGraphQuantity* psArcCurve = hosting_psMesh->addSurfaceGraphQuantity("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
-  psArcCurve->setRadius(arc_curve_radi * radi_scale, false);
-  psArcCurve->setColor(color);
-  psArcCurve->setEnabled(true);
+  auto psArcCurveNet = polyscope::registerCurveNetwork("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
+  psArcCurveNet->setRadius(arc_curve_radi * radi_scale, false);
+  psArcCurveNet->setColor(color);
+  psArcCurveNet->setEnabled(true);
 }
 
 
@@ -105,10 +105,10 @@ void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds
     // break;
   }
   // printf(" in arc net: poses %d, edges %d\n", positions.size(), edgeInds.size());
-  polyscope::SurfaceGraphQuantity* psArcCurve = hosting_psMesh->addSurfaceGraphQuantity("Arc curves " + title, positions, edgeInds);
-  psArcCurve->setRadius(arc_curve_radi * radi_scale, false);
-  psArcCurve->setColor(color);
-  psArcCurve->setEnabled(true);
+  auto psArcCurveNet = polyscope::registerCurveNetwork("Arc curves " + title, positions, edgeInds);
+  psArcCurveNet->setRadius(arc_curve_radi * radi_scale, false);
+  psArcCurveNet->setColor(color);
+  psArcCurveNet->setEnabled(true);
 }
 
 
@@ -159,11 +159,11 @@ void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> ed
     tmp_ind++;
     // break;
   }
-  printf(" in arc net: poses %d, edges %d\n", positions.size(), edgeInds.size());
-  polyscope::SurfaceGraphQuantity* psArcCurve = hosting_psMesh->addSurfaceGraphQuantity("Arc curves " + title, positions, edgeInds);
-  psArcCurve->setRadius(arc_curve_radi, false);
-  psArcCurve->setColor(color);
-  psArcCurve->setEnabled(true);  
+  // printf(" in arc net: poses %d, edges %d\n", positions.size(), edgeInds.size());
+  auto psArcCurveNet = polyscope::registerCurveNetwork("Arc curves " + title, positions, edgeInds);
+  psArcCurveNet->setRadius(arc_curve_radi, false);
+  psArcCurveNet->setColor(color);
+  psArcCurveNet->setEnabled(true);  
 }
 
 
@@ -197,33 +197,21 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
   std::vector<std::pair<size_t, size_t>> ind_pairs_vector;
   // Using vector::assign
   ind_pairs_vector.assign(drawn_pairs.begin(), drawn_pairs.end());
-  std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
-  hosting_psMesh = polyscope::registerSurfaceMesh("dummy mesh for GM patch arcs", 
-                                                  boundary_builder->forward_solver->hullGeometry->inputVertexPositions, dummy_face);
   // printf("  drawing the arc network on GM\n ");
   draw_arc_network_on_sphere(ind_pairs_vector, boundary_normals, 
                             center, radius, seg_count, 
-                            "region boundaries", hosting_psMesh, 1., arc_color);
+                            "region boundaries", nullptr, 1., arc_color);
   if (on_height_surface){
     // printf("  drawing the arc network on height surface\n ");
-    polyscope::SurfaceMesh* hosting_psMesh2 = polyscope::registerSurfaceMesh("dummy mesh: height_surface regions", 
-                                                     boundary_builder->forward_solver->hullGeometry->inputVertexPositions, 
-                                                     dummy_face);
     draw_arc_network_on_lifted_suface(ind_pairs_vector, boundary_normals, *boundary_builder->forward_solver, 
                                       center, 0., seg_count, 
-                                      "region boundaries ", hosting_psMesh2, arc_color);
+                                      "region boundaries ", nullptr, arc_color);
   }
   return {ind_pairs_vector, boundary_normals};
 }
 
 
 void VisualUtils::draw_edge_arcs_on_gauss_map(){
-  std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
-  std::vector<Vector3> dummy_geo({Vector3::zero()});
-  //    dummy mesh to add curves to
-  polyscope::SurfaceMesh* dummy_psMesh2 = polyscope::registerSurfaceMesh(
-      "dummy mesh for saddle edge arcs",
-      dummy_geo, dummy_face);
   //    add arc per edge
   std::vector<std::pair<size_t, size_t>> non_singular_edge_inds, stable_only_edge_inds ,both_edge_inds, all_edge_inds;
   size_t nFaces = forwardSolver->hullMesh->nFaces();
@@ -260,15 +248,15 @@ void VisualUtils::draw_edge_arcs_on_gauss_map(){
   }
   if (color_arcs){
     draw_arc_network_on_sphere(both_edge_inds, positions, center, gm_radi, arcs_seg_count,
-                              "saddle edge arcs", dummy_psMesh2, 1., both_edge_color);
+                              "saddle edge arcs", nullptr, 1., both_edge_color);
     draw_arc_network_on_sphere(stable_only_edge_inds, positions, center, gm_radi, arcs_seg_count,
-                              "singular edge arcs", dummy_psMesh2, 1., stable_edge_color);
+                              "singular edge arcs", nullptr, 1., stable_edge_color);
     draw_arc_network_on_sphere(all_edge_inds, positions, center, gm_radi, arcs_seg_count,
-                              "non-singular edge arcs", dummy_psMesh2, 1., stabilizable_edge_color);
+                              "non-singular edge arcs", nullptr, 1., stabilizable_edge_color);
   }
   else {
     draw_arc_network_on_sphere(all_edge_inds, positions, center, gm_radi, arcs_seg_count,
-                              "all edge arcs", dummy_psMesh2, 1., stabilizable_edge_color);
+                              "all edge arcs", nullptr, 1., stabilizable_edge_color);
   }
 }
 
@@ -463,18 +451,14 @@ void VisualUtils::draw_guess_pc(std::vector<std::pair<size_t, size_t>> neigh_ind
   // test_pc->setEnabled(true);
   test_pc->setPointRadius(gm_pt_radi * 0.7, false);
 
-  std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
-  std::vector<Vector3> dummy_geo({Vector3::zero()});
-  polyscope::SurfaceMesh* dummy_psMesh = polyscope::registerSurfaceMesh(
-      "dummy mesh for stable regions on polyhedra", dummy_geo, dummy_face);
   std::vector<std::array<size_t, 2>> edge_inds;
   for (std::pair<size_t, size_t> p1: neigh_inds)
     edge_inds.push_back({p1.first, p1.second});
-  polyscope::SurfaceGraphQuantity* stable_graph = 
-        dummy_psMesh->addSurfaceGraphQuantity("stable regions on polyhedra", positions, edge_inds);
-  stable_graph->setRadius(stable_edge_radi, true);
-  stable_graph->setColor(stable_edge_color);
-  stable_graph->setEnabled(true);
+  auto stable_graph_PSnet = 
+        polyscope::registerCurveNetwork("stable regions on polyhedra", positions, edge_inds);
+  stable_graph_PSnet->setRadius(stable_edge_radi, true);
+  stable_graph_PSnet->setColor(stable_edge_color);
+  stable_graph_PSnet->setEnabled(true);
   
 }
 
@@ -516,11 +500,6 @@ void VisualUtils::visualize_stable_vertices(){
 
 
 void VisualUtils::visualize_edge_stability(){
-  std::vector<std::vector<size_t>> dummy_face{{1,1,1}};
-  std::vector<Vector3> dummy_geo({Vector3::zero()});
-  polyscope::SurfaceMesh* dummy_psMesh1 = polyscope::registerSurfaceMesh(
-      "dummy mesh for edges", dummy_geo, dummy_face);
-
   std::vector<std::array<size_t, 2>> stable_edgeInds, stablilizable_edgeInds, both_edgeInds;
   std::vector<Vector3> stable_positions, stablilizable_positions, both_positions;
   size_t stable_counter = 0, stablizable_counter = 0, both_counter = 0;
@@ -546,18 +525,18 @@ void VisualUtils::visualize_edge_stability(){
       both_counter += 2;
     }
   }
-  polyscope::SurfaceGraphQuantity* psStableEdges =  dummy_psMesh1->addSurfaceGraphQuantity("stable Edges", stable_positions, stable_edgeInds);
-  psStableEdges->setRadius(stable_edge_radi, true);
-  psStableEdges->setColor(stable_edge_color);
-  psStableEdges->setEnabled(true);
-  polyscope::SurfaceGraphQuantity* psStablilizableEdges =  dummy_psMesh1->addSurfaceGraphQuantity("stablizable Edges", stablilizable_positions, stablilizable_edgeInds);
-  psStablilizableEdges->setRadius(stablizable_edge_radi, true);
-  psStablilizableEdges->setColor(stabilizable_edge_color);
-  psStablilizableEdges->setEnabled(true);
-  polyscope::SurfaceGraphQuantity* psBothEdges =  dummy_psMesh1->addSurfaceGraphQuantity("stable && stablizable Edges", both_positions, both_edgeInds);
-  psBothEdges->setRadius(both_edge_radi, true);
-  psBothEdges->setColor(both_edge_color);
-  psBothEdges->setEnabled(true);
+  auto psStableEdgesNet =  polyscope::registerCurveNetwork("stable Edges", stable_positions, stable_edgeInds);
+  psStableEdgesNet->setRadius(stable_edge_radi, true);
+  psStableEdgesNet->setColor(stable_edge_color);
+  psStableEdgesNet->setEnabled(true);
+  auto psStablilizableEdgesNet =  polyscope::registerCurveNetwork("stablizable Edges", stablilizable_positions, stablilizable_edgeInds);
+  psStablilizableEdgesNet->setRadius(stablizable_edge_radi, true);
+  psStablilizableEdgesNet->setColor(stabilizable_edge_color);
+  psStablilizableEdgesNet->setEnabled(true);
+  auto psBothEdgesNet =  polyscope::registerCurveNetwork("stable && stablizable Edges", both_positions, both_edgeInds);
+  psBothEdgesNet->setRadius(both_edge_radi, true);
+  psBothEdgesNet->setColor(both_edge_color);
+  psBothEdgesNet->setEnabled(true);
 }
 
 

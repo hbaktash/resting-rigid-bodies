@@ -73,8 +73,6 @@ polyscope::SurfaceMesh *psInputMesh, *psHullMesh, *dummy_psMesh1,
 polyscope::PointCloud *curr_state_pt, *curr_g_vec_gm_pt,
                       *raster_pc;
 
-polyscope::SurfaceGraphQuantity* curr_state_segment;
-
 float pt_cloud_radi_scale = 0.01,
       curve_radi_scale = 0.002,
       G_r = 0.158,
@@ -263,7 +261,7 @@ void visualize_g_vec(){
 // visualize current touching element: Vertex/Edge/Face
 void visualize_contact(){
   if (polyscope::hasPointCloud("current Vertex")) polyscope::removePointCloud("current Vertex");
-  dummy_forward_vis->removeQuantity("current contact edge"); // has a built-in existance checker
+  polyscope::removeCurveNetwork("current contact edge"); // has a built-in existance checker
   if (forwardSolver->curr_f.getIndex() == INVALID_IND) color_faces_with_default();
   // add the other two
   if (forwardSolver->curr_v.getIndex() != INVALID_IND) {
@@ -291,7 +289,7 @@ void visualize_contact(){
     std::vector<Vector3> positions;
     edgeInds.push_back({0, 1});
     positions.push_back(p1); positions.push_back(p2);
-    curr_state_segment =  dummy_forward_vis->addSurfaceGraphQuantity("current contact edge", positions, edgeInds);
+    auto curr_state_segment = polyscope::registerCurveNetwork("current contact edge", positions, edgeInds);
     curr_state_segment->setRadius(curve_radi_scale*3., false);
     curr_state_segment->setColor({0., 0., 1.});
     curr_state_segment->setEnabled(true);
@@ -311,9 +309,6 @@ void visualize_contact(){
 
 void initialize_state_vis(){
   // for later single segment curve addition (for stable edges)
-  std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
-  std::vector<Vector3> dummy_pos = {Vector3({0.,0.,0.})};
-  dummy_forward_vis = polyscope::registerSurfaceMesh("state check mesh", dummy_pos, dummy_face); // nothing matters in this line
   // will add curves to this later
   vis_utils.draw_G();
   visualize_contact();

@@ -44,9 +44,8 @@ void InverseSolver::set_fair_distribution() {
                                          1./(double)forwardSolver->hullMesh->nFaces());
 }
 
-void InverseSolver::set_fair_distribution_for_sink_faces(){
+void InverseSolver::set_fair_distribution_for_sink_faces(size_t goal_stable_count){
     std::vector<double> face_areas;
-    size_t goal_stable_count = 6; // TODO: take as input?
     size_t count = goal_stable_count;
     goal_prob = FaceData<double>(*forwardSolver->hullMesh, 0.);
     for (Face f: forwardSolver->hullMesh->faces()){
@@ -286,12 +285,14 @@ void InverseSolver::find_dG_dvs(){
 }
 
 // Vertex grads; Uni mass
-void InverseSolver::find_uni_mass_d_pf_dv(bool check_FD){
+void InverseSolver::find_uni_mass_d_pf_dv(bool frozen_G, bool check_FD){
     //  assuming that we only move convex hull vertices
     //  and that input is convex
-    find_d_pf_d_Gs();
+    if (!frozen_G){
+        find_d_pf_d_Gs();
+        find_dG_dvs();
+    }
     find_d_pf_dvs();
-    find_dG_dvs();
 
     uni_mass_d_pf_dv = FaceData<VertexData<Vector3>>(*forwardSolver->hullMesh);
     Vector3 zvec = Vector3::zero();
@@ -299,7 +300,7 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool check_FD){
     // printf("here\n");
     for (Face f: forwardSolver->hullMesh->faces()){
         uni_mass_d_pf_dv[f] = VertexData<Vector3>(*forwardSolver->hullMesh, zvec);
-        if (compute_global_G_effect){
+        if (!frozen_G && compute_global_G_effect){
             for (Vertex v: forwardSolver->hullMesh->vertices()){
                 // center of mass only term
                 Vector3 term1 = d_pf_dv[f][v];
@@ -312,16 +313,21 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool check_FD){
         }
         else {
             for (Vertex v: f.adjacentVertices()){
-                Vertex org_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]);
-                Vector<double> term2 = dG_dv[org_vertex].transpose() * vec32vec(d_pf_d_G[f]);
-                uni_mass_d_pf_dv[f][v] = d_pf_dv[f][v] + Vector3({term2[0], term2[1], term2[2]});
+                if (frozen_G)
+                    uni_mass_d_pf_dv[f][v] = d_pf_dv[f][v];
+                else {
+                    Vertex org_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]);
+                    Vector<double> term2 = dG_dv[org_vertex].transpose() * vec32vec(d_pf_d_G[f]);
+                    uni_mass_d_pf_dv[f][v] = d_pf_dv[f][v] + Vector3({term2[0], term2[1], term2[2]});
+                }
             }
         }
     }
     if (check_FD){
         printf("FD check: \n");
         double step = 1e-6;
-        forwardSolver->set_uniform_G();
+        if (!frozen_G)
+            forwardSolver->set_uniform_G();
         forwardSolver->initialize_pre_computes();        
         boundaryBuilder->build_boundary_normals();
         Vector<double> old_face_areas = boundaryBuilder->face_region_area.toVector();
@@ -335,7 +341,8 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool check_FD){
             for (Vector3 dp: {e_x, e_y, e_z}){
                 Vector3 tmp_p = old_p + dp * step;
                 forwardSolver->hullGeometry->inputVertexPositions[v] = tmp_p;
-                forwardSolver->set_uniform_G();
+                if (!frozen_G)
+                    forwardSolver->set_uniform_G();
                 forwardSolver->initialize_pre_computes();
                 boundaryBuilder->build_boundary_normals();
                 Vector<double> new_face_areas = boundaryBuilder->face_region_area.toVector();
@@ -359,16 +366,17 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool check_FD){
 }
 
 // 
-VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_flow_structure,
+VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(size_t goal_stable_count,
+                                                                    bool with_flow_structure,                        
                                                                     double stable_normal_update_thres){
     Vector3 zvec = Vector3::zero();
-    VertexData<Vector3> uni_mass_total_vertex_grads(*forwardSolver->hullMesh, zvec);
+    VertexData<Vector3> total_vertex_grads(*forwardSolver->hullMesh, zvec);
     // if (with_flow_structure && stable_normal_update_thres < 0){
     //     set_fair_distribution_for_sink_faces(); // 
     // }
     // else if (stable_normal_update_thres > 0)
     //     update_fair_distribution(stable_normal_update_thres);
-    set_fair_distribution_for_sink_faces(); // TODO: TESTING
+    set_fair_distribution_for_sink_faces(goal_stable_count); // TODO: TESTING
 
     for (Face f: forwardSolver->hullMesh->faces()){ 
         Face last_sink_face;
@@ -377,13 +385,13 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
                         (goal_prob[f]* 4.*PI - boundaryBuilder->face_region_area[f]);
         if (compute_global_G_effect) {
             for (Vertex v: forwardSolver->hullMesh->vertices()){
-                uni_mass_total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
+                total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
                                                 goal_multiplier;
             }
         }
         else {
             for (Vertex v: f.adjacentVertices()){
-                uni_mass_total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
+                total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
                                                 goal_multiplier;
                 // printf("      -- tmp grad norm for v %d: %f \n", v.getIndex(), uni_mass_d_pf_dv[f][v].norm());
             }
@@ -393,7 +401,7 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(bool with_fl
         //                                                                 goal_prob[last_sink_face]);
     }
 
-    return uni_mass_total_vertex_grads;
+    return total_vertex_grads;
 }
 
 
