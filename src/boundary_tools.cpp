@@ -230,7 +230,7 @@ double BoundaryBuilder::get_fair_dice_energy(size_t side_count){
         }
     }
     if (side_count > face_areas.size()){
-        printf(" adding penalty for nnot enough stable faces\n");
+        // printf(" adding penalty for nnot enough stable faces\n");
         energy += ((double)(side_count - face_areas.size())) * goal_area * goal_area; // adding penalty for lack of stable faces
     }
     return energy;
@@ -246,7 +246,7 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
             // printf(" f %d: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
         }
     }
-    std::sort(probs.begin(), probs.end());
+    std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a > b; });
     printf("sorted probs: \n");
     for (double prob: probs)
         printf("  -%f\n", prob);

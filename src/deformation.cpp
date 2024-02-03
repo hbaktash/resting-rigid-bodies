@@ -285,9 +285,12 @@ DenseMatrix<double> DeformationSolver::closest_point_energy_gradient(VertexPosit
 }
 
 
-void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geometry){
+void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry *new_geometry){
     closest_point_assignment = VertexData<SurfacePoint>(*convex_mesh, SurfacePoint());
-    
+    CP_involvement = VertexData<bool>(*mesh, false);
+    // stats
+    size_t face_assignments = 0, edge_assignments = 0, vertex_assignments = 0;
+
     // linear operator corresponding to assignments
     closest_point_operator = Eigen::SparseMatrix<double>(convex_mesh->nVertices(), mesh->nVertices());
     closest_point_flat_operator = Eigen::SparseMatrix<double>(3 * convex_mesh->nVertices(), 3*mesh->nVertices());
@@ -366,6 +369,8 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
         double min_dist = std::min(min_face_dist, std::min(min_edge_dist, min_vertex_dist));
         if (min_dist == min_face_dist){ // assuming triangle mesh
             // printf("closest is a face\n");
+            face_assignments++;
+
             Vector3 f_normal = new_geometry->faceNormal(closest_face);
             Vector3 on_face_projection = c_p - f_normal * dot(f_normal, 
                                                               c_p - new_geometry->inputVertexPositions[closest_face.halfedge().vertex()]);
@@ -375,8 +380,14 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
             Vector3 A = new_geometry->inputVertexPositions[v1],
                     B = new_geometry->inputVertexPositions[v2],
                     C = new_geometry->inputVertexPositions[v3];
+            // SurfacePoint assignment
             Vector3 bary_coor = barycentric(on_face_projection, A, B, C);
             closest_point_assignment[c_v] = SurfacePoint(closest_face, bary_coor);
+
+            // update CP involvement
+            CP_involvement[v1] = true;
+            CP_involvement[v2] = true;
+            CP_involvement[v3] = true;
 
             // operator entries
             tripletList.emplace_back(c_v.getIndex(), v1.getIndex(), bary_coor.x);
@@ -390,6 +401,8 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
         }
         else if (min_dist == min_edge_dist){
             // printf("closest is an edge\n");
+            edge_assignments++;
+
             Vertex v1 = closest_edge.firstVertex(),
                    v2 = closest_edge.secondVertex();
             Vector3 A = new_geometry->inputVertexPositions[v1], 
@@ -397,6 +410,10 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
             double tVal = (on_edge_projection - A).norm()/(A - B).norm();
             closest_point_assignment[c_v] = SurfacePoint(closest_edge, tVal);
 
+            // update CP involvement
+            CP_involvement[v1] = true;
+            CP_involvement[v2] = true;
+            
             // operator entries
             tripletList.emplace_back(c_v.getIndex(), v1.getIndex(), 1. - tVal);
             tripletList.emplace_back(c_v.getIndex(), v2.getIndex(), tVal);
@@ -407,7 +424,12 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
         }
         else {// min_dist == min_vertex_dist
             // printf("closest is a vertex\n");
-            closest_point_assignment[c_v] = SurfacePoint(closest_vertex);   
+            vertex_assignments++;
+
+            closest_point_assignment[c_v] = SurfacePoint(closest_vertex); 
+            // update CP involvement
+            CP_involvement[closest_vertex] = true;
+              
             tripletList.emplace_back(c_v.getIndex(), closest_vertex.getIndex(), 1.);
             for (size_t d = 0; d < 3; d++)
                 flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*closest_vertex.getIndex() + d, 1.);
@@ -415,8 +437,33 @@ void DeformationSolver::assign_closest_points(VertexPositionGeometry *new_geomet
     }
     closest_point_operator.setFromTriplets(tripletList.begin(), tripletList.end());
     closest_point_flat_operator.setFromTriplets(flat_tripletList.begin(), flat_tripletList.end());
+    printf("  ** stats for CP: vertices %d, edges: %d, faces: %d \n", vertex_assignments, edge_assignments, face_assignments);
 }
 
+void DeformationSolver::split_edge_closest_points(){
+    std::vector<std::pair<Edge, double>> splitable_edges;
+    std::vector<std::pair<Face, Vector3>> splitable_faces;
+    for (Vertex cv: convex_mesh->vertices()){
+        SurfacePoint assigned_cp = closest_point_assignment[cv];
+        if (assigned_cp.type == SurfacePointType::Edge){
+            splitable_edges.push_back({assigned_cp.edge, assigned_cp.tEdge});
+        }
+        else if (assigned_cp.type == SurfacePointType::Face){
+            splitable_faces.push_back({assigned_cp.face, assigned_cp.faceCoords});
+        }
+    }
+    
+}
+
+Vector<double> DeformationSolver::get_CP_barrier_multiplier_vetor(double CP_involed_constant){
+    Vector<double> barrier_multipliers = Vector<double>::Ones(mesh->nVertices());
+    for (Vertex v: mesh->vertices()){
+        if (CP_involvement[v]){
+            barrier_multipliers[v.getIndex()] = CP_involed_constant;
+        }
+    }
+    return barrier_multipliers;
+}
 
 void DeformationSolver::build_constraint_matrix_and_rhs(){
     size_t nf = convex_mesh->nFaces();
@@ -431,7 +478,7 @@ void DeformationSolver::build_constraint_matrix_and_rhs(){
 }
 
 std::tuple<double, DenseMatrix<double>, std::vector<DenseMatrix<double>>> 
-DeformationSolver::get_log_barrier_stuff(DenseMatrix<double> new_pos_mat){
+DeformationSolver::get_log_barrier_stuff(DenseMatrix<double> new_pos_mat, Vector<double> weights){
     double energy = 0.;
     size_t n = new_pos_mat.rows(),
            nf = convex_mesh->nFaces();
@@ -548,16 +595,15 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     });
 
     build_constraint_matrix_and_rhs();
-    //TODO: enforce feasibility
     while (!check_feasibility(unflat_tinyAD(x))){ // assuming centered; which is
         printf("  -- scaling for feasibility -- \n");
-        x *= 0.9;
+        x *= 0.95;
     }
 
     // Projected Newton
     VertexPositionGeometry *tmp_geometry = new VertexPositionGeometry(*mesh);
     TinyAD::LinearSolver solver;
-    double convergence_eps = 1e-5;
+    double convergence_eps = 1e-7;
     double barrier_lambda = barrier_init_lambda;
     printf(" starting opt\n");
     // polyscope::frameTick();
@@ -591,7 +637,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         // directly get Closest Point energy stuff
         if (!one_time_CP_assignment || i == 0){
             printf(" assigning  closest points\n");
-            assign_closest_points(tmp_geometry);
+            assign_closest_points_barycentric(tmp_geometry);
         }
         printf(" finding CP terms\n");
         // CP stuff
@@ -603,17 +649,13 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         // barrier stuff
         printf(" finding Barrier terms\n");
         DenseMatrix<double> x_in_dense_format = vertex_data_to_matrix(tmp_geometry->inputVertexPositions);
-        auto [barrier_energy, barrier_grad, barrier_hessian] = get_log_barrier_stuff(x_in_dense_format); // thank u new c++
+        auto [barrier_energy, barrier_grad, barrier_hessian] = get_log_barrier_stuff(x_in_dense_format, Vector<double>::Ones(mesh->nVertices())); // thank u new c++
         Eigen::SparseMatrix<double> barrier_H = tinyADify_barrier_hess(barrier_hessian);
         Eigen::VectorX<double> barrier_g = tinyAD_flatten(barrier_grad);
-        // TODO: what to do about scheduling
-        // Given a frozen CP lambda at iter i; solve with constraints
-            
-        size_t inner_max_iters = 50;
+        // TODO: smarter scheduling?
         
-        // TODO: make sure x is feasible
-        // for (size_t inner_iter = 0; inner_iter < inner_max_iters; inner_iter++){
-            
+        size_t inner_max_iters = 50;
+                    
         Eigen::SparseMatrix<double> total_H = bending_H_proj + CP_lambda * H_CP + barrier_lambda * barrier_H;
         Eigen::VectorX<double> total_g = bending_g + CP_lambda * CP_flat_g + barrier_lambda * barrier_g;
         double total_energy = bending_f + CP_lambda * CP_energy + barrier_lambda * barrier_energy;
@@ -622,7 +664,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
                             "\n\t\t\t\tCP  = " << CP_lambda << " * "<< CP_energy<< 
                             "\n\t\t\t\tbarr= " << barrier_lambda << " * "<< barrier_energy<< 
                             "\n\t\t\t\t\t total:" << total_energy);
-        Eigen::VectorXd d = TinyAD::newton_direction(total_g, total_H, solver);
+        Eigen::VectorXd d = TinyAD::newton_direction(total_g, total_H, solver, 1e-6);
         // if (visual_per_step != 0){
         //     if (i % visual_per_step == 0){
         //         printf(" visualizing interior step %d\n", inner_iter);
@@ -638,7 +680,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
                                             CP_lambda * closest_point_energy(curr_x) + 
                                             barrier_lambda * get_log_barrier_energy(unflat_tinyAD(curr_x));
                                     },
-                                0.5, 0.8, 64, 0.); // no clue whats good here for armijo constant
+                                0.5, 0.9, 100, 0.); // no clue whats good here for armijo constant
                               //smax, decay, max_iter, armijo constant
         // }
         // scheduled weights
@@ -646,8 +688,8 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         CP_lambda *= CP_mu;
         double step_norm = (x - old_x).norm();
         printf(" step norm is %f\n", step_norm);
-        if (step_norm < convergence_eps)
-            break;
+        // if (step_norm < convergence_eps)
+        //     break;
     }
     // polyscope::show();
     DenseMatrix<double> new_points_mat = unflat_tinyAD(x); 

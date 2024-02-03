@@ -456,7 +456,7 @@ void VisualUtils::draw_guess_pc(std::vector<std::pair<size_t, size_t>> neigh_ind
     edge_inds.push_back({p1.first, p1.second});
   auto stable_graph_PSnet = 
         polyscope::registerCurveNetwork("stable regions on polyhedra", positions, edge_inds);
-  stable_graph_PSnet->setRadius(stable_edge_radi, true);
+  stable_graph_PSnet->setRadius(stable_edge_radi/2., true);
   stable_graph_PSnet->setColor(stable_edge_color);
   stable_graph_PSnet->setEnabled(true);
   
