@@ -66,61 +66,67 @@ Vector3 barycentric(Vector3 p, Vector3 A, Vector3 B, Vector3 C);
 
 class DeformationSolver{
     public:
-        ManifoldSurfaceMesh *mesh;
-        VertexPositionGeometry *old_geometry;
-        
-        ManifoldSurfaceMesh *convex_mesh;
-        VertexPositionGeometry *convex_geometry;
+       ManifoldSurfaceMesh *mesh;
+       VertexPositionGeometry *old_geometry;
+       
+       ManifoldSurfaceMesh *convex_mesh;
+       VertexPositionGeometry *convex_geometry;
 
-        // CP energy stuff
-        VertexData<SurfacePoint> closest_point_assignment;
-        VertexData<bool> CP_involvement;
-        SparseMatrix<double> closest_point_operator;
-        SparseMatrix<double> closest_point_flat_operator;
+       // CP energy stuff
+       VertexData<SurfacePoint> closest_point_assignment;
+       VertexData<bool> CP_involvement;
+       SparseMatrix<double> closest_point_operator;
+       SparseMatrix<double> closest_point_flat_operator;
 
-        bool one_time_CP_assignment = false;
-        double CP_lambda = 10.0,
-               CP_mu = 1.1; // grow the CP lambda; since we want it to be zero in the end
-        double barrier_init_lambda = 10.,
-               barrier_decay = 0.8,
-               CP_barrier_multiplier = 1.;
+       bool one_time_CP_assignment = false;
+       double refinement_CP_threshold = 0.9;
+       double CP_lambda = 10.0,
+              CP_mu = 1.1; // grow the CP lambda; since we want it to be zero in the end
+       double barrier_init_lambda = 10.,
+              barrier_decay = 0.8,
+              CP_barrier_multiplier = 1.;
 
-        int filling_max_iter = 50;
-        // linear constraints
-        DenseMatrix<double> constraint_matrix;
-        Vector<double> constraint_rhs;
+       int filling_max_iter = 50;
+       // linear constraints
+       DenseMatrix<double> constraint_matrix;
+       Vector<double> constraint_rhs;
 
-        // constructors
-        DeformationSolver(ManifoldSurfaceMesh *old_mesh, VertexPositionGeometry *old_geometry,
-                          ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry);
+       // constructors
+       DeformationSolver(ManifoldSurfaceMesh *old_mesh, VertexPositionGeometry *old_geometry,
+                     ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry);
 
-        // bending energy
-        double bending_energy(VertexPositionGeometry *new_geometry);
-        // gradient of bending energy
-        VertexData<Vector3> bending_energy_gradient(VertexPositionGeometry *new_geometry);
-        // hessian of bending energy
-        // DenseMatrix<double> bending_energy_hessian(VertexPositionGeometry *new_geometry);
-        
-        // closest point energy
-        void assign_closest_points_barycentric(VertexPositionGeometry *new_geometry);
-        // edge/face splits
-        void split_edge_closest_points();
-        double closest_point_energy(VertexPositionGeometry *new_geometry);
-        double closest_point_energy(Vector<double> flat_new_pos_mat);
-        // gradient of CP energy
-        DenseMatrix<double> closest_point_energy_gradient(VertexPositionGeometry *new_geometry);
-        
+       // bending energy
+       double bending_energy(VertexPositionGeometry *new_geometry);
+       // gradient of bending energy
+       VertexData<Vector3> bending_energy_gradient(VertexPositionGeometry *new_geometry);
+       // hessian of bending energy
+       // DenseMatrix<double> bending_energy_hessian(VertexPositionGeometry *new_geometry);
+       auto get_tinyAD_bending_function(EdgeData<double> rest_constants, EdgeData<double> rest_dihedral_angles); // TinyAD::ScalarFunction<3, >
+       
+       // closest point energy
+       void assign_closest_vertices(VertexPositionGeometry *new_geometry);
+       void assign_closest_points_barycentric(VertexPositionGeometry *new_geometry);
+       // edge/face splits
+       void split_barycentric_closest_points(VertexPositionGeometry *new_geometry);
+       double closest_point_energy(VertexPositionGeometry *new_geometry);
+       double closest_point_energy(Vector<double> flat_new_pos_mat);
+       // gradient of CP energy
+       DenseMatrix<double> closest_point_energy_gradient(VertexPositionGeometry *new_geometry);
+       
 
-        // constraints
-        Vector<double> get_CP_barrier_multiplier_vetor(double CP_involed_constant = 0.1);
-        void build_constraint_matrix_and_rhs();
-        std::tuple<double, DenseMatrix<double>, std::vector<DenseMatrix<double>>> get_log_barrier_stuff(DenseMatrix<double> new_pos_mat, Vector<double> weights);
-        bool check_feasibility(DenseMatrix<double> new_pos_mat);
-        double get_log_barrier_energy(DenseMatrix<double> new_pos_mat);
+       // barrier and CP computes
+       Vector<double> get_CP_barrier_multiplier_vetor(double CP_involed_constant = 0.1);
+       void build_constraint_matrix_and_rhs();
+       std::tuple<double, DenseMatrix<double>, std::vector<DenseMatrix<double>>> get_log_barrier_stuff(DenseMatrix<double> new_pos_mat, Vector<double> weights);
+       bool check_feasibility(DenseMatrix<double> new_pos_mat);
+       double get_log_barrier_energy(DenseMatrix<double> new_pos_mat);
 
-        // solver
-        DenseMatrix<double> solve_for_bending(int visual_per_step = 0);
-        // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
+       // rest geometry constants for bending
+       EdgeData<double> get_rest_constants();
+       
+       // solver
+       DenseMatrix<double> solve_for_bending(int visual_per_step = 0);
+       // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
 };
 
 
