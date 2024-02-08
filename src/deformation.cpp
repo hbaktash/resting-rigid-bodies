@@ -18,8 +18,12 @@
 */
 
 #include "polyscope/polyscope.h"
+#include "polyscope/point_cloud.h"
 #include "polyscope/surface_mesh.h"
+
 #include "deformation.h"
+
+#include "geometrycentral/numerical/linear_solvers.h"
 
 
 // vector stuff
@@ -285,7 +289,7 @@ DenseMatrix<double> DeformationSolver::closest_point_energy_gradient(VertexPosit
 }
 
 
-void DeformationSolver::assign_closest_vertices(VertexPositionGeometry *new_geometry){
+void DeformationSolver::assign_closest_vertices(VertexPositionGeometry *new_geometry, bool allow_multi_assignment){
     closest_point_assignment = VertexData<SurfacePoint>(*convex_mesh, SurfacePoint());
     CP_involvement = VertexData<bool>(*mesh, false);
     // stats
@@ -310,11 +314,12 @@ void DeformationSolver::assign_closest_vertices(VertexPositionGeometry *new_geom
             if (vertex_dist < min_vertex_dist){
                 if (CP_involvement[v]){
                     last_hit_was_taken = true;
-                    continue;
+                    if (!allow_multi_assignment) continue; // go for the next closest point
+                    // otherwise a point can be assigned as multiple closest points 
                 }
                 closest_vertex = v;
                 min_vertex_dist = vertex_dist;
-                last_hit_was_taken = false;
+                if (!allow_multi_assignment) last_hit_was_taken = false;
             }            
         }
         if (last_hit_was_taken) vertex_double_hits++;
@@ -337,7 +342,7 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
     closest_point_assignment = VertexData<SurfacePoint>(*convex_mesh, SurfacePoint());
     CP_involvement = VertexData<bool>(*mesh, false);
     // stats
-    size_t face_assignments = 0, edge_assignments = 0, vertex_assignments = 0;
+    face_assignments = 0; edge_assignments = 0; vertex_assignments = 0;
 
     // linear operator corresponding to assignments
     closest_point_operator = Eigen::SparseMatrix<double>(convex_mesh->nVertices(), mesh->nVertices());
@@ -414,7 +419,7 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
 
         // assign SurfacePoint and assign barycentric coordinates
         // printf(" at cv %d fd %f, ed %f, vd %f\n", c_v.getIndex(), min_face_dist, min_edge_dist, min_vertex_dist);
-        double min_dist = std::min(min_face_dist, std::min(min_edge_dist, min_vertex_dist));
+        double min_dist = std::min(min_vertex_dist, std::min(min_edge_dist, min_face_dist)); // ordering is important in case of equality
         if (min_dist == min_face_dist){ // assuming triangle mesh
             // printf("closest is a face\n");
             face_assignments++;
@@ -495,40 +500,70 @@ void DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
     EdgeData<bool> edge_is_hit(*mesh, false);
     FaceData<bool> face_is_hit(*mesh, false);
     VertexData<bool> vertex_is_hit(*mesh, false);
+
+    // auto CPpcold = polyscope::registerPointCloud("closest points on old geo", closest_point_operator*vertex_data_to_matrix(old_geometry->inputVertexPositions));
+    // auto CPpcnew = polyscope::registerPointCloud("closest points on new geo", closest_point_operator*vertex_data_to_matrix(new_geometry->inputVertexPositions));
+    // CPpcold->setPointRadius( 0.02, false);
+    // CPpcold->setPointColor( {0.2,1,0});
+    // CPpcnew->setPointRadius( 0.02, false);
+    // CPpcnew->setPointColor( {0.2,0.1,1});
+    
     for (Vertex cv: convex_mesh->vertices()){
         SurfacePoint assigned_cp = closest_point_assignment[cv];
         Vertex new_v;
+        Vector3 split_p_old_geo,
+                split_p_new_geo;
         if (assigned_cp.type == SurfacePointType::Edge){
-            printf("splitting edge %d: %d,%d \n", assigned_cp.edge.getIndex(), assigned_cp.edge.firstVertex().getIndex(), assigned_cp.edge.secondVertex().getIndex());
-            if (assigned_cp.edge.getIndex() == 148 || assigned_cp.edge.getIndex() == 278){
-                // printf("splitting edge %d: %d,%d \n", assigned_cp.edge.getIndex(), assigned_cp.edge.firstVertex().getIndex(), assigned_cp.edge.secondVertex().getIndex());
-                printf("area1: %f, area2: %f\n", old_geometry->faceArea(assigned_cp.edge.halfedge().face()), old_geometry->faceArea(assigned_cp.edge.halfedge().twin().face()));
-            }
-            new_v = mesh->splitEdgeTriangular(assigned_cp.edge).vertex();
             if (!edge_is_hit[assigned_cp.edge])
                 edge_is_hit[assigned_cp.edge] = true;
-            else 
+            else {
                 mutli_edge_hits++;
+                continue;
+            }
+            // printf("splitting edge %d: %d,%d \n", assigned_cp.edge.getIndex(), assigned_cp.edge.firstVertex().getIndex(), assigned_cp.edge.secondVertex().getIndex());
+            // must be done before spliting
+            split_p_old_geo = assigned_cp.interpolate(old_geometry->inputVertexPositions);
+            split_p_new_geo = assigned_cp.interpolate(new_geometry->inputVertexPositions);
+            // debug 
+            new_v = mesh->splitEdgeTriangular(assigned_cp.edge).vertex();
+
         }
         else if (assigned_cp.type == SurfacePointType::Face){
-            // printf("splitting face %d\n", assigned_cp.face.getIndex());
-            new_v = mesh->insertVertex(assigned_cp.face);
             if (!face_is_hit[assigned_cp.face])
                 face_is_hit[assigned_cp.face] = true;
-            else 
+            else {
                 multi_face_hits++;
+                continue;
+            } 
+            // printf("splitting face %d\n", assigned_cp.face.getIndex());
+            // must be done before spliting
+            split_p_old_geo = assigned_cp.interpolate(old_geometry->inputVertexPositions);
+            split_p_new_geo = assigned_cp.interpolate(new_geometry->inputVertexPositions);
+            
+            new_v = mesh->insertVertex(assigned_cp.face);
         }
         else {
+            // printf("splitting vertex %d\n", assigned_cp.vertex.getIndex());
+            // must be done before spliting
+            split_p_old_geo = assigned_cp.interpolate(old_geometry->inputVertexPositions);
+            split_p_new_geo = assigned_cp.interpolate(new_geometry->inputVertexPositions);
             new_v = assigned_cp.vertex;
             if (!vertex_is_hit[assigned_cp.vertex])
                 vertex_is_hit[assigned_cp.vertex] = true;
             else 
                 multi_vertex_hits++;
         }
-        old_geometry->inputVertexPositions[new_v] = assigned_cp.interpolate(old_geometry->inputVertexPositions);
-        new_geometry->inputVertexPositions[new_v] = assigned_cp.interpolate(new_geometry->inputVertexPositions);
+        old_geometry->inputVertexPositions[new_v] = split_p_old_geo;
+        new_geometry->inputVertexPositions[new_v] = split_p_new_geo;
+
+        // std::cout<< "\t\t new p : pmid " << old_geometry->inputVertexPositions[new_v] <<"\n";
+    
     }
+
     mesh->compress();
+    // polyscope::registerSurfaceMesh("old geo post split", old_geometry->inputVertexPositions, mesh->getFaceVertexList());
+    // polyscope::registerSurfaceMesh("new geo post split", new_geometry->inputVertexPositions, mesh->getFaceVertexList());
+    // polyscope::show();
     printf(" splitting is over. multi edge hits %d, \n\t\t\t\t multi face hits: %d, \n\t\t\t\t multi vertex hits: %d\n", mutli_edge_hits, multi_face_hits, multi_vertex_hits);
 }
 
@@ -617,9 +652,6 @@ bool DeformationSolver::check_feasibility(DenseMatrix<double> new_pos_mat){
 EdgeData<double> DeformationSolver::get_rest_constants(){
     EdgeData<double> rest_constant(*mesh, 0.); // e/h_e
     old_geometry->refreshQuantities();
-    auto debug_ps = polyscope::registerSurfaceMesh("debug mesh", old_geometry->inputVertexPositions, mesh->getFaceVertexList());
-    polyscope::show();
-    
     for (Edge e : mesh->edges()) {
         Vector3 p1 = old_geometry->inputVertexPositions[e.firstVertex()];
         Vector3 p2 = old_geometry->inputVertexPositions[e.secondVertex()];
@@ -633,14 +665,18 @@ EdgeData<double> DeformationSolver::get_rest_constants(){
             printf("rest constant: %d: %d, %d  = %f\n", e.getIndex(), e.firstVertex().getIndex(), e.secondVertex().getIndex(), rest_constant[e]);
             printf(" -- areas: %f, %f\n", area1, area2);
             printf(" -- length sqrd: %f\n", e_len_sqrd);
-            // std::cout << " -- p1: " << p1 << std::endl;
-            // std::cout << " -- p2: " << p2 << std::endl;
-            // std::cout << " -- p1: " << old_geometry.inputVertexPositions[] << std::endl;
+            Vector3 p3 = old_geometry->inputVertexPositions[e.halfedge().next().tipVertex()],
+                    p4 = old_geometry->inputVertexPositions[e.halfedge().twin().next().tipVertex()];
+            std::cout << " -- p1: " << p1 << std::endl;
+            std::cout << " -- p2: " << p2 << std::endl;
+            std::cout << " -- p3: " << p3 << std::endl;
+            std::cout << " -- p4: " << p4 << std::endl;
             auto debug_ps = polyscope::registerSurfaceMesh("debug mesh", old_geometry->inputVertexPositions, mesh->getFaceVertexList());
             FaceData<Vector3> fcolors(*mesh, Vector3::constant(1.));
             fcolors[e.halfedge().face()] = Vector3({1.,0,0});
             fcolors[e.halfedge().twin().face()] = Vector3({1.,0,0});
             debug_ps->addFaceColorQuantity("zero faces!?", fcolors);
+            auto debug_pc = polyscope::registerPointCloud("zero areas quad", std::vector<Vector3>({p1, p2, p3, p4}));
             polyscope::show();
         }
     };
@@ -739,18 +775,11 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
 
     TinyAD::LinearSolver solver;
     printf(" starting opt\n");
-    // polyscope::frameTick();
-    auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
-    tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
-    tmp_PSmesh->setEdgeWidth(1.);
-    tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
-    tmp_PSmesh->setEnabled(true);
-    polyscope::frameTick();
     
     // some parameters
     double convergence_eps = 1e-7;
     double barrier_lambda = barrier_init_lambda;
-    bool barycentric_CP = true;
+    bool do_barycentric = true;
 
     for (int i = 0; i < filling_max_iter; ++i) {
         
@@ -758,27 +787,31 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         if (visual_per_step != 0){
             if (i % visual_per_step == 0){
                 printf(" visualizing step %d\n", i);
-                tmp_PSmesh->updateVertexPositions(tmp_geometry->inputVertexPositions);
+                auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
+                tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
+                tmp_PSmesh->setEdgeWidth(1.);
+                tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
+                tmp_PSmesh->setEnabled(true);
                 polyscope::frameTick();
             }
         }
         
         // assign closest points
         printf(" assigning  closest points\n");
-        if (barycentric_CP)
+        if (do_barycentric)
             assign_closest_points_barycentric(tmp_geometry);
         else 
             assign_closest_vertices(tmp_geometry);
-        printf(" CP energy\n");
+        // printf(" CP energy\n");
         double CP_energy = closest_point_energy(tmp_geometry);
 
         // split when close to convex hull
-        if (CP_energy <= refinement_CP_threshold){
+        if (CP_energy <= refinement_CP_threshold && do_barycentric){
             polyscope::warning("low CP energy " + std::to_string(CP_energy), "Spliting SurfacePoints and switching to Vertex only assignment");
             printf(" spliting\n");
             // modifies mesh, old_geometry, tmp_geometry
             split_barycentric_closest_points(tmp_geometry); 
-            barycentric_CP = false;
+            do_barycentric = false;
 
             // re-compute old geometry constants
             printf(" re-compute old geometry constants\n");
@@ -809,8 +842,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
                 Eigen::Vector3<T> N2 = (p1 - p2).cross(p4 - p2);
                 Eigen::Vector3<T> edgeDir = (p2 - p1).normalized();
                 T dihedral_angle = atan2(edgeDir.dot(N1.cross(N2)), N1.dot(N2));
-                if (TinyAD::to_passive(dihedral_angle) > 2*PI || TinyAD::to_passive(dihedral_angle) < -2.*PI)
-                    printf(" new dihedral wtf>>>>@!?\n");
                 return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_constant[e];
             });
 
@@ -818,8 +849,10 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
             x = bendingEnergy_func.x_from_data([&] (Vertex v) {
                 return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
             });
+
             // re assign CP since connectivity has changed
-            assign_closest_vertices(tmp_geometry);
+            // assign_closest_points_barycentric(tmp_geometry);
+            assign_closest_vertices(tmp_geometry, true);
         }
         
         printf(" finding CP terms\n");
@@ -833,10 +866,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         // bending stuff
         printf(" Hessian eval\n ");
         auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x); //
-
-        bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) { // don't really need this
-            tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
-        });
 
         // barrier stuff
         printf(" finding Barrier terms\n");
@@ -854,7 +883,11 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
                             "\n\t\t\t\tCP  = " << CP_lambda << " * "<< CP_energy<< 
                             "\n\t\t\t\tbarr= " << barrier_lambda << " * "<< barrier_energy<< 
                             "\n\t\t\t\t\t total:" << total_energy);
-        Eigen::VectorXd d = TinyAD::newton_direction(total_g, total_H, solver);
+        
+        // Eigen::VectorXd d = TinyAD::newton_direction(total_g, total_H, solver);
+        PositiveDefiniteSolver<double> newton_solver(total_H);
+        Eigen::VectorXd d = newton_solver.solve(-total_g);
+        
         Eigen::VectorXd old_x = x;
         x = TinyAD::line_search(x, d, total_energy, total_g,
                                 [&] (const Eigen::VectorXd curr_x) {
@@ -866,7 +899,10 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
                                     },
                                 0.5, 0.9, 100, 0.); // no clue whats good here for armijo constant; proly nothing since non-linear stuff happening
                               //smax, decay, max_iter, armijo constant
-        // }
+        
+        bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) {
+            tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
+        });
         // scheduled weights
         barrier_lambda *= barrier_decay;
         CP_lambda *= CP_mu;

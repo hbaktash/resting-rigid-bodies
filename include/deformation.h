@@ -77,9 +77,10 @@ class DeformationSolver{
        VertexData<bool> CP_involvement;
        SparseMatrix<double> closest_point_operator;
        SparseMatrix<double> closest_point_flat_operator;
+       size_t face_assignments = 0, edge_assignments = 0, vertex_assignments = 0;
 
        bool one_time_CP_assignment = false;
-       double refinement_CP_threshold = 0.9;
+       double refinement_CP_threshold = 0.3;
        double CP_lambda = 10.0,
               CP_mu = 1.1; // grow the CP lambda; since we want it to be zero in the end
        double barrier_init_lambda = 10.,
@@ -104,7 +105,7 @@ class DeformationSolver{
        auto get_tinyAD_bending_function(EdgeData<double> rest_constants, EdgeData<double> rest_dihedral_angles); // TinyAD::ScalarFunction<3, >
        
        // closest point energy
-       void assign_closest_vertices(VertexPositionGeometry *new_geometry);
+       void assign_closest_vertices(VertexPositionGeometry *new_geometry, bool allow_multi_assignment = true);
        void assign_closest_points_barycentric(VertexPositionGeometry *new_geometry);
        // edge/face splits
        void split_barycentric_closest_points(VertexPositionGeometry *new_geometry);
