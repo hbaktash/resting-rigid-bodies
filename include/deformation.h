@@ -32,7 +32,7 @@
 #include <TinyAD/Utils/NewtonDecrement.hh>
 #include <TinyAD/Utils/LineSearch.hh>
 
-
+#include <remesh_tools.h>
 
 #include <igl/arap.h>
 #include <Eigen/Core>

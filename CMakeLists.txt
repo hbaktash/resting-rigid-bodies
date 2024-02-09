@@ -127,6 +127,7 @@ set(inverse_SRCS
   src/inv_design.cpp
   src/convex_hull.cpp
   src/deformation.cpp
+  src/remesh_tools.cpp
 	# add any other source files here
 )
 
@@ -142,6 +143,7 @@ set(convex_fill
   src/inv_design.cpp
   src/convex_hull.cpp
   src/deformation.cpp
+  src/remesh_tools.cpp
 	# add any other source files here
 )
 

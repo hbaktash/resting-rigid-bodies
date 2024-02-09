@@ -96,7 +96,6 @@ bool compute_global_G_effect = true,
      one_time_CP_assignment = false,
      always_update_structure = true,
      with_hull_projection = false,
-     use_initial_geometry = false,
      first_time = false;
 bool do_remesh = false;
 float scale_for_remesh = 2.;
@@ -146,7 +145,7 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false,
       vis_utils.draw_guess_pc(net_pair.first, net_pair.second);
     else {
       if (polyscope::hasPointCloud("test point cloud")) polyscope::removePointCloud("test point cloud");
-      if (polyscope::hasSurfaceMesh("dummy mesh for stable regions on polyhedra")) polyscope::removeSurfaceMesh("dummy mesh for stable regions on polyhedra");
+      if (polyscope::hasCurveNetwork("stable regions on polyhedra")) polyscope::removeCurveNetwork("stable regions on polyhedra");
     }
   }
   else
@@ -678,10 +677,6 @@ void myCallback() {
   if (ImGui::Checkbox("structured opt", &structured_opt));
   if (ImGui::Checkbox("update structured at every step", &always_update_structure));
   if (ImGui::Checkbox("decrease convex hull points", &with_hull_projection));
-  if (ImGui::Checkbox("use initial geomtery", &use_initial_geometry)) {
-    inverseSolver->use_old_geometry = use_initial_geometry;
-  }
-  if (ImGui::SliderInt("ARAP max iters", &ARAP_max_iters, 1, 30)) inverseSolver->arap_max_iter = ARAP_max_iters;
   if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
 
   if (ImGui::Button("optimize hull (w.r.t. dice energy)")) {

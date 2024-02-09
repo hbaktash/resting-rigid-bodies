@@ -720,6 +720,9 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     size_t num_var = 3 * mesh->nVertices();
     
     // Pre-compute constants from the old geometry; old \theta, e, h_e
+    old_geometry->requireEdgeLengths();
+    double initial_mean_edge_len = old_geometry->edgeLengths.toVector().mean();
+    old_geometry->unrequireEdgeLengths();
     printf(" pre computing rest constants\n");
     old_geometry->refreshQuantities();
     old_geometry->requireEdgeDihedralAngles();
@@ -900,9 +903,51 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
                                 0.5, 0.9, 100, 0.); // no clue whats good here for armijo constant; proly nothing since non-linear stuff happening
                               //smax, decay, max_iter, armijo constant
         
+        // update tmp geometry
         bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) {
             tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
         });
+
+        // // joint remesh  
+        // joint_remesh(mesh, old_geometry, tmp_geometry, initial_mean_edge_len);
+        // // // update stuff after remesh; 
+        // // // ****** TODO how do I move this tinyAD stuff into a function??? ******
+        // printf(" re-compute old geometry constants\n");
+        // old_geometry->refreshQuantities();
+        // old_geometry->requireEdgeDihedralAngles();
+        // rest_dihedral_angles = old_geometry->edgeDihedralAngles;
+        // old_geometry->unrequireEdgeDihedralAngles();
+        // rest_constant = get_rest_constants();
+
+        // // re-compute bending function
+        // printf(" re-compute bending function\n");
+        // bendingEnergy_func = TinyAD::scalar_function<3>(mesh->vertices()); // 
+        // bendingEnergy_func.add_elements<4>(mesh->edges(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
+        // {
+        //     using T = TINYAD_SCALAR_TYPE(element);
+
+        //     Edge e = element.handle;
+            
+        //     if (e.isBoundary()) return (T)0.0;
+
+        //     Eigen::Vector3<T> p1 = element.variables(e.firstVertex());
+        //     Eigen::Vector3<T> p2 = element.variables(e.secondVertex());
+            
+        //     Eigen::Vector3<T> p3 = element.variables(e.halfedge().next().tipVertex());
+        //     Eigen::Vector3<T> p4 = element.variables(e.halfedge().twin().next().tipVertex());
+
+        //     Eigen::Vector3<T> N1 = (p2 - p1).cross(p3 - p1); //faceNormals[e.halfedge().face()];
+        //     Eigen::Vector3<T> N2 = (p1 - p2).cross(p4 - p2);
+        //     Eigen::Vector3<T> edgeDir = (p2 - p1).normalized();
+        //     T dihedral_angle = atan2(edgeDir.dot(N1.cross(N2)), N1.dot(N2));
+        //     return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_constant[e];
+        // });
+        // // re-build x; since the size has changed 
+        // // tmp geo is updated in remeshing automatically
+        // x = bendingEnergy_func.x_from_data([&] (Vertex v) {
+        //     return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
+        // });
+
         // scheduled weights
         barrier_lambda *= barrier_decay;
         CP_lambda *= CP_mu;
