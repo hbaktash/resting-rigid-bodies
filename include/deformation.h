@@ -123,7 +123,8 @@ class DeformationSolver{
        double get_log_barrier_energy(DenseMatrix<double> new_pos_mat);
 
        // rest geometry constants for bending
-       EdgeData<double> get_rest_constants();
+       EdgeData<double> get_bending_rest_constants();
+       FaceData<Eigen::Matrix2d> get_membrane_rest_constants();
        
        // solver
        DenseMatrix<double> solve_for_bending(int visual_per_step = 0);

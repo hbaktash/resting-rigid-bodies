@@ -649,7 +649,7 @@ bool DeformationSolver::check_feasibility(DenseMatrix<double> new_pos_mat){
 }
 
 
-EdgeData<double> DeformationSolver::get_rest_constants(){
+EdgeData<double> DeformationSolver::get_bending_rest_constants(){
     EdgeData<double> rest_constant(*mesh, 0.); // e/h_e
     old_geometry->refreshQuantities();
     for (Edge e : mesh->edges()) {
@@ -682,6 +682,12 @@ EdgeData<double> DeformationSolver::get_rest_constants(){
     };
     return rest_constant;
 }
+
+
+FaceData<Eigen::Matrix2d> DeformationSolver::get_membrane_rest_constants(){
+    
+}
+
 
 auto DeformationSolver::get_tinyAD_bending_function(EdgeData<double> rest_constant, EdgeData<double> rest_dihedral_angles){
     // bending function
@@ -728,13 +734,10 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     old_geometry->requireEdgeDihedralAngles();
     EdgeData<double> rest_dihedral_angles = old_geometry->edgeDihedralAngles;
     old_geometry->unrequireEdgeDihedralAngles();
-    EdgeData<double> rest_constant = get_rest_constants();
+    EdgeData<double> rest_bending_constant = get_bending_rest_constants();
 
     // bending func tinyAD
-    
     auto bendingEnergy_func = TinyAD::scalar_function<3>(mesh->vertices()); // 
-    // Add objective term per edge
-    // double edge_count = 1.;//(double) mesh->nEdges();
     bendingEnergy_func.add_elements<4>(mesh->edges(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
     {
         // Evaluate element using either double or TinyAD::Double
@@ -757,6 +760,29 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         T dihedral_angle = atan2(edgeDir.dot(N1.cross(N2)), N1.dot(N2));
 
         return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_constant[e];
+    });
+
+    // membrane rest constants
+    FaceData<Eigen::Matrix2d> rest_membrane_I_inverted = get_membrane_rest_constants();
+    // membrane func tinyAD
+    double membrane_mu = 0.1, membrane_lambda = 0.1;
+    auto membraneEnergy_func = TinyAD::scalar_function<3>(mesh->vertices()); // 
+    membraneEnergy_func.add_elements<3>(mesh->faces(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
+    {
+        // Evaluate element using either double or TinyAD::Double
+        using T = TINYAD_SCALAR_TYPE(element);
+
+        // Get variables 3D vertex positions
+        Face f = element.handle;
+
+        Eigen::Vector3<T> p1 = element.variables(f.halfedge().tailVertex());
+        Eigen::Vector3<T> p2 = element.variables(f.halfedge().tipVertex());
+        Eigen::Vector3<T> p3 = element.variables(f.halfedge().next().tipVertex());
+        Eigen::Matrix<T, 3, 2> J = TinyAD::col_mat(p2 - p1, p3 - p1);
+        Eigen::Matrix2<T> I = J.transpose() * J;
+        
+        Eigen::Matrix2<T> simil_matrix = rest_membrane_I_inverted * I;
+        return ;
     });
     
     printf(" initializing variables\n");
@@ -822,7 +848,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
             old_geometry->requireEdgeDihedralAngles();
             rest_dihedral_angles = old_geometry->edgeDihedralAngles;
             old_geometry->unrequireEdgeDihedralAngles();
-            rest_constant = get_rest_constants();
+            rest_bending_constant = get_bending_rest_constants();
 
             // re-compute bending function
             printf(" re-compute bending function\n");
@@ -908,7 +934,24 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
             tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
         });
 
-        // // joint remesh  
+        
+
+        // scheduled weights
+        barrier_lambda *= barrier_decay;
+        CP_lambda *= CP_mu;
+        double step_norm = (x - old_x).norm();
+        printf(" step norm is %9f\n", step_norm);
+        // if (step_norm < convergence_eps)
+        //     break;
+    }
+    // polyscope::show();
+    DenseMatrix<double> new_points_mat = unflat_tinyAD(x); 
+    return new_points_mat;
+}
+
+
+
+// // // //  joint remesh attempt
         // joint_remesh(mesh, old_geometry, tmp_geometry, initial_mean_edge_len);
         // // // update stuff after remesh; 
         // // // ****** TODO how do I move this tinyAD stuff into a function??? ******
@@ -917,7 +960,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         // old_geometry->requireEdgeDihedralAngles();
         // rest_dihedral_angles = old_geometry->edgeDihedralAngles;
         // old_geometry->unrequireEdgeDihedralAngles();
-        // rest_constant = get_rest_constants();
+        // rest_bending_constant = get_bending_rest_constants();
 
         // // re-compute bending function
         // printf(" re-compute bending function\n");
@@ -940,30 +983,13 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         //     Eigen::Vector3<T> N2 = (p1 - p2).cross(p4 - p2);
         //     Eigen::Vector3<T> edgeDir = (p2 - p1).normalized();
         //     T dihedral_angle = atan2(edgeDir.dot(N1.cross(N2)), N1.dot(N2));
-        //     return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_constant[e];
+        //     return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_bending_constant[e];
         // });
         // // re-build x; since the size has changed 
         // // tmp geo is updated in remeshing automatically
         // x = bendingEnergy_func.x_from_data([&] (Vertex v) {
         //     return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
         // });
-
-        // scheduled weights
-        barrier_lambda *= barrier_decay;
-        CP_lambda *= CP_mu;
-        double step_norm = (x - old_x).norm();
-        printf(" step norm is %9f\n", step_norm);
-        // if (step_norm < convergence_eps)
-        //     break;
-    }
-    // polyscope::show();
-    DenseMatrix<double> new_points_mat = unflat_tinyAD(x); 
-    return new_points_mat;
-}
-
-
-
-
 
 
 ///////// my old line search
