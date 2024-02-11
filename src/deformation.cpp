@@ -764,6 +764,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
 
     // membrane rest constants
     FaceData<Eigen::Matrix2d> rest_membrane_I_inverted = get_membrane_rest_constants();
+    old_geometry->requireFaceAreas();
     // membrane func tinyAD
     double membrane_mu = 0.1, membrane_lambda = 0.1;
     auto membraneEnergy_func = TinyAD::scalar_function<3>(mesh->vertices()); // 
@@ -782,7 +783,11 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         Eigen::Matrix2<T> I = J.transpose() * J;
         
         Eigen::Matrix2<T> simil_matrix = rest_membrane_I_inverted * I;
-        return ;
+        // computing W(I^{-1} I_tilde)
+        
+        return old_geometry->faceAreas[f] * 
+                (membrane_mu * simil_matrix.trace()/2. + membrane_lambda * simil_matrix.determinant()/4. -
+                 (membrane_mu/4. + membrane_lambda/2.) * log(simil_matrix.determinant()) - membrane_mu - membrane_lambda/4.);
     });
     
     printf(" initializing variables\n");
