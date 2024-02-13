@@ -31,11 +31,14 @@ void joint_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_geometr
     options.targetEdgeLength = target_edge_len;
     
     MutationManager deformed_mm(*mesh, *deformed_geometry);
-    
+
+    // DEBUG
+    Vector3 vis_shift = {2,0,0};
     // Edge split callback
     auto funcPreSplit = [&](Edge oldE, double tSplit) -> Vector3 { 
       Vertex oldVA = oldE.firstVertex();
       Vertex oldVB = oldE.secondVertex();
+      printf("pre spliting t: %f\n", tSplit);
       return (1. - tSplit) * ref_geometry->inputVertexPositions[oldVA] + tSplit * ref_geometry->inputVertexPositions[oldVB];
     };
     auto funcPostSplit = [&](Halfedge newHe1, Halfedge newHe2, double tSplit, Vector3 new_pos) -> void {
@@ -45,9 +48,21 @@ void joint_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_geometr
     
     // Edge collapse callback
     auto funcPreCollapse = [&](Edge oldE, double tSplit) -> Vector3 {
-      Vertex oldVA = oldE.firstVertex();
-      Vertex oldVB = oldE.secondVertex();
-      return (1. - tSplit) * ref_geometry->inputVertexPositions[oldVA] + tSplit * ref_geometry->inputVertexPositions[oldVB];
+      Vertex oldVA = oldE.firstVertex(),
+             oldVB = oldE.secondVertex();
+      Vector3 pA = ref_geometry->inputVertexPositions[oldVA],
+              pB = ref_geometry->inputVertexPositions[oldVB];
+      printf("pre collapsing t: %f\n", tSplit);
+      tSplit = tSplit < 0. ? 0.5 : tSplit;
+      Vector3 pMid = (1. - tSplit) * pA + tSplit * pB;
+      // auto old_geo_psmesh = polyscope::registerSurfaceMesh("post remesh old geo", ref_geometry->inputVertexPositions + vis_shift, mesh->getFaceVertexList());
+      // old_geo_psmesh->setSurfaceColor({0.3,0.3,0.8});
+      // auto tmp_pc = polyscope::registerPointCloud("old edge", std::vector<Vector3>({pA + vis_shift, pB + vis_shift}));
+      // tmp_pc->setPointColor({0.1, 0.8, 0.1});
+      // auto tmp_pc2 = polyscope::registerPointCloud("old edge midP", std::vector<Vector3>({pMid + vis_shift}));
+      // tmp_pc2->setPointColor({0.8, 0.1, 0.1});
+      // polyscope::show();
+      return pMid;
     };
     auto funcPostCollapse = [&](Vertex new_v, double tSplit, Vector3 new_pos) -> void {
         ref_geometry->inputVertexPositions[new_v] = new_pos;
@@ -59,10 +74,10 @@ void joint_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_geometr
     mesh->compress();
     
     // debug visuals
-    Vector3 vis_shift = {2,0,0};
     auto old_geo_psmesh = polyscope::registerSurfaceMesh("post remesh old geo", ref_geometry->inputVertexPositions + vis_shift, mesh->getFaceVertexList());
-    auto new_geo_psmesh = polyscope::registerSurfaceMesh("post remesh def geo", deformed_geometry->inputVertexPositions, mesh->getFaceVertexList());
+    // auto new_geo_psmesh = polyscope::registerSurfaceMesh("post remesh def geo", deformed_geometry->inputVertexPositions, mesh->getFaceVertexList());
     old_geo_psmesh->setSurfaceColor({0.2,0.2,0.7});
-    new_geo_psmesh->setSurfaceColor({0.7,0.2,0.2});
-    polyscope::show();
+    old_geo_psmesh->setEdgeWidth(1.);
+    // new_geo_psmesh->setSurfaceColor({0.7,0.2,0.2});
+    // polyscope::show();
 }

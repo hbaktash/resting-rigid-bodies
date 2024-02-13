@@ -684,12 +684,29 @@ EdgeData<double> DeformationSolver::get_bending_rest_constants(){
 }
 
 
-FaceData<Eigen::Matrix2d> DeformationSolver::get_membrane_rest_constants(){
-    
+FaceData<Eigen::Matrix2d> DeformationSolver::get_membrane_rest_tensors_inverted(){
+    FaceData<Eigen::Matrix2d> rest_tensors_inverted(*mesh);
+    for (Face f: mesh->faces()){
+        Vertex v1 = f.halfedge().tailVertex(),
+               v2 = f.halfedge().tipVertex(),
+               v3 = f.halfedge().next().tipVertex();
+        Vector3 p1 = old_geometry->inputVertexPositions[v1], 
+                p2 = old_geometry->inputVertexPositions[v2],
+                p3 = old_geometry->inputVertexPositions[v3];
+        Vector3 e2 = p2 - p1, 
+                e3 = p3 - p1;
+        // Eigen::Matri2<double, 3, 2> J = TinyAD::col_mat(p2 - p1, p3 - p1);
+        Eigen::Matrix2d I { // J^T J
+            {dot(e2,e2), dot(e2,e3)},
+            {dot(e3,e2), dot(e3,e3)}
+        };
+        rest_tensors_inverted[f] = I.inverse();
+    }
+    return rest_tensors_inverted;
 }
 
 
-auto DeformationSolver::get_tinyAD_bending_function(EdgeData<double> rest_constant, EdgeData<double> rest_dihedral_angles){
+auto DeformationSolver::get_tinyAD_bending_function(EdgeData<double> &rest_constant, EdgeData<double> &rest_dihedral_angles){
     // bending function
     auto bendingEnergy_func = TinyAD::scalar_function<3>(mesh->vertices()); // 
     // Add objective term per edge
@@ -721,52 +738,8 @@ auto DeformationSolver::get_tinyAD_bending_function(EdgeData<double> rest_consta
     return bendingEnergy_func;
 }
 
-
-DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
-    size_t num_var = 3 * mesh->nVertices();
-    
-    // Pre-compute constants from the old geometry; old \theta, e, h_e
-    old_geometry->requireEdgeLengths();
-    double initial_mean_edge_len = old_geometry->edgeLengths.toVector().mean();
-    old_geometry->unrequireEdgeLengths();
-    printf(" pre computing rest constants\n");
-    old_geometry->refreshQuantities();
-    old_geometry->requireEdgeDihedralAngles();
-    EdgeData<double> rest_dihedral_angles = old_geometry->edgeDihedralAngles;
-    old_geometry->unrequireEdgeDihedralAngles();
-    EdgeData<double> rest_bending_constant = get_bending_rest_constants();
-
-    // bending func tinyAD
-    auto bendingEnergy_func = TinyAD::scalar_function<3>(mesh->vertices()); // 
-    bendingEnergy_func.add_elements<4>(mesh->edges(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
-    {
-        // Evaluate element using either double or TinyAD::Double
-        using T = TINYAD_SCALAR_TYPE(element);
-
-        // Get variables 3D vertex positions
-        Edge e = element.handle;
-        
-        if (e.isBoundary()) return (T)0.0;
-
-        Eigen::Vector3<T> p1 = element.variables(e.firstVertex());
-        Eigen::Vector3<T> p2 = element.variables(e.secondVertex());
-        
-        Eigen::Vector3<T> p3 = element.variables(e.halfedge().next().tipVertex());
-        Eigen::Vector3<T> p4 = element.variables(e.halfedge().twin().next().tipVertex());
-
-        Eigen::Vector3<T> N1 = (p2 - p1).cross(p3 - p1); //faceNormals[e.halfedge().face()];
-        Eigen::Vector3<T> N2 = (p1 - p2).cross(p4 - p2);
-        Eigen::Vector3<T> edgeDir = (p2 - p1).normalized();
-        T dihedral_angle = atan2(edgeDir.dot(N1.cross(N2)), N1.dot(N2));
-
-        return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_constant[e];
-    });
-
-    // membrane rest constants
-    FaceData<Eigen::Matrix2d> rest_membrane_I_inverted = get_membrane_rest_constants();
-    old_geometry->requireFaceAreas();
-    // membrane func tinyAD
-    double membrane_mu = 0.1, membrane_lambda = 0.1;
+auto DeformationSolver::get_tinyAD_membrane_function(FaceData<Eigen::Matrix2d> &rest_tensors_inverted, FaceData<double> &rest_face_areas){
+    double membrane_mu = 0.2, membrane_lambda = 0.1;
     auto membraneEnergy_func = TinyAD::scalar_function<3>(mesh->vertices()); // 
     membraneEnergy_func.add_elements<3>(mesh->faces(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
     {
@@ -782,13 +755,42 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         Eigen::Matrix<T, 3, 2> J = TinyAD::col_mat(p2 - p1, p3 - p1);
         Eigen::Matrix2<T> I = J.transpose() * J;
         
-        Eigen::Matrix2<T> simil_matrix = rest_membrane_I_inverted * I;
+        Eigen::Matrix2<T> simil_matrix = rest_tensors_inverted[f] * I;
         // computing W(I^{-1} I_tilde)
         
-        return old_geometry->faceAreas[f] * 
-                (membrane_mu * simil_matrix.trace()/2. + membrane_lambda * simil_matrix.determinant()/4. -
-                 (membrane_mu/4. + membrane_lambda/2.) * log(simil_matrix.determinant()) - membrane_mu - membrane_lambda/4.);
+        return rest_face_areas[f] * (simil_matrix.transpose() * simil_matrix).trace() / simil_matrix.determinant();
+        // return rest_face_areas[f] * 
+        //         (membrane_mu * simil_matrix.trace()/2. + membrane_lambda * simil_matrix.determinant()/4. -
+        //          (membrane_mu/4. + membrane_lambda/2.) * log(simil_matrix.determinant()));
     });
+    return membraneEnergy_func;
+}
+
+
+DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
+    size_t num_var = 3 * mesh->nVertices();
+    
+    // // bending rest constants
+    old_geometry->requireEdgeLengths();
+    double initial_mean_edge_len = old_geometry->edgeLengths.toVector().mean();
+    old_geometry->unrequireEdgeLengths();
+    printf(" pre computing rest constants\n");
+    old_geometry->refreshQuantities();
+    old_geometry->requireEdgeDihedralAngles();
+    EdgeData<double> rest_dihedral_angles = old_geometry->edgeDihedralAngles;
+    old_geometry->unrequireEdgeDihedralAngles();
+    EdgeData<double> rest_bending_constant = get_bending_rest_constants();
+
+    // bending func tinyAD
+    auto bendingEnergy_func = get_tinyAD_bending_function(rest_bending_constant, rest_dihedral_angles);
+
+    // // membrane rest constants
+    FaceData<Eigen::Matrix2d> rest_membrane_I_inverted = get_membrane_rest_tensors_inverted();
+    old_geometry->requireFaceAreas();
+    FaceData<double> old_face_areas = old_geometry->faceAreas;
+    // membrane func tinyAD
+    auto membraneEnergy_func = get_tinyAD_membrane_function(rest_membrane_I_inverted, old_face_areas);
+    
     
     printf(" initializing variables\n");
     int n = mesh->nVertices();
@@ -816,20 +818,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     bool do_barycentric = true;
 
     for (int i = 0; i < filling_max_iter; ++i) {
-        
-        // visuals
-        if (visual_per_step != 0){
-            if (i % visual_per_step == 0){
-                printf(" visualizing step %d\n", i);
-                auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
-                tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
-                tmp_PSmesh->setEdgeWidth(1.);
-                tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
-                tmp_PSmesh->setEnabled(true);
-                polyscope::frameTick();
-            }
-        }
-        
         // assign closest points
         printf(" assigning  closest points\n");
         if (do_barycentric)
@@ -857,28 +845,17 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
 
             // re-compute bending function
             printf(" re-compute bending function\n");
-            bendingEnergy_func = TinyAD::scalar_function<3>(mesh->vertices()); // 
-            bendingEnergy_func.add_elements<4>(mesh->edges(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
-            {
-                using T = TINYAD_SCALAR_TYPE(element);
+            bendingEnergy_func = get_tinyAD_bending_function(rest_bending_constant, rest_dihedral_angles);
 
-                Edge e = element.handle;
-                
-                if (e.isBoundary()) return (T)0.0;
-
-                Eigen::Vector3<T> p1 = element.variables(e.firstVertex());
-                Eigen::Vector3<T> p2 = element.variables(e.secondVertex());
-                
-                Eigen::Vector3<T> p3 = element.variables(e.halfedge().next().tipVertex());
-                Eigen::Vector3<T> p4 = element.variables(e.halfedge().twin().next().tipVertex());
-
-                Eigen::Vector3<T> N1 = (p2 - p1).cross(p3 - p1); //faceNormals[e.halfedge().face()];
-                Eigen::Vector3<T> N2 = (p1 - p2).cross(p4 - p2);
-                Eigen::Vector3<T> edgeDir = (p2 - p1).normalized();
-                T dihedral_angle = atan2(edgeDir.dot(N1.cross(N2)), N1.dot(N2));
-                return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_constant[e];
-            });
-
+            
+            rest_membrane_I_inverted = get_membrane_rest_tensors_inverted();
+            old_geometry->requireFaceAreas();
+            old_face_areas = old_geometry->faceAreas;
+    
+            // membrane func tinyAD
+            printf(" re-compute membrane function\n");
+            membraneEnergy_func = get_tinyAD_membrane_function(rest_membrane_I_inverted, old_face_areas);
+    
             // re-build x; since the size has changed 
             x = bendingEnergy_func.x_from_data([&] (Vertex v) {
                 return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
@@ -898,9 +875,11 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         Eigen::SparseMatrix<double> H_CP = A_CP.transpose() * A_CP;
         
         // bending stuff
-        printf(" Hessian eval\n ");
+        printf(" bending Hessian eval\n ");
         auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x); //
-
+        printf(" membrane Hessian eval\n ");
+        auto [membrane_f, membrane_g, membrane_H_proj] = membraneEnergy_func.eval_with_hessian_proj(x); //
+        
         // barrier stuff
         printf(" finding Barrier terms\n");
         DenseMatrix<double> x_in_dense_format = vertex_data_to_matrix(tmp_geometry->inputVertexPositions);
@@ -909,11 +888,12 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         Eigen::VectorX<double> barrier_g = tinyAD_flatten(barrier_grad);
         // TODO: smarter scheduling?
                             
-        Eigen::SparseMatrix<double> total_H = bending_H_proj + CP_lambda * H_CP + barrier_lambda * barrier_H;
-        Eigen::VectorX<double> total_g = bending_g + CP_lambda * CP_flat_g + barrier_lambda * barrier_g;
-        double total_energy = bending_f + CP_lambda * CP_energy + barrier_lambda * barrier_energy;
+        Eigen::SparseMatrix<double> total_H = bending_H_proj + membrane_lambda * membrane_H_proj + CP_lambda * H_CP + barrier_lambda * barrier_H;
+        Eigen::VectorX<double> total_g = bending_g + membrane_lambda * membrane_g + CP_lambda * CP_flat_g + barrier_lambda * barrier_g;
+        double total_energy = bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy + barrier_lambda * barrier_energy;
 
         TINYAD_DEBUG_OUT("\t- Energy in iter " << i << ": bending= " << bending_f << 
+                            "\n\t\t\t\t   membrane  = " << membrane_f <<
                             "\n\t\t\t\tCP  = " << CP_lambda << " * "<< CP_energy<< 
                             "\n\t\t\t\tbarr= " << barrier_lambda << " * "<< barrier_energy<< 
                             "\n\t\t\t\t\t total:" << total_energy);
@@ -939,8 +919,19 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
             tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
         });
 
+        // visuals
+        if (visual_per_step != 0){
+            if (i % visual_per_step == 0){
+                printf(" visualizing step %d\n", i);
+                auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
+                tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
+                tmp_PSmesh->setEdgeWidth(1.);
+                tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
+                tmp_PSmesh->setEnabled(true);
+                polyscope::frameTick();
+            }
+        }
         
-
         // scheduled weights
         barrier_lambda *= barrier_decay;
         CP_lambda *= CP_mu;
@@ -956,45 +947,46 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
 
 
 
-// // // //  joint remesh attempt
-        // joint_remesh(mesh, old_geometry, tmp_geometry, initial_mean_edge_len);
-        // // // update stuff after remesh; 
-        // // // ****** TODO how do I move this tinyAD stuff into a function??? ******
-        // printf(" re-compute old geometry constants\n");
-        // old_geometry->refreshQuantities();
-        // old_geometry->requireEdgeDihedralAngles();
-        // rest_dihedral_angles = old_geometry->edgeDihedralAngles;
-        // old_geometry->unrequireEdgeDihedralAngles();
-        // rest_bending_constant = get_bending_rest_constants();
+// // 
+//  // joint remesh attempt
+// joint_remesh(mesh, old_geometry, tmp_geometry, initial_mean_edge_len);
+// // // update stuff after remesh; 
+// // // ****** TODO how do I move this tinyAD stuff into a function??? ******
+// printf(" re-compute old geometry constants\n");
+// old_geometry->refreshQuantities();
+// old_geometry->requireEdgeDihedralAngles();
+// rest_dihedral_angles = old_geometry->edgeDihedralAngles;
+// old_geometry->unrequireEdgeDihedralAngles();
+// rest_bending_constant = get_bending_rest_constants();
 
-        // // re-compute bending function
-        // printf(" re-compute bending function\n");
-        // bendingEnergy_func = TinyAD::scalar_function<3>(mesh->vertices()); // 
-        // bendingEnergy_func.add_elements<4>(mesh->edges(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
-        // {
-        //     using T = TINYAD_SCALAR_TYPE(element);
+// // re-compute bending function
+// printf(" re-compute bending function\n");
+// bendingEnergy_func = TinyAD::scalar_function<3>(mesh->vertices()); // 
+// bendingEnergy_func.add_elements<4>(mesh->edges(), [&] (auto& element) -> TINYAD_SCALAR_TYPE(element)
+// {
+//     using T = TINYAD_SCALAR_TYPE(element);
 
-        //     Edge e = element.handle;
-            
-        //     if (e.isBoundary()) return (T)0.0;
+//     Edge e = element.handle;
+    
+//     if (e.isBoundary()) return (T)0.0;
 
-        //     Eigen::Vector3<T> p1 = element.variables(e.firstVertex());
-        //     Eigen::Vector3<T> p2 = element.variables(e.secondVertex());
-            
-        //     Eigen::Vector3<T> p3 = element.variables(e.halfedge().next().tipVertex());
-        //     Eigen::Vector3<T> p4 = element.variables(e.halfedge().twin().next().tipVertex());
+//     Eigen::Vector3<T> p1 = element.variables(e.firstVertex());
+//     Eigen::Vector3<T> p2 = element.variables(e.secondVertex());
+    
+//     Eigen::Vector3<T> p3 = element.variables(e.halfedge().next().tipVertex());
+//     Eigen::Vector3<T> p4 = element.variables(e.halfedge().twin().next().tipVertex());
 
-        //     Eigen::Vector3<T> N1 = (p2 - p1).cross(p3 - p1); //faceNormals[e.halfedge().face()];
-        //     Eigen::Vector3<T> N2 = (p1 - p2).cross(p4 - p2);
-        //     Eigen::Vector3<T> edgeDir = (p2 - p1).normalized();
-        //     T dihedral_angle = atan2(edgeDir.dot(N1.cross(N2)), N1.dot(N2));
-        //     return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_bending_constant[e];
-        // });
-        // // re-build x; since the size has changed 
-        // // tmp geo is updated in remeshing automatically
-        // x = bendingEnergy_func.x_from_data([&] (Vertex v) {
-        //     return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
-        // });
+//     Eigen::Vector3<T> N1 = (p2 - p1).cross(p3 - p1); //faceNormals[e.halfedge().face()];
+//     Eigen::Vector3<T> N2 = (p1 - p2).cross(p4 - p2);
+//     Eigen::Vector3<T> edgeDir = (p2 - p1).normalized();
+//     T dihedral_angle = atan2(edgeDir.dot(N1.cross(N2)), N1.dot(N2));
+//     return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_bending_constant[e];
+// });
+// // re-build x; since the size has changed 
+// // tmp geo is updated in remeshing automatically
+// x = bendingEnergy_func.x_from_data([&] (Vertex v) {
+//     return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
+// });
 
 
 ///////// my old line search

@@ -80,7 +80,8 @@ class DeformationSolver{
        size_t face_assignments = 0, edge_assignments = 0, vertex_assignments = 0;
 
        bool one_time_CP_assignment = false;
-       double refinement_CP_threshold = 0.3;
+       double refinement_CP_threshold = 0.5;
+       double membrane_lambda = 0.1;
        double CP_lambda = 10.0,
               CP_mu = 1.1; // grow the CP lambda; since we want it to be zero in the end
        double barrier_init_lambda = 10.,
@@ -102,8 +103,9 @@ class DeformationSolver{
        VertexData<Vector3> bending_energy_gradient(VertexPositionGeometry *new_geometry);
        // hessian of bending energy
        // DenseMatrix<double> bending_energy_hessian(VertexPositionGeometry *new_geometry);
-       auto get_tinyAD_bending_function(EdgeData<double> rest_constants, EdgeData<double> rest_dihedral_angles); // TinyAD::ScalarFunction<3, >
-       
+       auto get_tinyAD_bending_function(EdgeData<double> &rest_constants, EdgeData<double> &rest_dihedral_angles); // TinyAD::ScalarFunction<3, >
+       auto get_tinyAD_membrane_function(FaceData<Eigen::Matrix2d> &rest_tensors_inverted, FaceData<double> &rest_face_areas); // TinyAD::ScalarFunction<3, >
+
        // closest point energy
        void assign_closest_vertices(VertexPositionGeometry *new_geometry, bool allow_multi_assignment = true);
        void assign_closest_points_barycentric(VertexPositionGeometry *new_geometry);
@@ -124,7 +126,7 @@ class DeformationSolver{
 
        // rest geometry constants for bending
        EdgeData<double> get_bending_rest_constants();
-       FaceData<Eigen::Matrix2d> get_membrane_rest_constants();
+       FaceData<Eigen::Matrix2d> get_membrane_rest_tensors_inverted();
        
        // solver
        DenseMatrix<double> solve_for_bending(int visual_per_step = 0);

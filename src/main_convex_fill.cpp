@@ -97,8 +97,8 @@ bool compute_global_G_effect = true,
      always_update_structure = true,
      with_hull_projection = false,
      first_time = false;
-bool do_remesh = false;
-float scale_for_remesh = 2.;
+bool do_remesh = true;
+float scale_for_remesh = 1.003;
 polyscope::PointCloud *test_pc;
 
 int fair_sides_count = 6; // for optimization
@@ -108,7 +108,7 @@ int fair_sides_count = 6; // for optimization
 InverseSolver* inverseSolver;
 float step_size = 0.01,
       step_size2 = 0.01,
-      step_size3 = 0.5;
+      step_size3 = 0.167;
 float stable_normal_update_thresh = -1;
 int ARAP_max_iters = 10;
 
@@ -117,15 +117,16 @@ DeformationSolver *deformationSolver;
 bool animate = false,
      v2_dice_animate = false;
 float scale_for_feasi = 2.;
-float CP_lambda_exp = 1.,
+float membrane_lambda = 0.2,
+      CP_lambda_exp = 1.,
       CP_mu = 1.1,
       refinement_CP_threshold = 0.3,
       barrier_lambda_exp = 1.,
       barrier_mu = 0.8;
 int filling_max_iter = 200;
-int hull_opt_steps = 100;
+int hull_opt_steps = 50;
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc"), std::string("mark_gomboc")};
 std::string all_polygons_current_item = "sliced tet",
             all_polygons_current_item2 = "tet";
 static const char* all_polygons_current_item_c_str = "bunnylp";
@@ -222,6 +223,7 @@ void init_convex_shape_to_fill(std::string poly_str, bool triangulate = true){
 void initialize_deformation_params(DeformationSolver *deformation_solver){
   deformation_solver->one_time_CP_assignment = one_time_CP_assignment;
   deformation_solver->refinement_CP_threshold = refinement_CP_threshold;
+  deformation_solver->membrane_lambda = membrane_lambda;
   deformation_solver->CP_lambda = pow(10, CP_lambda_exp);
   deformation_solver->CP_mu = CP_mu;
   deformation_solver->barrier_init_lambda = pow(10, barrier_lambda_exp);
@@ -651,6 +653,7 @@ void myCallback() {
   }
   if (ImGui::Checkbox("one time CP assignment", &one_time_CP_assignment)) deformationSolver->one_time_CP_assignment = one_time_CP_assignment;
   if (ImGui::SliderFloat("refinement CP threshold ", &refinement_CP_threshold, 0., 1.)) deformationSolver->refinement_CP_threshold = refinement_CP_threshold;
+  if (ImGui::SliderFloat("membrane lambda", &membrane_lambda, 0., 500.)) deformationSolver->membrane_lambda = membrane_lambda;
   if (ImGui::SliderFloat("CP lambda log10/initial value", &CP_lambda_exp, 0., 5.)) deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
   if (ImGui::SliderFloat("CP growth mu ", &CP_mu, 1., 1.5)) deformationSolver->CP_mu = CP_mu;
   if (ImGui::SliderFloat("Barrier lambda log10/initial value", &barrier_lambda_exp, 0., 5.)) deformationSolver->barrier_init_lambda = pow(10, barrier_lambda_exp);
