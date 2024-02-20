@@ -147,6 +147,23 @@ set(convex_fill
 	# add any other source files here
 )
 
+set(paper_figs 
+  src/main_roll_figs.cpp
+  src/arc_algebra.cpp
+  src/forward3D.cpp
+  src/mesh_factory.cpp
+  src/geometry_utils.cpp
+  src/coloring.cpp
+  src/visual_utils.cpp
+  src/boundary_tools.cpp
+  src/inv_design.cpp
+  src/convex_hull.cpp
+  src/deformation.cpp
+  src/remesh_tools.cpp
+
+	# add any other source files here
+)
+
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 add_executable(polygons "${polygons_SRCS}")
 target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
@@ -199,6 +216,17 @@ target_link_libraries(convexFill PUBLIC geometry-central polyscope qhullcpp qhul
 # message(STATUS "${GUROBI_CXX_DEBUG_LIBRARY}")
 # target_link_libraries(convexFill PUBLIC optimized ${GUROBI_CXX_LIBRARY} debug ${GUROBI_CXX_DEBUG_LIBRARY})
 # target_link_libraries(convexFill PUBLIC ${GUROBI_LIBRARY})
+
+# paper figure stuff
+add_executable(paper_figs "${paper_figs}")
+target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# add the args.hxx project which we use for command line args
+target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
+target_link_libraries(paper_figs PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
+
 
 # Bullet stuff
 

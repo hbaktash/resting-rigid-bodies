@@ -131,6 +131,7 @@ class DeformationSolver{
        // solver
        DenseMatrix<double> solve_for_bending(int visual_per_step = 0);
        // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
+       void print_energies_after_transform(Eigen::Matrix3d A);
 };
 
 

@@ -450,6 +450,7 @@ void VisualUtils::draw_guess_pc(std::vector<std::pair<size_t, size_t>> neigh_ind
   test_pc->setPointColor({1.,0.,0.});
   // test_pc->setEnabled(true);
   test_pc->setPointRadius(gm_pt_radi * 0.7, false);
+  test_pc->setEnabled(true);
 
   std::vector<std::array<size_t, 2>> edge_inds;
   for (std::pair<size_t, size_t> p1: neigh_inds)
@@ -566,4 +567,39 @@ void VisualUtils::visualize_colored_polyhedra(FaceData<Vector3> face_colors){
   // // add colors to the original polyhedra as well?
   // polyscope::SurfaceFaceColorQuantity *faceQnty2 = psMesh->addFaceColorQuantity("random face colors2", face_colors);
   // faceQnty2->setEnabled(true);
+}
+
+
+void VisualUtils::visualize_all_stable_orientations(){
+  forwardSolver->set_uniform_G();
+  forwardSolver->initialize_pre_computes();
+  BoundaryBuilder *bnd_builder = new BoundaryBuilder(forwardSolver);
+  bnd_builder->build_boundary_normals();
+
+  std::vector<std::pair<Face, double>> probs;
+  for (Face f: forwardSolver->hullMesh->faces())
+      if (bnd_builder->face_region_area[f] > 0)
+          probs.push_back({f, bnd_builder->face_region_area[f]/(4.*PI)});
+  std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
+  double floor_z = -1.;
+  Vector3 floor_vec = Vector3({0,0,floor_z});
+  VertexData<Vector3> rotated_poses(*forwardSolver->inputMesh);
+  size_t i = 0;
+  for (auto &p: probs){
+    Face f = p.first;
+    double prob = p.second;
+    Vector3 f_normal = forwardSolver->hullGeometry->faceNormal(f);
+    Vector3 rot_axis = cross(f_normal, floor_vec);
+    double rot_angle = angle(f_normal, floor_vec);
+    Vector3 offset = floor_vec - forwardSolver->hullGeometry->inputVertexPositions[f.halfedge().vertex()].rotateAround(rot_axis, rot_angle);
+    for (Vertex v: forwardSolver->inputMesh->vertices()){
+      rotated_poses[v] = forwardSolver->inputGeometry->inputVertexPositions[v].rotateAround(rot_axis, rot_angle) + offset;
+    }
+    double y_shift = - (double)i;
+    Vector3 vis_shift({y_shift * 2., -2., 0.});
+    auto tmp_ori_mesh = polyscope::registerSurfaceMesh("ori "+std::to_string(i)+" probe: " + std::to_string(prob), rotated_poses + vis_shift, forwardSolver->inputMesh->getFaceVertexList());
+    tmp_ori_mesh->setSurfaceColor({0.1, 0.4, 0.02});
+    i++;
+  }
+
 }

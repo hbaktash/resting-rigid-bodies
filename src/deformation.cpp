@@ -294,6 +294,7 @@ void DeformationSolver::assign_closest_vertices(VertexPositionGeometry *new_geom
     CP_involvement = VertexData<bool>(*mesh, false);
     // stats
     size_t vertex_double_hits = 0;
+    std::vector<Vector3> double_hit_CVs, double_hit_IPs;
 
     // linear operator corresponding to assignments
     closest_point_operator = Eigen::SparseMatrix<double>(convex_mesh->nVertices(), mesh->nVertices());
@@ -308,12 +309,14 @@ void DeformationSolver::assign_closest_vertices(VertexPositionGeometry *new_geom
         Vertex closest_vertex;
         double min_vertex_dist  = std::numeric_limits<double>::infinity();
         bool last_hit_was_taken = false;
+        Vector3 last_taken_point;
         for (Vertex v: mesh->vertices()){
             Vector3 A = new_geometry->inputVertexPositions[v];
             double vertex_dist = (A - c_p).norm();
             if (vertex_dist < min_vertex_dist){
                 if (CP_involvement[v]){
                     last_hit_was_taken = true;
+                    last_taken_point = A;
                     if (!allow_multi_assignment) continue; // go for the next closest point
                     // otherwise a point can be assigned as multiple closest points 
                 }
@@ -322,7 +325,12 @@ void DeformationSolver::assign_closest_vertices(VertexPositionGeometry *new_geom
                 if (!allow_multi_assignment) last_hit_was_taken = false;
             }            
         }
-        if (last_hit_was_taken) vertex_double_hits++;
+        if (last_hit_was_taken){
+            vertex_double_hits++;
+            // DEBUG
+            double_hit_CVs.push_back(c_p);
+            double_hit_IPs.push_back(last_taken_point);
+        }
         
         // update assignment and involvement
         closest_point_assignment[c_v] = SurfacePoint(closest_vertex); 
@@ -335,6 +343,10 @@ void DeformationSolver::assign_closest_vertices(VertexPositionGeometry *new_geom
     }
     closest_point_operator.setFromTriplets(tripletList.begin(), tripletList.end());
     closest_point_flat_operator.setFromTriplets(flat_tripletList.begin(), flat_tripletList.end());
+    auto dp_cvs = polyscope::registerPointCloud(" double hit CVs ", double_hit_CVs);
+    auto dp_IPs = polyscope::registerPointCloud(" double hit interiors ", double_hit_IPs);
+    dp_cvs->setPointColor({0.8,0.3,0.3});
+    dp_IPs->setPointColor({0.1,0.1,0.9});
     printf("  ** stats for vertex-only CP: double hits %d \n", vertex_double_hits);
 }
 
@@ -756,14 +768,48 @@ auto DeformationSolver::get_tinyAD_membrane_function(FaceData<Eigen::Matrix2d> &
         Eigen::Matrix2<T> I = J.transpose() * J;
         
         Eigen::Matrix2<T> simil_matrix = rest_tensors_inverted[f] * I;
-        // computing W(I^{-1} I_tilde)
+        // W(I^{-1} I_tilde)
         
-        return rest_face_areas[f] * (simil_matrix.transpose() * simil_matrix).trace() / simil_matrix.determinant();
+        return rest_face_areas[f] * (simil_matrix.transpose() * simil_matrix).trace() / simil_matrix.determinant(); // 
         // return rest_face_areas[f] * 
         //         (membrane_mu * simil_matrix.trace()/2. + membrane_lambda * simil_matrix.determinant()/4. -
         //          (membrane_mu/4. + membrane_lambda/2.) * log(simil_matrix.determinant()));
     });
     return membraneEnergy_func;
+}
+
+
+void DeformationSolver::print_energies_after_transform(Eigen::Matrix3d A){
+    // VertexData<Vector3> transformed_points(*mesh);
+    DenseMatrix<double> mat_transformed_points = vertex_data_to_matrix(old_geometry->inputVertexPositions) * A.transpose();
+    // for (Vertex v: mesh->vertices()){
+    //     transformed_points[v] = vec_to_GC_vec3(mat_transformed_points.row(v.getIndex()));
+    // }
+    FaceData<Eigen::Matrix2d> rest_membrane_I_inverted = get_membrane_rest_tensors_inverted();
+    old_geometry->requireFaceAreas();
+    FaceData<double> old_face_areas = old_geometry->faceAreas;
+
+    old_geometry->requireEdgeLengths();
+    double initial_mean_edge_len = old_geometry->edgeLengths.toVector().mean();
+    old_geometry->unrequireEdgeLengths();
+    printf(" pre computing rest constants\n");
+    old_geometry->refreshQuantities();
+    old_geometry->requireEdgeDihedralAngles();
+    EdgeData<double> rest_dihedral_angles = old_geometry->edgeDihedralAngles;
+    old_geometry->unrequireEdgeDihedralAngles();
+    EdgeData<double> rest_bending_constant = get_bending_rest_constants();
+
+    // bending func tinyAD
+    auto bendingEnergy_func = get_tinyAD_bending_function(rest_bending_constant, rest_dihedral_angles);
+
+    // membrane func tinyAD
+    auto membraneEnergy_func = get_tinyAD_membrane_function(rest_membrane_I_inverted, old_face_areas);
+    Eigen::VectorXd x = tinyAD_flatten(mat_transformed_points);
+    auto [membrane_f, membrane_g, membrane_H_proj] = membraneEnergy_func.eval_with_hessian_proj(x); //
+    auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x); //
+    
+    TINYAD_DEBUG_OUT("\n\t\t membrane energy = " << membrane_f <<
+                     ": bending= " << bending_f);
 }
 
 
@@ -810,7 +856,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     });
 
     TinyAD::LinearSolver solver;
-    printf(" starting opt\n");
+    // printf(" starting opt\n");
     
     // some parameters
     double convergence_eps = 1e-7;
@@ -866,7 +912,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
             assign_closest_vertices(tmp_geometry, true);
         }
         
-        printf(" finding CP terms\n");
+        // printf(" finding CP terms\n");
 
         // CP stuff; splits shouldnt affect energy
         CP_energy = closest_point_energy(tmp_geometry); // maeking sure subdivision has gone right
@@ -875,13 +921,13 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         Eigen::SparseMatrix<double> H_CP = A_CP.transpose() * A_CP;
         
         // bending stuff
-        printf(" bending Hessian eval\n ");
+        // printf(" bending Hessian eval\n ");
         auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x); //
-        printf(" membrane Hessian eval\n ");
+        // printf(" membrane Hessian eval\n ");
         auto [membrane_f, membrane_g, membrane_H_proj] = membraneEnergy_func.eval_with_hessian_proj(x); //
         
         // barrier stuff
-        printf(" finding Barrier terms\n");
+        // printf(" finding Barrier terms\n");
         DenseMatrix<double> x_in_dense_format = vertex_data_to_matrix(tmp_geometry->inputVertexPositions);
         auto [barrier_energy, barrier_grad, barrier_hessian] = get_log_barrier_stuff(x_in_dense_format, Vector<double>::Ones(mesh->nVertices())); // thank u new c++
         Eigen::SparseMatrix<double> barrier_H = tinyADify_barrier_hess(barrier_hessian);
@@ -893,7 +939,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         double total_energy = bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy + barrier_lambda * barrier_energy;
 
         TINYAD_DEBUG_OUT("\t- Energy in iter " << i << ": bending= " << bending_f << 
-                            "\n\t\t\t\t   membrane  = " << membrane_f <<
+                            "\n\t\t\t\tmembrane  = " << membrane_lambda << " * " << membrane_f <<
                             "\n\t\t\t\tCP  = " << CP_lambda << " * "<< CP_energy<< 
                             "\n\t\t\t\tbarr= " << barrier_lambda << " * "<< barrier_energy<< 
                             "\n\t\t\t\t\t total:" << total_energy);
@@ -904,14 +950,27 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         
         Eigen::VectorXd old_x = x;
         x = TinyAD::line_search(x, d, total_energy, total_g,
-                                [&] (const Eigen::VectorXd curr_x) {
+                                [&] (const Eigen::VectorXd curr_x, bool print = false) {
+                                    
                                     if (!check_feasibility(unflat_tinyAD(curr_x)))
                                         return std::numeric_limits<double>::infinity();
-                                    return bendingEnergy_func.eval(curr_x) + 
-                                            CP_lambda * closest_point_energy(curr_x) + 
-                                            barrier_lambda * get_log_barrier_energy(unflat_tinyAD(curr_x));
+                                    
+                                    double bending_e = bendingEnergy_func.eval(curr_x),
+                                           membrane_e = membraneEnergy_func.eval(curr_x),
+                                           CP_e = closest_point_energy(curr_x),
+                                           log_barr_e = get_log_barrier_energy(unflat_tinyAD(curr_x));
+                                    double f_new = bending_e + membrane_lambda * membrane_e + CP_lambda * CP_e + barrier_lambda * log_barr_e;
+                                    
+                                    if (print)
+                                        TINYAD_WARNING("$$$$ Energies:"<<
+                                                        "\n\t\t\t\t bending= " << bending_e << 
+                                                        "\n\t\t\t\tmembrane  = " << membrane_lambda << membrane_e <<
+                                                        "\n\t\t\t\tCP  = " << CP_lambda << " * "<< CP_e<< 
+                                                        "\n\t\t\t\tbarr= " << barrier_lambda << " * "<< log_barr_e<< 
+                                                        "\n\t\t\t\t\t total:" << f_new);
+                                    return f_new;
                                     },
-                                0.5, 0.9, 100, 0.); // no clue whats good here for armijo constant; proly nothing since non-linear stuff happening
+                                0.5, 0.9, 200, 0.); // no clue whats good here for armijo constant; proly nothing since non-linear stuff happening
                               //smax, decay, max_iter, armijo constant
         
         // update tmp geometry
@@ -922,7 +981,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         // visuals
         if (visual_per_step != 0){
             if (i % visual_per_step == 0){
-                printf(" visualizing step %d\n", i);
+                // printf(" visualizing step %d\n", i);
                 auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
                 tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
                 tmp_PSmesh->setEdgeWidth(1.);
@@ -932,15 +991,14 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
             }
         }
         
+        double step_norm = (x - old_x).norm();
+        printf(" step norm is %9f\n", step_norm);
         // scheduled weights
         barrier_lambda *= barrier_decay;
         CP_lambda *= CP_mu;
-        double step_norm = (x - old_x).norm();
-        printf(" step norm is %9f\n", step_norm);
         // if (step_norm < convergence_eps)
         //     break;
     }
-    // polyscope::show();
     DenseMatrix<double> new_points_mat = unflat_tinyAD(x); 
     return new_points_mat;
 }

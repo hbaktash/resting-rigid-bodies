@@ -96,6 +96,10 @@ class VisualUtils{
         void visualize_edge_stability();
         void visualize_face_stability();
         void visualize_colored_polyhedra(FaceData<Vector3> face_colors);
+
+        void visualize_all_stable_orientations();
+
+
         // void draw_arc_on_sphere();
         // void draw_arc_network_on_sphere();
         // void draw_arc_network_on_lifted_suface();
