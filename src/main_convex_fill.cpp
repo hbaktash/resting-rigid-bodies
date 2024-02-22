@@ -108,7 +108,7 @@ int fair_sides_count = 6; // for optimization
 InverseSolver* inverseSolver;
 float step_size = 0.01,
       step_size2 = 0.01,
-      step_size3 = 0.167;
+      step_size3 = 0.1; // 0.167 small_bunny
 float stable_normal_update_thresh = -1;
 int ARAP_max_iters = 10;
 
@@ -119,13 +119,14 @@ bool animate = false,
 float dice_search_decay = 0.95;
 
 float scale_for_feasi = 2.;
-float membrane_lambda_exp = 0.2,
+float membrane_lambda_exp = 1.5,
+      bending_lambda_exp = 0.,
       CP_lambda_exp = 1.,
-      CP_mu = 1.1,
-      refinement_CP_threshold = 0.3,
-      barrier_lambda_exp = 1.,
-      barrier_mu = 0.8;
-int filling_max_iter = 200;
+      CP_mu = 1.2,
+      refinement_CP_threshold = 0.1,
+      barrier_lambda_exp = -4.,
+      barrier_mu = 0.95;
+int filling_max_iter = 100;
 int hull_opt_steps = 50;
 
 // test energies stuff
@@ -231,10 +232,11 @@ void init_convex_shape_to_fill(std::string poly_str, bool triangulate = true){
 void initialize_deformation_params(DeformationSolver *deformation_solver){
   deformation_solver->one_time_CP_assignment = one_time_CP_assignment;
   deformation_solver->refinement_CP_threshold = refinement_CP_threshold;
+  deformation_solver->bending_lambda = pow(10, bending_lambda_exp);
   deformation_solver->membrane_lambda = pow(10, membrane_lambda_exp);
   deformation_solver->CP_lambda = pow(10, CP_lambda_exp);
   deformation_solver->CP_mu = CP_mu;
-  deformation_solver->barrier_init_lambda = pow(10, barrier_lambda_exp);
+  deformation_solver->barrier_init_lambda = pow(10, barrier_lambda_exp) * (1./sqrt(mesh->nVertices()));
   deformation_solver->barrier_decay = barrier_mu;
   deformation_solver->filling_max_iter = filling_max_iter;  
 }
@@ -315,7 +317,7 @@ void update_hull_of_hull(VertexData<Vector3> positions){
 // hull update stuff
 double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver *fwd_solver, bool frozen_G){
   printf(" ---- hull update line search ----\n");
-  polyscope::getSurfaceMesh("init hull mesh")->setEnabled(true);
+  if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(true);
   double grad_norm2 = 0.;
   for (Vector3 v3: grad.toVector())
     grad_norm2 += v3.norm2();
@@ -552,11 +554,8 @@ void version2_dice_pipeline(size_t step_count = 1){
 
 
   polyscope::warning(" dice enrgy search done!", " deforming initial shape");
-  polyscope::getSurfaceMesh("pipe2 tmp sol")->setEnabled(false);
-  polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
-  polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
-  polyscope::getPointCloud("test point cloud")->setEnabled(false);
-  polyscope::getCurveNetwork("stable regions on polyhedra")->setEnabled(false);
+  polyscope::removeAllStructures();
+  gm_is_drawn = false;
   // Register the mesh with polyscope
   polyscope::SurfaceMesh *psHullFillMesh = polyscope::registerSurfaceMesh(
     "fillable hull", tmp_solver->inputGeometry->inputVertexPositions, tmp_solver->inputMesh->getFaceVertexList());
@@ -597,6 +596,8 @@ void version2_dice_pipeline(size_t step_count = 1){
   final_solver->initialize_pre_computes();
   tmp_bnd_builder = new BoundaryBuilder(final_solver);
   tmp_bnd_builder->build_boundary_normals();
+  vis_utils = VisualUtils(final_solver);
+  visualize_gauss_map();
   update_visuals_with_G(final_solver, tmp_bnd_builder);
   printf(" good G probabilities:\n");
   tmp_bnd_builder->print_area_of_boundary_loops();
@@ -663,7 +664,8 @@ void myCallback() {
   }
   if (ImGui::Checkbox("one time CP assignment", &one_time_CP_assignment)) deformationSolver->one_time_CP_assignment = one_time_CP_assignment;
   if (ImGui::SliderFloat("refinement CP threshold ", &refinement_CP_threshold, 0., 1.)) deformationSolver->refinement_CP_threshold = refinement_CP_threshold;
-  if (ImGui::SliderFloat("membrane lambda", &membrane_lambda_exp, -5., 5.)) deformationSolver->membrane_lambda = pow(10, membrane_lambda_exp);
+  if (ImGui::SliderFloat("bending lambda log10/initial value", &bending_lambda_exp, -5., 5.)) deformationSolver->bending_lambda = pow(10, bending_lambda_exp);
+  if (ImGui::SliderFloat("membrane lambda log10/initial value", &membrane_lambda_exp, -5., 5.)) deformationSolver->membrane_lambda = pow(10, membrane_lambda_exp);
   if (ImGui::SliderFloat("CP lambda log10/initial value", &CP_lambda_exp, 0., 5.)) deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
   if (ImGui::SliderFloat("CP growth mu ", &CP_mu, 1., 1.5)) deformationSolver->CP_mu = CP_mu;
   if (ImGui::SliderFloat("Barrier lambda log10/initial value", &barrier_lambda_exp, -10., 5.)) deformationSolver->barrier_init_lambda = pow(10, barrier_lambda_exp);
@@ -748,6 +750,7 @@ int main(int argc, char **argv) {
       animate = false;
     }
     if (v2_dice_animate){
+      // polyscope::removeAllStructures();
       version2_dice_pipeline(hull_opt_steps);
       v2_dice_animate = false;
     }

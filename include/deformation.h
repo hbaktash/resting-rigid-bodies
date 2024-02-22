@@ -81,7 +81,8 @@ class DeformationSolver{
 
        bool one_time_CP_assignment = false;
        double refinement_CP_threshold = 0.5;
-       double membrane_lambda = 0.1;
+       double bending_lambda = 1e0,
+              membrane_lambda = 1e2;
        double CP_lambda = 10.0,
               CP_mu = 1.1; // grow the CP lambda; since we want it to be zero in the end
        double barrier_init_lambda = 10.,
@@ -103,8 +104,7 @@ class DeformationSolver{
        VertexData<Vector3> bending_energy_gradient(VertexPositionGeometry *new_geometry);
        // hessian of bending energy
        // DenseMatrix<double> bending_energy_hessian(VertexPositionGeometry *new_geometry);
-       auto get_tinyAD_bending_function(EdgeData<double> &rest_constants, EdgeData<double> &rest_dihedral_angles); // TinyAD::ScalarFunction<3, >
-       auto get_tinyAD_membrane_function(FaceData<Eigen::Matrix2d> &rest_tensors_inverted, FaceData<double> &rest_face_areas); // TinyAD::ScalarFunction<3, >
+       
 
        // closest point energy
        void assign_closest_vertices(VertexPositionGeometry *new_geometry, bool allow_multi_assignment = true);
@@ -124,14 +124,24 @@ class DeformationSolver{
        bool check_feasibility(DenseMatrix<double> new_pos_mat);
        double get_log_barrier_energy(DenseMatrix<double> new_pos_mat);
 
-       // rest geometry constants for bending
-       EdgeData<double> get_bending_rest_constants();
-       FaceData<Eigen::Matrix2d> get_membrane_rest_tensors_inverted();
+       // rest geometry constants for elastic energies
+       EdgeData<double> rest_dihedral_angles,
+                        rest_bending_constant;
+       FaceData<Eigen::Matrix2d> rest_membrane_I_inverted;
+       FaceData<double> rest_face_areas;
+
+       void update_bending_rest_constants();
+       void update_membrane_rest_constants();
        
+       auto get_tinyAD_bending_function(); // EdgeData<double> &rest_constants, EdgeData<double> &rest_dihedral_angles
+       auto get_tinyAD_membrane_function(); // FaceData<Eigen::Matrix2d> &rest_tensors_inverted, FaceData<double> &rest_face_areas
+       auto get_tinyAD_barrier_function();
+
        // solver
        DenseMatrix<double> solve_for_bending(int visual_per_step = 0);
        // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
        void print_energies_after_transform(Eigen::Matrix3d A);
+       void test_my_barrier_vs_tinyAD();
 };
 
 
