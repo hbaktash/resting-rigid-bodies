@@ -108,6 +108,7 @@ Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorX
     model.set(GRB_IntParam_Method, -1);
     model.setObjective(objective, GRB_MINIMIZE);
     // model.setObjectiveN(objective, 0, 1, 1); // main objective
+    // model.set(GRB_IntParam_LogToConsole, 0);
     model.update();
     //----------------------------------------------
     // 4. solve problem

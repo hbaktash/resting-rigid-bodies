@@ -94,7 +94,7 @@ bool compute_global_G_effect = true,
      deform_after = true,
      frozen_G = false,
      structured_opt = true,
-     dynamic_remesh = false,
+     dynamic_remesh = true,
      always_update_structure = true,
      with_hull_projection = false,
      first_time = false;
@@ -114,21 +114,24 @@ float stable_normal_update_thresh = -1;
 int ARAP_max_iters = 10;
 
 // deformation
+float scale_for_feasi = 2.;
 DeformationSolver *deformationSolver;
 bool animate = false,
      v2_dice_animate = false;
 float dice_search_decay = 0.95;
 
-float scale_for_feasi = 2.;
-float membrane_lambda_exp = 1.5,
-      bending_lambda_exp = 0.,
+float init_bending_lambda_exp = 0.,
+      final_bending_lambda_exp = 2.,
+      init_membrane_lambda_exp = 3.,
+      final_membrane_lambda_exp = 0.,
+      init_CP_lambda_exp = 1.,
+      final_CP_lambda_exp = 7.,
+      final_barrier_lambda_exp = -4.,
+      init_barrier_lambda_exp = -8.,
       reg_lambda_exp = -3.,
-      CP_lambda_exp = 1.,
-      CP_mu = 1.2,
-      refinement_CP_threshold = 0.1,
-      barrier_lambda_exp = -4.,
-      barrier_mu = 0.95;
-int filling_max_iter = 100;
+      internal_p = 0.91,
+      refinement_CP_threshold = 0.1;
+int filling_max_iter = 10;
 int hull_opt_steps = 50;
 
 // test energies stuff
@@ -138,7 +141,7 @@ float row2[3] = {0.,0.,1.};
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc"), std::string("mark_gomboc")};
-std::string all_polygons_current_item = "sliced tet",
+std::string all_polygons_current_item = "small_bunny",
             all_polygons_current_item2 = "tet";
 static const char* all_polygons_current_item_c_str = "bunnylp";
 
@@ -234,14 +237,19 @@ void init_convex_shape_to_fill(std::string poly_str, bool triangulate = true){
 void initialize_deformation_params(DeformationSolver *deformation_solver){
   deformationSolver->dynamic_remesh = dynamic_remesh;
   deformation_solver->refinement_CP_threshold = refinement_CP_threshold;
-  deformation_solver->bending_lambda = pow(10, bending_lambda_exp);
-  deformation_solver->reg_lambda = pow(10, reg_lambda_exp);
-  deformation_solver->membrane_lambda = pow(10, membrane_lambda_exp);
-  deformation_solver->CP_lambda = pow(10, CP_lambda_exp);
-  deformation_solver->CP_mu = CP_mu;
-  deformation_solver->barrier_init_lambda = pow(10, barrier_lambda_exp) * (1./sqrt(mesh->nVertices()));
-  deformation_solver->barrier_decay = barrier_mu;
   deformation_solver->filling_max_iter = filling_max_iter;  
+  
+  deformationSolver->init_bending_lambda = pow(10, init_bending_lambda_exp);
+  deformationSolver->final_bending_lambda = pow(10, final_bending_lambda_exp);
+  deformationSolver->init_membrane_lambda = pow(10, init_membrane_lambda_exp);
+  deformationSolver->final_membrane_lambda = pow(10, final_membrane_lambda_exp);
+  deformationSolver->init_CP_lambda = pow(10, init_CP_lambda_exp);
+  deformationSolver->final_CP_lambda = pow(10, final_CP_lambda_exp);
+  deformationSolver->final_barrier_lambda = pow(10, final_barrier_lambda_exp);
+  deformationSolver->init_barrier_lambda = pow(10, init_barrier_lambda_exp);
+  deformation_solver->internal_growth_p = internal_p;
+  
+  deformation_solver->reg_lambda = pow(10, reg_lambda_exp);
 }
 
 void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
@@ -374,115 +382,115 @@ double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver *fwd_so
 } 
 
 
-void take_uni_mass_opt_vertices_step(bool frozen_G = false){
-  if (!frozen_G){
-    printf("finding uniform mass\n");
-    forwardSolver->set_uniform_G();
-  }
-  printf("initalize precomputes\n");
-  forwardSolver->initialize_pre_computes();
-  printf("finding vertex derivatives\n");
-  inverseSolver->find_uni_mass_d_pf_dv(frozen_G);
-  printf(" vertex derivatives found!\n");
-  if (structured_opt){ // if updating the flow structure
-    boundary_builder->build_boundary_normals(); // face-last-face is called 
-    // boundary_builder->print_area_of_boundary_loops();
-    if (first_time || always_update_structure){
-      inverseSolver->flow_structure = forwardSolver->face_last_face;
-      if (first_time) stable_normal_update_thresh = -1.;
-      else stable_normal_update_thresh = 0.1;
-      first_time = false;
-    }
-  }
-  printf(" finding total per vertex derivatives\n");
-  VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt, stable_normal_update_thresh);
-  printf(" total per vertex derivatives found!\n");
-  double opt_step_size = hull_update_line_search(total_uni_mass_vertex_grads, forwardSolver, frozen_G);
+// void take_uni_mass_opt_vertices_step(bool frozen_G = false){
+//   if (!frozen_G){
+//     printf("finding uniform mass\n");
+//     forwardSolver->set_uniform_G();
+//   }
+//   printf("initalize precomputes\n");
+//   forwardSolver->initialize_pre_computes();
+//   printf("finding vertex derivatives\n");
+//   inverseSolver->find_uni_mass_d_pf_dv(frozen_G);
+//   printf(" vertex derivatives found!\n");
+//   if (structured_opt){ // if updating the flow structure
+//     boundary_builder->build_boundary_normals(); // face-last-face is called 
+//     // boundary_builder->print_area_of_boundary_loops();
+//     if (first_time || always_update_structure){
+//       inverseSolver->flow_structure = forwardSolver->face_last_face;
+//       if (first_time) stable_normal_update_thresh = -1.;
+//       else stable_normal_update_thresh = 0.1;
+//       first_time = false;
+//     }
+//   }
+//   printf(" finding total per vertex derivatives\n");
+//   VertexData<Vector3> total_uni_mass_vertex_grads = inverseSolver->find_uni_mass_total_vertex_grads(structured_opt, stable_normal_update_thresh);
+//   printf(" total per vertex derivatives found!\n");
+//   double opt_step_size = hull_update_line_search(total_uni_mass_vertex_grads, forwardSolver, frozen_G);
 
-  polyscope::registerSurfaceMesh("pre-step hull", forwardSolver->hullGeometry->inputVertexPositions,
-                                                  forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
-  polyscope::registerSurfaceMesh("pre-step mesh", forwardSolver->inputGeometry->inputVertexPositions,
-                                                  forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
+//   polyscope::registerSurfaceMesh("pre-step hull", forwardSolver->hullGeometry->inputVertexPositions,
+//                                                   forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
+//   polyscope::registerSurfaceMesh("pre-step mesh", forwardSolver->inputGeometry->inputVertexPositions,
+//                                                   forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
   
-  // PC
-  // polyscope::PointCloud* pre_pc = polyscope::registerPointCloud("pre-step hull points", forwardSolver->hullGeometry->inputVertexPositions);
-  // pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1., false);
-  // pre_pc->setPointColor(glm::vec3({0.8,0.1, 0.1}));
-  // pre_pc->setEnabled(false);
+//   // PC
+//   // polyscope::PointCloud* pre_pc = polyscope::registerPointCloud("pre-step hull points", forwardSolver->hullGeometry->inputVertexPositions);
+//   // pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1., false);
+//   // pre_pc->setPointColor(glm::vec3({0.8,0.1, 0.1}));
+//   // pre_pc->setEnabled(false);
   
-  if (deform_after){
-    if (true){ // new bending stuff
-      // forwardSolver's hull mesh and geometry updated
-      update_hull_of_hull(forwardSolver->hullGeometry->inputVertexPositions 
-                          + total_uni_mass_vertex_grads * opt_step_size); // updates hull mesh and geometry
-      polyscope::registerSurfaceMesh("pree-deform hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                                              forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
+//   if (deform_after){
+//     if (true){ // new bending stuff
+//       // forwardSolver's hull mesh and geometry updated
+//       update_hull_of_hull(forwardSolver->hullGeometry->inputVertexPositions 
+//                           + total_uni_mass_vertex_grads * opt_step_size); // updates hull mesh and geometry
+//       polyscope::registerSurfaceMesh("pree-deform hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
+//                                                               forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
 
-      // deforming
-      deformationSolver = new DeformationSolver(mesh, inverseSolver->initial_geometry, // TODO: or use the ex inputGeometry?
-                                                forwardSolver->hullMesh, forwardSolver->hullGeometry);   
-      initialize_deformation_params(deformationSolver);
+//       // deforming
+//       deformationSolver = new DeformationSolver(mesh, inverseSolver->initial_geometry, // TODO: or use the ex inputGeometry?
+//                                                 forwardSolver->hullMesh, forwardSolver->hullGeometry);   
+//       initialize_deformation_params(deformationSolver);
 
-      DenseMatrix<double> new_points = deformationSolver->solve_for_bending(1);
-      for (Vertex v: forwardSolver->inputMesh->vertices())
-        forwardSolver->inputGeometry->inputVertexPositions[v] = vec_to_GC_vec3(new_points.row(v.getIndex()));
-    }
-    else if (false){ // old ARAP stuff
-      printf("update hard correspondence\n");
-      forwardSolver->update_hull_points_correspondence(forwardSolver->hullGeometry->inputVertexPositions 
-                                                        + total_uni_mass_vertex_grads * opt_step_size, 
-                                                        inverseSolver->initial_geometry->inputVertexPositions);
+//       DenseMatrix<double> new_points = deformationSolver->solve_for_bending(1);
+//       for (Vertex v: forwardSolver->inputMesh->vertices())
+//         forwardSolver->inputGeometry->inputVertexPositions[v] = vec_to_GC_vec3(new_points.row(v.getIndex()));
+//     }
+//     else if (false){ // old ARAP stuff
+//       printf("update hard correspondence\n");
+//       forwardSolver->update_hull_points_correspondence(forwardSolver->hullGeometry->inputVertexPositions 
+//                                                         + total_uni_mass_vertex_grads * opt_step_size, 
+//                                                         inverseSolver->initial_geometry->inputVertexPositions);
       
-      VertexData<Vector3> trivial_updates;
-      trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * opt_step_size);
-      auto new_positions = forwardSolver->inputGeometry->inputVertexPositions + trivial_updates;
-      polyscope::registerSurfaceMesh("pre-ARAP mesh", new_positions,
-                                                  forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
-      // update indexing for interior vertices
+//       VertexData<Vector3> trivial_updates;
+//       trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * opt_step_size);
+//       auto new_positions = forwardSolver->inputGeometry->inputVertexPositions + trivial_updates;
+//       polyscope::registerSurfaceMesh("pre-ARAP mesh", new_positions,
+//                                                   forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
+//       // update indexing for interior vertices
 
 
-      printf("updating interior positions\n");
-      VertexData<Vector3> updates;
-      if (forwardSolver->hullMesh->nVertices() == forwardSolver->inputMesh->nVertices()) // no interior vertices
-        updates = trivial_updates;
-      else {
-        // updates = inverseSolver->laplace_update_positions(new_positions);
-        updates = inverseSolver->ARAP_update_positions(new_positions);
-        // updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
-        // updates = inverseSolver->diffusive_update_positions(total_uni_mass_vertex_grads * step_size3);
-      }
-      forwardSolver->inputGeometry->inputVertexPositions += updates;
-    }
-  }
-  else {
-    VertexData<Vector3> trivial_updates;
-    trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * opt_step_size);
-    forwardSolver->inputGeometry->inputVertexPositions = forwardSolver->inputGeometry->inputVertexPositions + trivial_updates;
-  }
-  polyscope::registerSurfaceMesh("post-deform pre-hull-update hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                 forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
-  forwardSolver->update_convex_hull(with_hull_projection);
-  // update hull with new positions
+//       printf("updating interior positions\n");
+//       VertexData<Vector3> updates;
+//       if (forwardSolver->hullMesh->nVertices() == forwardSolver->inputMesh->nVertices()) // no interior vertices
+//         updates = trivial_updates;
+//       else {
+//         // updates = inverseSolver->laplace_update_positions(new_positions);
+//         updates = inverseSolver->ARAP_update_positions(new_positions);
+//         // updates = inverseSolver->greedy_update_positions(total_uni_mass_vertex_grads * step_size3);
+//         // updates = inverseSolver->diffusive_update_positions(total_uni_mass_vertex_grads * step_size3);
+//       }
+//       forwardSolver->inputGeometry->inputVertexPositions += updates;
+//     }
+//   }
+//   else {
+//     VertexData<Vector3> trivial_updates;
+//     trivial_updates = inverseSolver->trivial_update_positions(total_uni_mass_vertex_grads * opt_step_size);
+//     forwardSolver->inputGeometry->inputVertexPositions = forwardSolver->inputGeometry->inputVertexPositions + trivial_updates;
+//   }
+//   polyscope::registerSurfaceMesh("post-deform pre-hull-update hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
+//                                  forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
+//   forwardSolver->update_convex_hull(with_hull_projection);
+//   // update hull with new positions
   
-  polyscope::registerSurfaceMesh("post-deformation mesh", forwardSolver->inputGeometry->inputVertexPositions,
-                                 forwardSolver->inputMesh->getFaceVertexList());
-  polyscope::registerSurfaceMesh("post-deform & hull update hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
-                                 forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
+//   polyscope::registerSurfaceMesh("post-deformation mesh", forwardSolver->inputGeometry->inputVertexPositions,
+//                                  forwardSolver->inputMesh->getFaceVertexList());
+//   polyscope::registerSurfaceMesh("post-deform & hull update hull mesh", forwardSolver->hullGeometry->inputVertexPositions,
+//                                  forwardSolver->hullMesh->getFaceVertexList())->setEnabled(false);
   
-  // PC
-  // polyscope::PointCloud* post_pc = polyscope::registerPointCloud("post-step hull points", forwardSolver->hullGeometry->inputVertexPositions);
-  // pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1., false);
-  // pre_pc->setPointColor(glm::vec3({0.1,0.1, 0.8}));
-  if (!frozen_G){
-    forwardSolver->set_uniform_G();
-    G = forwardSolver->get_G();
-  }
-  update_solver_and_boundaries();
-  update_visuals_with_G();
-  boundary_builder->print_area_of_boundary_loops();
-  printf(" fair dice energy: %f\n", boundary_builder->get_fair_dice_energy(fair_sides_count));
-  // update_visuals_with_G();
-}
+//   // PC
+//   // polyscope::PointCloud* post_pc = polyscope::registerPointCloud("post-step hull points", forwardSolver->hullGeometry->inputVertexPositions);
+//   // pre_pc->setPointRadius(vis_utils.gm_pt_radi * 1., false);
+//   // pre_pc->setPointColor(glm::vec3({0.1,0.1, 0.8}));
+//   if (!frozen_G){
+//     forwardSolver->set_uniform_G();
+//     G = forwardSolver->get_G();
+//   }
+//   update_solver_and_boundaries();
+//   update_visuals_with_G();
+//   boundary_builder->print_area_of_boundary_loops();
+//   printf(" fair dice energy: %f\n", boundary_builder->get_fair_dice_energy(fair_sides_count));
+//   // update_visuals_with_G();
+// }
 
 
 void animate_convex_fill_deformation(ManifoldSurfaceMesh *_mesh, VertexPositionGeometry *_old_geometry,
@@ -665,17 +673,20 @@ void myCallback() {
     // TODO: check what should be done here to avoid the ugly bool trick
     // deformationSolver->solve_for_bending(1);
   }
-  if (ImGui::Checkbox("dynamic remesh", &dynamic_remesh)) deformationSolver->dynamic_remesh = dynamic_remesh;
-  if (ImGui::SliderFloat("refinement CP threshold ", &refinement_CP_threshold, 0., 1.)) deformationSolver->refinement_CP_threshold = refinement_CP_threshold;
-  if (ImGui::SliderFloat("bending lambda log10/initial value", &bending_lambda_exp, -5., 5.)) deformationSolver->bending_lambda = pow(10, bending_lambda_exp);
-  if (ImGui::SliderFloat("membrane lambda log10/initial value", &membrane_lambda_exp, -5., 5.)) deformationSolver->membrane_lambda = pow(10, membrane_lambda_exp);
-  if (ImGui::SliderFloat("reg lambda log10/initial value", &reg_lambda_exp, -5., 5.)) deformationSolver->reg_lambda = pow(10, reg_lambda_exp);
-  if (ImGui::SliderFloat("CP lambda log10/initial value", &CP_lambda_exp, 0., 5.)) deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
-  if (ImGui::SliderFloat("CP growth mu ", &CP_mu, 1., 1.5)) deformationSolver->CP_mu = CP_mu;
-  if (ImGui::SliderFloat("Barrier lambda log10/initial value", &barrier_lambda_exp, -10., 5.)) deformationSolver->barrier_init_lambda = pow(10, barrier_lambda_exp);
-  if (ImGui::SliderFloat("Barrier decay mu ", &barrier_mu, 0., 1.)) deformationSolver->barrier_decay = barrier_mu;
+  if (ImGui::SliderInt("filling iters", &filling_max_iter, 1, 300)) deformationSolver->filling_max_iter = filling_max_iter;
+  if (ImGui::Checkbox("dynamic remesh", &dynamic_remesh));
+  if (ImGui::SliderFloat("growth p", &internal_p, 0., 1.));
+  if (ImGui::SliderFloat("refinement CP threshold ", &refinement_CP_threshold, 0., 1.));
+  if (ImGui::SliderFloat("init bending lambda; log10", &init_bending_lambda_exp, -5., 5.));
+  if (ImGui::SliderFloat("final bending lambda; log10", &final_bending_lambda_exp, -5., 5.));
+  if (ImGui::SliderFloat("init membrane lambda; log10", &init_membrane_lambda_exp, -5., 5.));
+  if (ImGui::SliderFloat("final membrane lambda; log10", &final_membrane_lambda_exp, -5., 5.));
+  if (ImGui::SliderFloat("init CP lambda; log10", &init_CP_lambda_exp, -5., 10.));
+  if (ImGui::SliderFloat("final CP lambda; log10", &final_CP_lambda_exp, -5., 10.));
+  if (ImGui::SliderFloat("init barrier lambda; log10", &init_barrier_lambda_exp, -10., 5.));
+  if (ImGui::SliderFloat("final barrier lambda; log10", &final_barrier_lambda_exp, -10., 5.));
+  if (ImGui::SliderFloat("reg lambda; log10", &reg_lambda_exp, -5., 5.));
   
-  if (ImGui::SliderInt("filling iters", &filling_max_iter, 0, 400)) deformationSolver->filling_max_iter = filling_max_iter;
 
   if (ImGui::Button("uniform mass G")){
     G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
@@ -692,18 +703,18 @@ void myCallback() {
   }
 
   
-  if (ImGui::Button("take fair step (joint gradient)")) {
-    take_uni_mass_opt_vertices_step(frozen_G);
-  }
   if (ImGui::SliderFloat("starting step size", &step_size3, 0., 1.0));
   if (ImGui::SliderInt("fair dice side count", &fair_sides_count, 1, 10));
 
-  if (ImGui::Checkbox("deform after", &deform_after));
-  
-  if (ImGui::Checkbox("compute global G effect", &compute_global_G_effect)) inverseSolver->compute_global_G_effect = compute_global_G_effect;
-  if (ImGui::Checkbox("structured opt", &structured_opt));
-  if (ImGui::Checkbox("update structured at every step", &always_update_structure));
-  if (ImGui::Checkbox("decrease convex hull points", &with_hull_projection));
+  // // V3 stuff 
+  // if (ImGui::Button("take fair step (joint gradient)")) {
+  //   take_uni_mass_opt_vertices_step(frozen_G);
+  // }
+  // if (ImGui::Checkbox("deform after", &deform_after));
+  // if (ImGui::Checkbox("compute global G effect", &compute_global_G_effect)) inverseSolver->compute_global_G_effect = compute_global_G_effect;
+  // if (ImGui::Checkbox("structured opt", &structured_opt));
+  // if (ImGui::Checkbox("update structured at every step", &always_update_structure));
+  // if (ImGui::Checkbox("decrease convex hull points", &with_hull_projection));
   if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
 
   if (ImGui::Button("optimize hull (w.r.t. dice energy)")) {

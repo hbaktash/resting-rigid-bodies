@@ -72,11 +72,11 @@ class DeformationSolver{
        SparseMatrix<double> closest_point_flat_operator;
        size_t face_assignments = 0, edge_assignments = 0, vertex_assignments = 0;
 
-       bool dynamic_remesh = false;
+       bool dynamic_remesh = true;
        double refinement_CP_threshold = 0.5;
        double init_bending_lambda = 1e0,
-              final_bending_lambda = 1e2,
-              init_membrane_lambda = 1e2,
+              final_bending_lambda = 1e3,
+              init_membrane_lambda = 1e3,
               final_membrane_lambda = 1e0,
               init_CP_lambda = 1e1,
               final_CP_lambda = 1e9,
