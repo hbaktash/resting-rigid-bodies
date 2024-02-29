@@ -25,92 +25,6 @@
 
 #include "geometrycentral/numerical/linear_solvers.h"
 
-
-// vector stuff
-Eigen::Vector3d to_eigen(const geometrycentral::Vector3& _v){
-    return Eigen::Vector3d(_v.x, _v.y, _v.z);
-}
-
-geometrycentral::Vector3 to_geometrycentral(
-        const Eigen::Vector3d& _v) {
-    return geometrycentral::Vector3 { _v.x(), _v.y(), _v.z() };
-}
-
-Vector<double> tinyAD_flatten(DenseMatrix<double> mat){
-    size_t n = mat.rows();
-    Vector<double> ans(n*3);
-    for (size_t i = 0; i < n; i++){
-        for (size_t j = 0; j < 3; j++)
-            ans(3*i + j) = mat(i,j);
-    }
-    return ans;
-}
-
-DenseMatrix<double> unflat_tinyAD(Vector<double> flat_mat){
-    size_t n = flat_mat.size()/3;
-    DenseMatrix<double> mat(n, 3);
-    for (size_t i = 0; i < n; i++){
-        for (size_t j = 0; j < 3; j++)
-            mat.coeffRef(i,j) = flat_mat(3*i + j);
-    }
-    return mat;
-}
-
-SparseMatrix<double> tinyADify_barrier_hess(std::vector<DenseMatrix<double>> hessians){
-    size_t n = hessians.size();
-    std::vector<Eigen::Triplet<double>> tripletList;
-    tripletList.reserve(9*n);
-
-    for (size_t i = 0; i < n; i++){
-        DenseMatrix<double> hess_i = hessians[i];
-        for (size_t k = 0; k < 3; k++){
-            for (size_t l = 0; l < 3; l++)
-                tripletList.emplace_back(3 * i + k, 3 * i + l, hess_i(k, l));
-        }
-    }
-    Eigen::SparseMatrix<double> tinyADfied_hess(3*n, 3*n);
-    tinyADfied_hess.setFromTriplets(tripletList.begin(), tripletList.end());
-    return tinyADfied_hess;
-}
-
-
-Vector<double> vec32vec(Vector3 v){
-    Vector<double> ans(3);
-    ans[0] = v.x;
-    ans[1] = v.y;
-    ans[2] = v.z;
-    return ans;
-}
-
-Vector3 vec_to_GC_vec3(Vector<double> vec){
-    Vector3 ans;
-    ans.x = vec[0];
-    ans.y = vec[1];
-    ans.z = vec[2];
-    return ans;
-}
-
-DenseMatrix<double> vertex_data_to_matrix(VertexData<Vector3> positions){
-    size_t n = positions.getMesh()->nVertices();
-    DenseMatrix<double> mat(n, 3);
-    for (Vertex v: positions.getMesh()->vertices()){
-        Vector3 p = positions[v];
-        mat.row(v.getIndex()) = vec32vec(p);
-    }
-    return mat;
-}
-
-
-DenseMatrix<double> face_data_to_matrix(FaceData<Vector3> fdata){
-    size_t n = fdata.getMesh()->nFaces();
-    DenseMatrix<double> mat(n, 3);
-    for (Face f: fdata.getMesh()->faces()){
-        Vector3 p = fdata[f];
-        mat.row(f.getIndex()) = vec32vec(p);
-    }
-    return mat;
-}
-
 // Gradient stuff
 // formula source in header file
 Vector3 dihedral_angle_grad_G(Vector3 G, Vector3 A, Vector3 B, Vector3 C){
@@ -191,6 +105,9 @@ DeformationSolver::DeformationSolver(ManifoldSurfaceMesh *_mesh, VertexPositionG
     convex_geometry = _convex_geometry;
 }
 
+double DeformationSolver::get_scheduled_weight(double init_w, double final_w){
+    return final_w + (init_w - final_w) * internal_pt * internal_growth_p;
+}
 
 double DeformationSolver::bending_energy(VertexPositionGeometry *new_geometry){
     assert(new_geometry->mesh.nVertices() == mesh->nVertices()); // should be the same meshes actually
@@ -265,12 +182,16 @@ double DeformationSolver::closest_point_energy(VertexPositionGeometry *new_geome
     double energy = 0.;
     DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_geometry->inputVertexPositions),
                         convex_points_mat = vertex_data_to_matrix(convex_geometry->inputVertexPositions);
-    energy = (closest_point_operator*new_pos_mat - convex_points_mat).norm();
+    DenseMatrix<double> closest_assignments = closest_point_operator*new_pos_mat;
+    energy = (closest_assignments - convex_points_mat).norm();
+    // polyscope::registerPointCloud("closest assignments", closest_assignments);
+    // polyscope::show();
     // for (Vertex c_v: convex_mesh->vertices()){
     //     Vector3 c_p = convex_geometry->inputVertexPositions[c_v],
     //             closest_point = closest_point_assignment[c_v].interpolate(new_geometry->inputVertexPositions);
     //     energy += (c_p - closest_point).norm();
     // }
+    printf(" CP energy: %f \n", energy);
     return energy;
 }
 
@@ -343,10 +264,10 @@ void DeformationSolver::assign_closest_vertices(VertexPositionGeometry *new_geom
     }
     closest_point_operator.setFromTriplets(tripletList.begin(), tripletList.end());
     closest_point_flat_operator.setFromTriplets(flat_tripletList.begin(), flat_tripletList.end());
-    auto dp_cvs = polyscope::registerPointCloud(" double hit CVs ", double_hit_CVs);
-    auto dp_IPs = polyscope::registerPointCloud(" double hit interiors ", double_hit_IPs);
-    dp_cvs->setPointColor({0.8,0.3,0.3});
-    dp_IPs->setPointColor({0.1,0.1,0.9});
+    // auto dp_cvs = polyscope::registerPointCloud(" double hit CVs ", double_hit_CVs);
+    // auto dp_IPs = polyscope::registerPointCloud(" double hit interiors ", double_hit_IPs);
+    // dp_cvs->setPointColor({0.8,0.3,0.3});
+    // dp_IPs->setPointColor({0.1,0.1,0.9});
     printf("  ** stats for vertex-only CP: double hits %d \n", vertex_double_hits);
 }
 
@@ -833,7 +754,6 @@ void DeformationSolver::print_energies_after_transform(Eigen::Matrix3d A){
 
 DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     size_t num_var = 3 * mesh->nVertices();
-    
     old_geometry->refreshQuantities();
     old_geometry->requireEdgeLengths();
     double initial_mean_edge_len = old_geometry->edgeLengths.toVector().mean();
@@ -873,10 +793,27 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     
     // some parameters
     double convergence_eps = 1e-7;
-    double barrier_lambda = barrier_init_lambda;
+    double barrier_lambda = init_barrier_lambda,
+           bending_lambda = init_bending_lambda,
+           membrane_lambda = init_membrane_lambda,
+           CP_lambda = init_CP_lambda;
     bool do_barycentric = true;
 
     for (int i = 0; i < filling_max_iter; ++i) {
+        
+        // visuals
+        if (visual_per_step != 0){
+            if (i % visual_per_step == 0){
+                // printf(" visualizing step %d\n", i);
+                
+                auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
+                tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
+                tmp_PSmesh->setEdgeWidth(1.);
+                tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
+                tmp_PSmesh->setEnabled(true);
+                polyscope::frameTick();
+            }
+        }
         // assign closest points
         printf(" assigning  closest points\n");
         if (do_barycentric)
@@ -907,8 +844,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
             update_membrane_rest_constants();
             // membrane func tinyAD
             membraneEnergy_func = get_tinyAD_membrane_function();
-    
-    
+
             // re-build x; since the size has changed 
             x = bendingEnergy_func.x_from_data([&] (Vertex v) {
                 return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
@@ -922,103 +858,141 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         // printf(" finding CP terms\n");
 
         // CP stuff; splits shouldnt affect energy
-        CP_energy = closest_point_energy(tmp_geometry); // maeking sure subdivision has gone right
+        CP_energy = closest_point_energy(tmp_geometry); // making sure subdivision has gone right
+        Eigen::VectorXd x_cv_flat = tinyAD_flatten(vertex_data_to_matrix(convex_geometry->inputVertexPositions));
         Eigen::SparseMatrix<double> A_CP = closest_point_flat_operator;
-        Eigen::VectorX<double> CP_g = 2.*tinyAD_flatten(closest_point_energy_gradient(tmp_geometry));
-        Eigen::SparseMatrix<double> CP_H = A_CP.transpose() * A_CP;
+        Eigen::VectorX<double> CP_g = 2. * A_CP.transpose() * (A_CP * x - x_cv_flat);  // tinyAD_flatten(closest_point_energy_gradient(tmp_geometry));
+        Eigen::SparseMatrix<double> CP_H = 2. * A_CP.transpose() * A_CP;
         
+        // x - x_0 regularizer
+        // Eigen::VectorXd reg_g = Eigen::VectorXd::Zero(x.size());
+        Eigen::SparseMatrix<double> reg_H = 2.* identityMatrix<double>(x.size());
+        
+
+        // polyscope::registerPointCloud("closest assignment from flat mat", unflat_tinyAD(A_CP * x));
+        // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("CP grads", -unflat_tinyAD(CP_g))->setEnabled(true);
+        // polyscope::show();
         // bending stuff
-        // printf(" bending Hessian eval\n ");
+        printf(" bending Hessian eval\n ");
         auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x); //
-        // printf(" membrane Hessian eval\n ");
+        printf(" membrane Hessian eval\n ");
         auto [membrane_f, membrane_g, membrane_H_proj] = membraneEnergy_func.eval_with_hessian_proj(x); //
         
         // barrier stuff
-        auto [barrier_f, barrier_g, barrier_H] = barrierEnergy_func.eval_with_derivatives(x); //
+        // auto [barrier_f, barrier_g, barrier_H] = barrierEnergy_func.eval_with_derivatives(x); //
         
         // printf(" finding Barrier terms\n");
-        DenseMatrix<double> x_in_dense_format = vertex_data_to_matrix(tmp_geometry->inputVertexPositions);
-        auto [my_barrier_f, barrier_grad, barrier_hessian] = get_log_barrier_stuff(x_in_dense_format, Vector<double>::Ones(mesh->nVertices())); // thank u new c++
-        Eigen::SparseMatrix<double> my_barrier_H = tinyADify_barrier_hess(barrier_hessian);
-        Eigen::VectorX<double> my_barrier_g = tinyAD_flatten(barrier_grad);
+        // DenseMatrix<double> x_in_dense_format = vertex_data_to_matrix(tmp_geometry->inputVertexPositions);
+        // auto [my_barrier_f, barrier_grad, barrier_hessian] = get_log_barrier_stuff(x_in_dense_format, Vector<double>::Ones(mesh->nVertices())); // thank u new c++
+        // Eigen::SparseMatrix<double> my_barrier_H = tinyADify_barrier_hess(barrier_hessian);
+        // Eigen::VectorX<double> my_barrier_g = tinyAD_flatten(barrier_grad);
         // TODO: smarter scheduling?
           
-        Eigen::SparseMatrix<double> total_H = bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + CP_lambda * CP_H + barrier_lambda * barrier_H;
-        Eigen::VectorX<double> total_g = bending_lambda * bending_g + membrane_lambda * membrane_g + CP_lambda * CP_g + barrier_lambda * barrier_g;
-        double total_energy = bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy + barrier_lambda * barrier_f;
+        // Eigen::SparseMatrix<double> total_H = bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + CP_lambda * CP_H + barrier_lambda * barrier_H;
+        // Eigen::VectorX<double> total_g = bending_lambda * bending_g + membrane_lambda * membrane_g + CP_lambda * CP_g + barrier_lambda * barrier_g;
+        // double total_energy = bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy + barrier_lambda * barrier_f;
 
-        TINYAD_INFO(" my barr vs TinyAD" << 
-                    "\n\t\t\tenergies: " << my_barrier_f << ", " << barrier_f <<
-                    "\n\t\t\tgrads: " << my_barrier_g.isApprox(barrier_g) << " "<< (barrier_g.transpose()-my_barrier_g.transpose()).norm()<<
-                    "\n\t\t\thessians:" << my_barrier_H.isApprox(barrier_H) << " "<< (barrier_H - my_barrier_H).norm());
+        // TINYAD_INFO(" my barr vs TinyAD" << 
+        //             "\n\t\t\tenergies: " << my_barrier_f << ", " << barrier_f <<
+        //             "\n\t\t\tgrads: " << my_barrier_g.isApprox(barrier_g) << " "<< (barrier_g.transpose()-my_barrier_g.transpose()).norm()<<
+        //             "\n\t\t\thessians:" << my_barrier_H.isApprox(barrier_H) << " "<< (barrier_H - my_barrier_H).norm());
 
         TINYAD_DEBUG_OUT("\t- Energy in iter " << i << ": bending= " << bending_lambda << "*" << bending_f << 
                          "\n\t\t\t\t membrane  = " << membrane_lambda << " * " << membrane_f <<
-                         "\n\t\t\t\t CP        = " << CP_lambda << " * "<< CP_energy<< 
-                         "\n\t\t\t\t barr      = " << barrier_lambda << " * "<< barrier_f<< 
-                         "\n\t\t\t\t\t total: " << total_energy);
-        
-        // Eigen::VectorXd d = TinyAD::newton_direction(total_g, total_H, solver);
-        shiftDiagonal(barrier_H, 1e-7); // TODO
-        printf("testing barrier H\n");
-        // LinearSolver<double>
-        try {
-            PositiveDefiniteSolver<double> test_solver(barrier_H);
-        }
-        catch(const std::exception& e) {
-            std::cerr << "barrier H NOT ok\n"<< e.what() << '\n';
-        }
-        
-        shiftDiagonal(total_H, 1e-7); // TODO
-
-        PositiveDefiniteSolver<double> newton_solver(total_H);
-        Eigen::VectorXd d = newton_solver.solve(-total_g);
-        
+                         "\n\t\t\t\t CP        = " << CP_lambda << " * "<< CP_energy ); //<< 
+                        //  "\n\t\t\t\t barr      = " << barrier_lambda << " * "<< barrier_f<< 
+                        //  "\n\t\t\t\t\t total: " << total_energy);
         Eigen::VectorXd old_x = x;
-        x = TinyAD::line_search(x, d, total_energy, total_g,
-                                [&] (const Eigen::VectorXd curr_x, bool print = false) {
-                                    if (!check_feasibility(unflat_tinyAD(curr_x)))
-                                        return std::numeric_limits<double>::infinity();
-                                    double bending_e = bendingEnergy_func.eval(curr_x),
-                                           membrane_e = membraneEnergy_func.eval(curr_x),
-                                           CP_e = closest_point_energy(curr_x),
-                                           log_barr_e = get_log_barrier_energy(unflat_tinyAD(curr_x));
-                                    double f_new = bending_lambda * bending_e + membrane_lambda * membrane_e + CP_lambda * CP_e + barrier_lambda * log_barr_e;  
-                                    if (print)
-                                        TINYAD_WARNING("$$$$ Energies:"<<
-                                                        "\n\t\t\t\t bending= " << bending_lambda << "*" << bending_e << 
-                                                        "\n\t\t\t\tmembrane  = " << membrane_lambda << membrane_e <<
-                                                        "\n\t\t\t\tCP  = " << CP_lambda << " * "<< CP_e<< 
-                                                        "\n\t\t\t\tbarr= " << barrier_lambda << " * "<< log_barr_e<< 
-                                                        "\n\t\t\t\t\t total:" << f_new);
-                                    return f_new;
-                                    },
-                                0.5, 0.9, 200, 0.); // no clue whats good here for armijo constant; proly nothing since non-linear stuff happening
-                              //smax, decay, max_iter, armijo constant
+        x = solve_QP_with_ineq((bending_lambda  * bending_H_proj + 
+                                membrane_lambda * membrane_H_proj + 
+                                reg_lambda      * reg_H +
+                                CP_lambda       * CP_H)/2., //bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + 
+                                    bending_lambda  * (bending_g - bending_H_proj*x) + 
+                                    membrane_lambda * (membrane_g - membrane_H_proj*x) + 
+                                    reg_lambda      * (-2.*x) + 
+                                    CP_lambda       * (CP_g - CP_H*x), old_x, //
+                                constraint_matrix, constraint_rhs);
+        // // Eigen::VectorXd d = TinyAD::newton_direction(total_g, total_H, solver);
+        // shiftDiagonal(barrier_H, 1e-7); // TODO
+        // printf("testing barrier H\n");
+        // // LinearSolver<double>
+        // try {
+        //     PositiveDefiniteSolver<double> test_solver(barrier_H);
+        // }
+        // catch(const std::exception& e) {
+        //     std::cerr << "barrier H NOT ok\n"<< e.what() << '\n';
+        // }
+        
+        // shiftDiagonal(total_H, 1e-7); // TODO
+
+        // Solver<double> newton_solver1(total_H);
+        // Eigen::VectorXd d1 = newton_solver1.solve(-total_g);
+        
+        // PositiveDefiniteSolver<double> newton_solver(total_H);
+        // Eigen::VectorXd d = newton_solver.solve(-total_g);
+        // TINYAD_INFO(" resid: "<< (total_H * d + total_g).norm() << 
+        //             "\n resid1: "<< (total_H * d1 + total_g).norm() <<
+        //             "\n diff: "<< (d1 - d).norm());
+
+        // x = TinyAD::line_search(x, d, total_energy, total_g,
+        //                         [&] (const Eigen::VectorXd curr_x, bool print = false) {
+        //                             if (!check_feasibility(unflat_tinyAD(curr_x)))
+        //                                 return std::numeric_limits<double>::infinity();
+        //                             double bending_e = bendingEnergy_func.eval(curr_x),
+        //                                    membrane_e = membraneEnergy_func.eval(curr_x),
+        //                                    CP_e = closest_point_energy(curr_x),
+        //                                    log_barr_e = get_log_barrier_energy(unflat_tinyAD(curr_x));
+        //                             double f_new = bending_lambda * bending_e + membrane_lambda * membrane_e + CP_lambda * CP_e + barrier_lambda * log_barr_e;  
+        //                             if (print)
+        //                                 TINYAD_WARNING("$$$$ Energies:"<<
+        //                                                 "\n\t\t\t\t bending= " << bending_lambda << "*" << bending_e << 
+        //                                                 "\n\t\t\t\tmembrane  = " << membrane_lambda << membrane_e <<
+        //                                                 "\n\t\t\t\tCP  = " << CP_lambda << " * "<< CP_e<< 
+        //                                                 "\n\t\t\t\tbarr= " << barrier_lambda << " * "<< log_barr_e<< 
+        //                                                 "\n\t\t\t\t\t total:" << f_new);
+        //                             return f_new;
+        //                             },
+        //                         0.5, 0.9, 200, 0.); // no clue whats good here for armijo constant; proly nothing since non-linear stuff happening
+        //                       //smax, decay, max_iter, armijo constant
         
         // update tmp geometry
         bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) {
             tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
         });
-
-        // visuals
-        if (visual_per_step != 0){
-            if (i % visual_per_step == 0){
-                // printf(" visualizing step %d\n", i);
-                auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
-                tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
-                tmp_PSmesh->setEdgeWidth(1.);
-                tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
-                tmp_PSmesh->setEnabled(true);
-                polyscope::frameTick();
-            }
-        }
         
         double step_norm = (x - old_x).norm();
         printf(" step norm is %9f\n", step_norm);
+
+        // // dynamic remesh 
+        if (dynamic_remesh){
+            // joint_remesh(mesh, old_geometry, tmp_geometry, initial_mean_edge_len);
+            split_only_remesh(mesh, old_geometry, tmp_geometry, initial_mean_edge_len);
+
+            barrierEnergy_func = get_tinyAD_barrier_function();
+            update_bending_rest_constants();
+            bendingEnergy_func = get_tinyAD_bending_function();
+            update_membrane_rest_constants();
+            membraneEnergy_func = get_tinyAD_membrane_function();
+            x = bendingEnergy_func.x_from_data([&] (Vertex v) {
+                return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
+            });
+        }
+        
         // scheduled weights
-        barrier_lambda *= barrier_decay;
-        CP_lambda *= CP_mu;
+        // if (step_norm < 0.05 && CP_energy > 0.05){
+        //     printf(" Cp increment\n");    
+        //     CP_lambda *= CP_mu;
+        // }
+        // else if (CP_energy < 0.05){
+        //     printf(" barrier decrement\n");
+        //     membrane_lambda *= CP_mu;
+        //     bending_lambda *= CP_mu;
+        //     barrier_lambda *= barrier_decay;
+        // }
+        barrier_lambda = get_scheduled_weight(init_barrier_lambda, final_barrier_lambda);
+        bending_lambda = get_scheduled_weight(init_bending_lambda, final_bending_lambda);
+        membrane_lambda = get_scheduled_weight(init_membrane_lambda, final_membrane_lambda);
+        CP_lambda = get_scheduled_weight(init_CP_lambda, final_CP_lambda);
         // if (step_norm < convergence_eps)
         //     break;
     }

@@ -35,6 +35,7 @@
 #include "markov_model.h"
 #include "inv_design.h"
 // #include "igl/arap.h"
+// #include "optimization.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -93,7 +94,7 @@ bool compute_global_G_effect = true,
      deform_after = true,
      frozen_G = false,
      structured_opt = true,
-     one_time_CP_assignment = false,
+     dynamic_remesh = false,
      always_update_structure = true,
      with_hull_projection = false,
      first_time = false;
@@ -121,6 +122,7 @@ float dice_search_decay = 0.95;
 float scale_for_feasi = 2.;
 float membrane_lambda_exp = 1.5,
       bending_lambda_exp = 0.,
+      reg_lambda_exp = -3.,
       CP_lambda_exp = 1.,
       CP_mu = 1.2,
       refinement_CP_threshold = 0.1,
@@ -230,9 +232,10 @@ void init_convex_shape_to_fill(std::string poly_str, bool triangulate = true){
 }
 
 void initialize_deformation_params(DeformationSolver *deformation_solver){
-  deformation_solver->one_time_CP_assignment = one_time_CP_assignment;
+  deformationSolver->dynamic_remesh = dynamic_remesh;
   deformation_solver->refinement_CP_threshold = refinement_CP_threshold;
   deformation_solver->bending_lambda = pow(10, bending_lambda_exp);
+  deformation_solver->reg_lambda = pow(10, reg_lambda_exp);
   deformation_solver->membrane_lambda = pow(10, membrane_lambda_exp);
   deformation_solver->CP_lambda = pow(10, CP_lambda_exp);
   deformation_solver->CP_mu = CP_mu;
@@ -662,10 +665,11 @@ void myCallback() {
     // TODO: check what should be done here to avoid the ugly bool trick
     // deformationSolver->solve_for_bending(1);
   }
-  if (ImGui::Checkbox("one time CP assignment", &one_time_CP_assignment)) deformationSolver->one_time_CP_assignment = one_time_CP_assignment;
+  if (ImGui::Checkbox("dynamic remesh", &dynamic_remesh)) deformationSolver->dynamic_remesh = dynamic_remesh;
   if (ImGui::SliderFloat("refinement CP threshold ", &refinement_CP_threshold, 0., 1.)) deformationSolver->refinement_CP_threshold = refinement_CP_threshold;
   if (ImGui::SliderFloat("bending lambda log10/initial value", &bending_lambda_exp, -5., 5.)) deformationSolver->bending_lambda = pow(10, bending_lambda_exp);
   if (ImGui::SliderFloat("membrane lambda log10/initial value", &membrane_lambda_exp, -5., 5.)) deformationSolver->membrane_lambda = pow(10, membrane_lambda_exp);
+  if (ImGui::SliderFloat("reg lambda log10/initial value", &reg_lambda_exp, -5., 5.)) deformationSolver->reg_lambda = pow(10, reg_lambda_exp);
   if (ImGui::SliderFloat("CP lambda log10/initial value", &CP_lambda_exp, 0., 5.)) deformationSolver->CP_lambda = pow(10, CP_lambda_exp);
   if (ImGui::SliderFloat("CP growth mu ", &CP_mu, 1., 1.5)) deformationSolver->CP_mu = CP_mu;
   if (ImGui::SliderFloat("Barrier lambda log10/initial value", &barrier_lambda_exp, -10., 5.)) deformationSolver->barrier_init_lambda = pow(10, barrier_lambda_exp);
@@ -722,6 +726,7 @@ void myCallback() {
     initialize_deformation_params(tmp_def);
     tmp_def->print_energies_after_transform(A);
   }
+  // DebugTextEncoding
 }
 
 

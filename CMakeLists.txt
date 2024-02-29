@@ -69,13 +69,20 @@ add_subdirectory(deps/qhull)
 # add_subdirectory(deps/bullet3)
 
 # SET(GUROBI_DIR "/Library/gurobi1100/macos_universal2")
-find_package(GUROBI REQUIRED)
+find_package(GUROBI)
 if (GUROBI_FOUND)
-  message(STATUS "Gurobi found at ${GUROBI_LIBRARY}")
+  message(STATUS "Gurobi found at ${GUROBI_USE_PRECOMPILED_CXX}")
 else ()
   message(STATUS "Gurobi not found!")
 endif ()
-include_directories(${GUROBI_INCLUDE_DIRS})
+# include_directories(${GUROBI_INCLUDE_DIRS})
+
+find_package(MOSEK)
+if (MOSEK_FOUND)
+  message(STATUS "MOSEK found at ${MOSEK_LIBRARY_DIR}")
+else ()
+  message(STATUS "MOSEK not found!")
+endif ()
 
 
 # == Build our project stuff
@@ -97,6 +104,7 @@ set(polyhedra_SRCS
   src/markov_model.cpp
   src/boundary_tools.cpp
   src/convex_hull.cpp
+  src/utils.cpp
 	# add any other source files here
 )
 
@@ -111,6 +119,7 @@ set(bullet_SRCS
   src/arc_algebra.cpp
   src/boundary_tools.cpp
   src/convex_hull.cpp
+  src/utils.cpp
   # add any other source files here
 )
 
@@ -128,6 +137,7 @@ set(inverse_SRCS
   src/convex_hull.cpp
   src/deformation.cpp
   src/remesh_tools.cpp
+  src/utils.cpp
 	# add any other source files here
 )
 
@@ -144,25 +154,27 @@ set(convex_fill
   src/convex_hull.cpp
   src/deformation.cpp
   src/remesh_tools.cpp
+  src/optimization.cpp
+  src/utils.cpp
 	# add any other source files here
 )
 
-set(paper_figs 
-  src/main_roll_figs.cpp
-  src/arc_algebra.cpp
-  src/forward3D.cpp
-  src/mesh_factory.cpp
-  src/geometry_utils.cpp
-  src/coloring.cpp
-  src/visual_utils.cpp
-  src/boundary_tools.cpp
-  src/inv_design.cpp
-  src/convex_hull.cpp
-  src/deformation.cpp
-  src/remesh_tools.cpp
+# set(paper_figs 
+#   src/main_roll_figs.cpp
+#   src/arc_algebra.cpp
+#   src/forward3D.cpp
+#   src/mesh_factory.cpp
+#   src/geometry_utils.cpp
+#   src/coloring.cpp
+#   src/visual_utils.cpp
+#   src/boundary_tools.cpp
+#   src/inv_design.cpp
+#   src/convex_hull.cpp
+#   src/deformation.cpp
+#   src/remesh_tools.cpp
 
-	# add any other source files here
-)
+# 	# add any other source files here
+# )
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 add_executable(polygons "${polygons_SRCS}")
@@ -197,6 +209,8 @@ target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
 target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
+target_include_directories(invDesign PUBLIC "${MOSEK_INCLUDE_DIRS}")
+target_link_directories(invDesign PUBLIC ${MOSEK_LIBRARY_DIR})
 target_link_libraries(invDesign PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
@@ -211,21 +225,21 @@ target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/includ
 target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
 target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
-target_link_libraries(convexFill PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
-# message(STATUS "${GUROBI_CXX_LIBRARY}")
-# message(STATUS "${GUROBI_CXX_DEBUG_LIBRARY}")
-# target_link_libraries(convexFill PUBLIC optimized ${GUROBI_CXX_LIBRARY} debug ${GUROBI_CXX_DEBUG_LIBRARY})
-# target_link_libraries(convexFill PUBLIC ${GUROBI_LIBRARY})
-
-# paper figure stuff
-add_executable(paper_figs "${paper_figs}")
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-# add the args.hxx project which we use for command line args
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
-target_link_libraries(paper_figs PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
+# target_include_directories(convexFill PUBLIC "${MOSEK_INCLUDE_DIRS}")
+# target_link_directories(convexFill PUBLIC ${MOSEK_LIBRARY_DIR})
+target_include_directories(convexFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
+# target_link_libraries(convexFill PUBLIC ${GUROBI_CXX_LIBRARY} ${GUROBI_CXX_DEBUG_LIBRARY})
+# target_link_libraries(convexFill PUBLIC ${GUROBI_LIBRARIES})
+target_link_libraries(convexFill PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib
+# # paper figure stuff
+# add_executable(paper_figs "${paper_figs}")
+# target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+# target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# # add the args.hxx project which we use for command line args
+# target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+# target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+# target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
+# target_link_libraries(paper_figs PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
 
 
 # Bullet stuff

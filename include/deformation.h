@@ -36,23 +36,16 @@
 
 #include <igl/arap.h>
 #include <Eigen/Core>
+#include "utils.h"
+
+#include "optimization.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 
 
-// convertion stuff
-
-Vector<double> vec32vec(Vector3 v);
-Vector3 vec_to_GC_vec3(Vector<double> vec);
-DenseMatrix<double> vertex_data_to_matrix(VertexData<Vector3> positions);
-DenseMatrix<double> face_data_to_matrix(FaceData<Vector3> fdata);
-
-Vector<double> tinyAD_flatten(DenseMatrix<double> mat);
-DenseMatrix<double> unflat_tinyAD(Vector<double> flat_mat);
-
-SparseMatrix<double> tinyADify_barrier_hess(std::vector<DenseMatrix<double>> hessians);
+// convertion stuff; Moved to utils
 
 // Gradient stuff
 // from: https://www.sciencedirect.com/science/article/pii/S0167839607000891 
@@ -79,15 +72,21 @@ class DeformationSolver{
        SparseMatrix<double> closest_point_flat_operator;
        size_t face_assignments = 0, edge_assignments = 0, vertex_assignments = 0;
 
-       bool one_time_CP_assignment = false;
+       bool dynamic_remesh = false;
        double refinement_CP_threshold = 0.5;
-       double bending_lambda = 1e0,
-              membrane_lambda = 1e2;
-       double CP_lambda = 10.0,
-              CP_mu = 1.1; // grow the CP lambda; since we want it to be zero in the end
-       double barrier_init_lambda = 10.,
-              barrier_decay = 0.8,
-              CP_barrier_multiplier = 1.;
+       double init_bending_lambda = 1e0,
+              final_bending_lambda = 1e2,
+              init_membrane_lambda = 1e2,
+              final_membrane_lambda = 1e0,
+              init_CP_lambda = 1e1,
+              final_CP_lambda = 1e9,
+              reg_lambda = 1e-3;
+       double final_barrier_lambda = 1e-8,
+              init_barrier_lambda = 1e-4;
+       // TODO: should this be different for every energy? 
+       double internal_growth_p = 0.9, // p; for b-(a-b)p^{t}
+              internal_pt = 1.;
+       double get_scheduled_weight(double init_w, double final_w);
 
        int filling_max_iter = 50;
        // linear constraints

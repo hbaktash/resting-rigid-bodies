@@ -19,13 +19,14 @@
 
 #pragma once
 
-#include "geometrycentral/surface/manifold_surface_mesh.h"
-#include "geometrycentral/surface/vertex_position_geometry.h"
-#include "geometrycentral/surface/remeshing.h"
+// #include "monty.h"
+// #include "fusion.h"
+#include "geometrycentral/numerical/linear_solvers.h"
+#include <Eigen/Core>
+#include "gurobi_c++.h"
 
+// using namespace mosek::fusion;
+// using namespace monty;
 
-using namespace geometrycentral;
-using namespace geometrycentral::surface;
-
-void joint_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_geometry, VertexPositionGeometry *deformed_geometry, double target_edge_len);
-void split_only_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_geometry, VertexPositionGeometry *deformed_geometry, double target_edge_len);
+Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
+                                   Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b);
