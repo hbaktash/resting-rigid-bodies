@@ -28,5 +28,18 @@
 // using namespace mosek::fusion;
 // using namespace monty;
 
+
+#define ANSI_FG_MAGENTA "\x1b[35m"
+#define ANSI_FG_YELLOW "\x1b[33m"
+#define ANSI_FG_GREEN "\x1b[32m"
+#define ANSI_FG_WHITE "\x1b[37m"
+#define ANSI_FG_RED "\x1b[31m"
+#define ANSI_RESET "\x1b[0m"
+
+
+Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Eigen::VectorXd g, 
+                            std::function<double(Eigen::VectorXd)> eval, double s_max = 1.0, 
+                            double shrink = 0.8, int max_iters = 64, double armijo_const = 1e-4);
+
 Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
                                    Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b);

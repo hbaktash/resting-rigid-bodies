@@ -89,7 +89,7 @@ BoundaryBuilder *boundary_builder;
 polyscope::PointCloud *boundary_normals_pc;
 polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
 bool draw_boundary_patches = true;
-bool test_guess = true;
+bool test_guess = false;
 bool compute_global_G_effect = true,
      deform_after = true,
      frozen_G = false,
@@ -328,7 +328,7 @@ void update_hull_of_hull(VertexData<Vector3> positions){
 // hull update stuff
 double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver *fwd_solver, bool frozen_G){
   printf(" ---- hull update line search ----\n");
-  if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(true);
+  // if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(true);
   double grad_norm2 = 0.;
   for (Vector3 v3: grad.toVector())
     grad_norm2 += v3.norm2();
@@ -505,7 +505,7 @@ void version2_dice_pipeline(size_t step_count = 1){
   // forwardSolver->set_uniform_G();
   ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
   VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
-  Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G);
+  Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G, false);
   tmp_solver->set_uniform_G(); // frozen G matters here or not ???
   printf("initalize precomputes\n");
   tmp_solver->initialize_pre_computes();
@@ -513,9 +513,12 @@ void version2_dice_pipeline(size_t step_count = 1){
   
   if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(false);
   if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);
-  polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
+  if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
+  if (polyscope::hasSurfaceMesh("init input mesh")) polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
+  auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
                                                   tmp_solver->inputMesh->getFaceVertexList());
-  
+  pip2psmesh->setEdgeWidth(2.);
+  polyscope::screenshot(false);
   BoundaryBuilder *tmp_bnd_builder;
   InverseSolver *tmp_inv_solver;
   tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
@@ -536,16 +539,35 @@ void version2_dice_pipeline(size_t step_count = 1){
     }
     VertexData<Vector3> vertex_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
                                                                                         structured_opt, stable_normal_update_thresh);
+    
+    auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
+                                                  tmp_solver->inputMesh->getFaceVertexList());
+    auto old_tmp_geo = tmp_solver->inputGeometry->inputVertexPositions;
+    auto old_tmp_mesh = tmp_solver->inputMesh->getFaceVertexList();
+    pip2psmesh->setEnabled(true);
+    pip2psmesh->addVertexVectorQuantity(" dice grads", vertex_grads)->setEnabled(true);
+    pip2psmesh->setSurfaceColor({0.1,0.9,0.1});
+    pip2psmesh->setEdgeWidth(2.);
+    polyscope::screenshot(false);
+    polyscope::frameTick();
+    pip2psmesh->setEnabled(false);
     double opt_step_size = hull_update_line_search(vertex_grads, tmp_solver, frozen_G);
+    auto pip2psmeshnext = polyscope::registerSurfaceMesh("pipe2 next pre hull", old_tmp_geo + opt_step_size * vertex_grads,
+                                                  old_tmp_mesh);
+    pip2psmeshnext->setEnabled(true);
+    pip2psmeshnext->setEdgeWidth(2.);
+    pip2psmeshnext->setSurfaceColor({0.8,0.1,0.1});
+    polyscope::screenshot(false);
+    polyscope::frameTick();
+    pip2psmeshnext->setEnabled(false);
+  
+
     
     auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(tmp_solver->hullGeometry->inputVertexPositions + opt_step_size * vertex_grads);
     tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, tmp_solver->get_G(), false); 
     // TODO: is this ok?
   
     // visuals
-    polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
-                                                  tmp_solver->inputMesh->getFaceVertexList());
-    polyscope::frameTick();
 
 
     if (!frozen_G){

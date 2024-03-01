@@ -19,6 +19,33 @@
 
 #include "optimization.h"
 
+
+
+Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Eigen::VectorXd g, 
+                            std::function<double(Eigen::VectorXd)> eval, double s_max, 
+                            double shrink, int max_iters, double armijo_const){
+    // Check input
+    assert(x0.size() == g.size());
+    if (s_max <= 0.0)
+        throw std::runtime_error("Max step size not positive.");
+    int i = 0;
+    for (i = 0; i < max_iters; i++) {
+        Eigen::VectorXd x_new = x0 + s_max * d;
+        double f_new = eval(x_new);
+        if (f_new <= f0 + armijo_const * s_max * d.dot(g)){
+            std::cout << ANSI_FG_GREEN << " line search ended at iter " << i << "/" << max_iters << ANSI_RESET << std::endl;
+            return x_new;
+        }
+        if (s_max > 1.0 && s_max * shrink < 1.0)
+            s_max = 1.0;
+        else
+            s_max *= shrink;
+    }
+    std::cout << ANSI_FG_YELLOW << "Line search couldn't find improvement. Gradient max norm is" << g.cwiseAbs().maxCoeff() << ANSI_RESET << std::endl;
+    return x0;
+}
+
+
 Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
                                    Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b){
                                         // Gurobi calling code borrowed from CoMISo
@@ -39,7 +66,7 @@ Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorX
 
     size_t n_vars = x_0.size(),
            n_fc = cons_b.size();
-    printf(" && nvars %d, n cv faces %d \n", n_vars, n_fc);
+    // printf(" && nvars %d, n cv faces %d \n", n_vars, n_fc);
     assert(n_vars % 3 == 0);
     size_t n_verts = n_vars/3;
 
@@ -108,19 +135,36 @@ Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorX
     model.set(GRB_IntParam_Method, -1);
     model.setObjective(objective, GRB_MINIMIZE);
     // model.setObjectiveN(objective, 0, 1, 1); // main objective
-    // model.set(GRB_IntParam_LogToConsole, 0);
+    model.set(GRB_IntParam_LogToConsole, 0);
     model.update();
     //----------------------------------------------
     // 4. solve problem
     //----------------------------------------------
-    model.optimize();
-
-    Eigen::VectorXd sol_x(x_0.size());
-    for (int i = 0; i < n_vars; i++) {
-        sol_x[i] = vars[i].get(GRB_DoubleAttr_X);
+    try {
+        model.optimize();
+        int optimstatus = model.get(GRB_IntAttr_Status);
+        if (optimstatus == GRB_OPTIMAL) { // Solved!
+            std::cout << ANSI_FG_GREEN << "Optimal objective: " << model.get(GRB_DoubleAttr_ObjVal) << ANSI_RESET << std::endl;
+            Eigen::VectorXd sol_x(x_0.size());
+            for (int i = 0; i < n_vars; i++) {
+                sol_x[i] = vars[i].get(GRB_DoubleAttr_X);
+            }
+            return sol_x;
+        // Not solved
+        } else if (optimstatus == GRB_INFEASIBLE) { 
+            std::cout << ANSI_FG_RED << "Model is infeasible" << ANSI_RESET << std::endl;
+        } else if (optimstatus == GRB_UNBOUNDED) {
+            std::cout << ANSI_FG_RED << "Model is unbounded" << ANSI_RESET << std::endl;
+        } else {
+            std::cout << ANSI_FG_RED << "Optimization was stopped with status = "<< ANSI_RESET << optimstatus << std::endl;
+        }
+    } catch (GRBException e) {
+        std::cout << ANSI_FG_RED << "Error code = " << e.getErrorCode() << ANSI_RESET << std::endl;
+        std::cout << ANSI_FG_YELLOW << e.getMessage() << ANSI_RESET << std::endl;
+    } catch (...) {
+        std::cout << ANSI_FG_RED << "Error during optimization" << ANSI_RESET << std::endl;
     }
-
-    return sol_x;
+    return x_0;
 }
 
 
