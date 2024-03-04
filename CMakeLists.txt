@@ -149,6 +149,8 @@ set(convex_fill
   src/geometry_utils.cpp
   src/coloring.cpp
   src/visual_utils.cpp
+  src/implot.cpp
+  src/implot_items.cpp
   src/boundary_tools.cpp
   src/inv_design.cpp
   src/convex_hull.cpp

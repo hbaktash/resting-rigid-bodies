@@ -13,7 +13,16 @@ git clone --recursive git@git.corp.adobe.com:hbaktash/rolling-dragons-2D.git
 #### Bullet library
 For the bullet simulation executable I followed the instructions from https://github.com/erwincoumans/hello_bullet_cmake
 Using a simpler build which does not handle MVS stuff.
+Manually building Bullet is the way to go at the moment.
 
+```
+cd deps/bullet3
+mkdir build_cmake
+cd build_cmake
+cmake -DCMAKE_INSTALL_PREFIX:PATH=local_install -DUSE_DOUBLE_PRECISION=ON -DCMAKE_DEBUG_POSTFIX="" -DINSTALL_LIBS=ON -DCMAKE_BUILD_TYPE=Release ..
+make -j
+make install
+```
 
 ### Build the code
 
@@ -40,3 +49,7 @@ This executable shows our implementation for the momentum-less case of dropping 
 This is a simple simulation for dropping an objct on the ground. Momentum is not disabled yet and bounces, etc.. happen.
  
 
+## More build notes
+
+- manually pulled Polyscope for a recent update (initally detached at ..?)
+- manually pulled imgui to be able to use https://github.com/epezent/implot/tree/master (initally detached at 512c54bb)

@@ -36,6 +36,7 @@
 #include "inv_design.h"
 // #include "igl/arap.h"
 // #include "optimization.h"
+#include "implot.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -52,6 +53,7 @@ Vector3 G, // center of Mass
         curr_face_color({0.1,0.87,0.1});
 
 Forward3DSolver* forwardSolver;
+  
 
 VisualUtils vis_utils;
 
@@ -133,6 +135,11 @@ float init_bending_lambda_exp = 0.,
       refinement_CP_threshold = 0.1;
 int filling_max_iter = 10;
 int hull_opt_steps = 50;
+
+static const int MAX_FILL_ITERS = 300;
+int current_fill_iter = -1;
+static float xs1[MAX_FILL_ITERS], ys1[MAX_FILL_ITERS];
+// static double xs2[20], ys2[20];
 
 // test energies stuff
 float row0[3] = {1.,0.,0.}; 
@@ -598,7 +605,7 @@ void version2_dice_pipeline(size_t step_count = 1){
 
   deformationSolver = new DeformationSolver(mesh, geometry, tmp_solver->inputMesh, tmp_solver->inputGeometry);   
   initialize_deformation_params(deformationSolver);
-  DenseMatrix<double> new_points = deformationSolver->solve_for_bending(1);
+  DenseMatrix<double> new_points = deformationSolver->solve_for_bending(1, true, &current_fill_iter, xs1, ys1);
 
   // polyscope::SurfaceMesh *final_deformed_psMesh = polyscope::registerSurfaceMesh(
   //   "v2pipeline final mesh", new_points, mesh->getFaceVertexList(), polyscopePermutations(*mesh));
@@ -746,6 +753,17 @@ void myCallback() {
   }
   if (ImGui::SliderFloat("dice energy step decay", &dice_search_decay, 0., 1.));
   if (ImGui::SliderInt("hull optimize step count", &hull_opt_steps, 1, 200));
+
+  ImPlot::CreateContext();
+  if (ImPlot::BeginPlot("Line Plots")) {
+      printf("current energy iter %d\n", current_fill_iter);
+      ImPlot::SetupAxes("x","y");
+      ImPlot::PlotLine("energy", xs1, ys1, current_fill_iter);
+      ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+      ImPlot::EndPlot();
+      ImPlot::DestroyContext();
+  }
+  // Test stuff
   if (ImGui::InputFloat3("row0", row0)
     || ImGui::InputFloat3("row1", row1)
     || ImGui::InputFloat3("row2", row2));
@@ -759,6 +777,23 @@ void myCallback() {
     initialize_deformation_params(tmp_def);
     tmp_def->print_energies_after_transform(A);
   }
+
+  // IMPLOT attempts
+  // bool open_flag = true;
+  // ImGui::Begin("ImPlot Demo", &open_flag, ImGuiWindowFlags_MenuBar);
+  // if (ImGui::BeginTabBar("ImPlotDemoTabs")) {
+  //   if (ImGui::BeginTabItem("Plots")) {
+  //     if (ImGui::TreeNodeEx("sub demo")) { 
+  // ImGui::CreateContext();
+  // ImGui::DestroyContext();       
+  
+  //       ImGui::TreePop();
+  //     }
+  //     ImGui::EndTabItem();
+  //   }
+  //   ImGui::EndTabBar();
+  // }
+  // ImGui::End();
   // DebugTextEncoding
 }
 

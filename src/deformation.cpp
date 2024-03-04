@@ -770,7 +770,7 @@ void DeformationSolver::print_energies_after_transform(Eigen::Matrix3d A){
 }
 
 
-DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
+DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bool energy_plot, int* current_iter, float* xs, float* ys){
     size_t num_var = 3 * mesh->nVertices();
     old_geometry->refreshQuantities();
     old_geometry->requireEdgeLengths();
@@ -888,13 +888,8 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         Eigen::SparseMatrix<double> reg_H = 2.* identityMatrix<double>(x.size());
         
 
-        // polyscope::registerPointCloud("closest assignment from flat mat", unflat_tinyAD(A_CP * x));
-        // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("CP grads", -unflat_tinyAD(CP_g))->setEnabled(true);
-        // polyscope::show();
-        // bending stuff
-        // printf(" bending Hessian eval\n ");
+        // elastic stuff
         auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x); //
-        // printf(" membrane Hessian eval\n ");
         auto [membrane_f, membrane_g, membrane_H_proj] = membraneEnergy_func.eval_with_hessian_proj(x); //
         
         // barrier stuff
@@ -905,7 +900,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         // auto [my_barrier_f, barrier_grad, barrier_hessian] = get_log_barrier_stuff(x_in_dense_format, Vector<double>::Ones(mesh->nVertices())); // thank u new c++
         // Eigen::SparseMatrix<double> my_barrier_H = tinyADify_barrier_hess(barrier_hessian);
         // Eigen::VectorX<double> my_barrier_g = tinyAD_flatten(barrier_grad);
-        // TODO: smarter scheduling?
           
         Eigen::SparseMatrix<double> total_H = bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + CP_lambda * CP_H + reg_lambda * reg_H; // + barrier_lambda * barrier_H;
         Eigen::VectorXd total_g = bending_lambda * bending_g + membrane_lambda * membrane_g + CP_lambda * CP_g; // reg g is zero at x0 // + barrier_lambda * barrier_g;
@@ -920,16 +914,16 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
                          "\n\t\t\t\t membrane  = " << membrane_lambda << " * " << membrane_f <<
                          "\n\t\t\t\t CP        = " << CP_lambda << " * "<< CP_energy << 
                          "\n\t\t\t\t\t total: " << bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy);
+        if (energy_plot){
+            *current_iter = i;
+            xs[i] = i;
+            ys[i] = bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy;
+        }
         Eigen::VectorXd old_x = x;
         Eigen::VectorXd new_x = solve_QP_with_ineq(total_H/2., //bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + 
                                                 total_g - total_H * x,
                                                     old_x, //
                                                     constraint_matrix, constraint_rhs);
-        // bending_lambda  * (bending_g - bending_H_proj*x) + 
-        //                             membrane_lambda * (membrane_g - membrane_H_proj*x) + 
-        //                             reg_lambda      * (-2.*x) + 
-        //                             CP_lambda       * (CP_g - CP_H*x), old_x,
-        // // Eigen::VectorXd d = TinyAD::newton_direction(total_g, total_H, solver);
         // shiftDiagonal(barrier_H, 1e-7); // TODO
         // printf("testing barrier H\n");
         // // LinearSolver<double>
@@ -993,18 +987,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
                 return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
             });
         }
-        
-        // scheduled weights
-        // if (step_norm < 0.05 && CP_energy > 0.05){
-        //     printf(" Cp increment\n");    
-        //     CP_lambda *= CP_mu;
-        // }
-        // else if (CP_energy < 0.05){
-        //     printf(" barrier decrement\n");
-        //     membrane_lambda *= CP_mu;
-        //     bending_lambda *= CP_mu;
-        //     barrier_lambda *= barrier_decay;
-        // }
         double step_norm = (x - old_x).norm();
         // printf(" step norm is %9f\n", step_norm);
         internal_pt *= internal_growth_p;

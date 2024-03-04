@@ -137,7 +137,8 @@ class DeformationSolver{
        auto get_tinyAD_barrier_function();
 
        // solver
-       DenseMatrix<double> solve_for_bending(int visual_per_step = 0);
+       DenseMatrix<double> solve_for_bending(int visual_per_step = 0, 
+                                             bool energy_plot = false, int* current_iter = nullptr, float* xs = nullptr, float* ys = nullptr);
        // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
        void print_energies_after_transform(Eigen::Matrix3d A);
        void test_my_barrier_vs_tinyAD();
