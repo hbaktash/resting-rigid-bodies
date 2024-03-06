@@ -122,29 +122,30 @@ bool animate = false,
      v2_dice_animate = false;
 float dice_search_decay = 0.95;
 
-float init_bending_lambda_exp = 0.,
-      final_bending_lambda_exp = 2.,
-      init_membrane_lambda_exp = 3.,
-      final_membrane_lambda_exp = 0.,
-      init_CP_lambda_exp = 1.,
-      final_CP_lambda_exp = 7.,
-      final_barrier_lambda_exp = -4.,
-      init_barrier_lambda_exp = -8.,
+float bending_lambda_exps[2] = {1., 1.},
+      membrane_lambda_exps[2] = {3., 3.},
+      CP_lambda_exps[2] = {1., 7.},
+      barrier_lambda_exps[2] = {-4., -8.},
       reg_lambda_exp = -3.,
       internal_p = 0.91,
       refinement_CP_threshold = 0.1;
 int filling_max_iter = 10;
 int hull_opt_steps = 50;
 
-static const int MAX_FILL_ITERS = 300;
+static const int MAX_FILL_ITERS = 300,
+                 ENERGY_COUNT = 5;
 int current_fill_iter = -1;
-static float xs1[MAX_FILL_ITERS], ys1[MAX_FILL_ITERS];
+static float xs[MAX_FILL_ITERS];
+const char* energy_names[ENERGY_COUNT] = {"bending", "membrane", "CP", "barrier", "total"};
+static float **energies = new float*[ENERGY_COUNT];
+float max_energy = 0.;
+
 // static double xs2[20], ys2[20];
 
 // test energies stuff
-float row0[3] = {1.,0.,0.}; 
-float row1[3] = {0.,1.,0.}; 
-float row2[3] = {0.,0.,1.}; 
+float row0[3] = {2.,0.,0.}; 
+float row1[3] = {0.,2.,0.}; 
+float row2[3] = {0.,0.,2.}; 
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc"), std::string("mark_gomboc")};
@@ -246,14 +247,14 @@ void initialize_deformation_params(DeformationSolver *deformation_solver){
   deformation_solver->refinement_CP_threshold = refinement_CP_threshold;
   deformation_solver->filling_max_iter = filling_max_iter;  
   
-  deformationSolver->init_bending_lambda = pow(10, init_bending_lambda_exp);
-  deformationSolver->final_bending_lambda = pow(10, final_bending_lambda_exp);
-  deformationSolver->init_membrane_lambda = pow(10, init_membrane_lambda_exp);
-  deformationSolver->final_membrane_lambda = pow(10, final_membrane_lambda_exp);
-  deformationSolver->init_CP_lambda = pow(10, init_CP_lambda_exp);
-  deformationSolver->final_CP_lambda = pow(10, final_CP_lambda_exp);
-  deformationSolver->final_barrier_lambda = pow(10, final_barrier_lambda_exp);
-  deformationSolver->init_barrier_lambda = pow(10, init_barrier_lambda_exp);
+  deformationSolver->init_bending_lambda = pow(10, bending_lambda_exps[0]);
+  deformationSolver->final_bending_lambda = pow(10, bending_lambda_exps[1]);
+  deformationSolver->init_membrane_lambda = pow(10, membrane_lambda_exps[0]);
+  deformationSolver->final_membrane_lambda = pow(10, membrane_lambda_exps[1]);
+  deformationSolver->init_CP_lambda = pow(10, CP_lambda_exps[0]);
+  deformationSolver->final_CP_lambda = pow(10, CP_lambda_exps[1]);
+  deformationSolver->init_barrier_lambda = pow(10, barrier_lambda_exps[0]);
+  deformationSolver->final_barrier_lambda = pow(10, barrier_lambda_exps[1]);
   deformation_solver->internal_growth_p = internal_p;
   
   deformation_solver->reg_lambda = pow(10, reg_lambda_exp);
@@ -265,6 +266,7 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
   mesh = mesh_ptr.release();
   geometry = geometry_ptr.release();
   preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0, do_remesh, scale_for_remesh);
+
   first_time = true;
 }
 
@@ -502,6 +504,7 @@ double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver *fwd_so
 
 void animate_convex_fill_deformation(ManifoldSurfaceMesh *_mesh, VertexPositionGeometry *_old_geometry,
                                      ManifoldSurfaceMesh *_convex_mesh, VertexPositionGeometry *_convex_geometry){
+  if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(true);
   deformationSolver = new DeformationSolver(_mesh, _old_geometry, _convex_mesh, _convex_geometry);   
   initialize_deformation_params(deformationSolver);
   animate = true;
@@ -552,6 +555,7 @@ void version2_dice_pipeline(size_t step_count = 1){
     auto old_tmp_geo = tmp_solver->inputGeometry->inputVertexPositions;
     auto old_tmp_mesh = tmp_solver->inputMesh->getFaceVertexList();
     pip2psmesh->setEnabled(true);
+    pip2psmesh->setTransparency(0.7);
     pip2psmesh->addVertexVectorQuantity(" dice grads", vertex_grads)->setEnabled(true);
     pip2psmesh->setSurfaceColor({0.1,0.9,0.1});
     pip2psmesh->setEdgeWidth(2.);
@@ -605,7 +609,7 @@ void version2_dice_pipeline(size_t step_count = 1){
 
   deformationSolver = new DeformationSolver(mesh, geometry, tmp_solver->inputMesh, tmp_solver->inputGeometry);   
   initialize_deformation_params(deformationSolver);
-  DenseMatrix<double> new_points = deformationSolver->solve_for_bending(1, true, &current_fill_iter, xs1, ys1);
+  DenseMatrix<double> new_points = deformationSolver->solve_for_bending(1, true, &current_fill_iter, energies);
 
   // polyscope::SurfaceMesh *final_deformed_psMesh = polyscope::registerSurfaceMesh(
   //   "v2pipeline final mesh", new_points, mesh->getFaceVertexList(), polyscopePermutations(*mesh));
@@ -694,6 +698,25 @@ void myCallback() {
       ImGui::EndCombo();
   }
 
+  ImPlot::CreateContext();
+  if (ImPlot::BeginPlot("CP + elastic energies", "iter", "energy")) {
+      // printf("current energy iter %d\n", current_fill_iter);
+      // for (int i = 0; i < current_fill_iter; i++){
+      //   std::cout << xs1[i] << " " << ys1[i] <<std::endl;
+      // }
+      int current_ENERGY_COUNT = 3;
+      for (int i = 0; i < current_ENERGY_COUNT; i++)
+        if (max_energy < energies[i][current_fill_iter]) max_energy = energies[i][current_fill_iter];
+      ImPlot::SetupAxes("iter","energy");
+      ImPlot::SetupAxisLimits(ImAxis_X1,0, current_fill_iter);
+      ImPlot::SetupAxisLimits(ImAxis_Y1,0, max_energy);
+      for (int i = 0; i < current_ENERGY_COUNT; i++)
+        ImPlot::PlotLine(energy_names[i], xs, energies[i], current_fill_iter);
+      ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
+      ImPlot::EndPlot();
+  }
+  ImPlot::DestroyContext();
+
   if (ImGui::Button("deform into convex shape")){
     polyscope::removeAllStructures();
     init_convex_shape_to_fill(all_polygons_current_item2);
@@ -702,18 +725,16 @@ void myCallback() {
     // TODO: check what should be done here to avoid the ugly bool trick
     // deformationSolver->solve_for_bending(1);
   }
-  if (ImGui::SliderInt("filling iters", &filling_max_iter, 1, 300)) deformationSolver->filling_max_iter = filling_max_iter;
+  if (ImGui::SliderInt("filling iters", &filling_max_iter, 1, 300)) {
+    deformationSolver->filling_max_iter = filling_max_iter;
+  }
   if (ImGui::Checkbox("dynamic remesh", &dynamic_remesh));
   if (ImGui::SliderFloat("growth p", &internal_p, 0., 1.));
   if (ImGui::SliderFloat("refinement CP threshold ", &refinement_CP_threshold, 0., 1.));
-  if (ImGui::SliderFloat("init bending lambda; log10", &init_bending_lambda_exp, -5., 5.));
-  if (ImGui::SliderFloat("final bending lambda; log10", &final_bending_lambda_exp, -5., 5.));
-  if (ImGui::SliderFloat("init membrane lambda; log10", &init_membrane_lambda_exp, -5., 5.));
-  if (ImGui::SliderFloat("final membrane lambda; log10", &final_membrane_lambda_exp, -5., 5.));
-  if (ImGui::SliderFloat("init CP lambda; log10", &init_CP_lambda_exp, -5., 10.));
-  if (ImGui::SliderFloat("final CP lambda; log10", &final_CP_lambda_exp, -5., 10.));
-  if (ImGui::SliderFloat("init barrier lambda; log10", &init_barrier_lambda_exp, -10., 5.));
-  if (ImGui::SliderFloat("final barrier lambda; log10", &final_barrier_lambda_exp, -10., 5.));
+  if (ImGui::InputFloat2("init/final bending log ", bending_lambda_exps)
+    || ImGui::InputFloat2("init/final membrane log ", membrane_lambda_exps)
+    || ImGui::InputFloat2("init/final CP log ", CP_lambda_exps)
+    || ImGui::InputFloat2("init/final barrier log ", barrier_lambda_exps));
   if (ImGui::SliderFloat("reg lambda; log10", &reg_lambda_exp, -5., 5.));
   
 
@@ -754,28 +775,35 @@ void myCallback() {
   if (ImGui::SliderFloat("dice energy step decay", &dice_search_decay, 0., 1.));
   if (ImGui::SliderInt("hull optimize step count", &hull_opt_steps, 1, 200));
 
-  ImPlot::CreateContext();
-  if (ImPlot::BeginPlot("Line Plots")) {
-      printf("current energy iter %d\n", current_fill_iter);
-      ImPlot::SetupAxes("x","y");
-      ImPlot::PlotLine("energy", xs1, ys1, current_fill_iter);
-      ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle);
-      ImPlot::EndPlot();
-      ImPlot::DestroyContext();
-  }
   // Test stuff
   if (ImGui::InputFloat3("row0", row0)
     || ImGui::InputFloat3("row1", row1)
     || ImGui::InputFloat3("row2", row2));
-  if (ImGui::Button("test energies")){
+  if (ImGui::Button("simple test")){
     DenseMatrix<double> A = DenseMatrix<double>::Zero(3,3);
     A(0,0) = row0[0]; A(0,1) = row0[1]; A(0,2) = row0[2];
     A(1,0) = row1[0]; A(1,1) = row1[1]; A(1,2) = row1[2];
     A(2,0) = row2[0]; A(2,1) = row2[1]; A(2,2) = row2[2];
     std::cout << "A matrix\n \t" << A << "\n";
-    auto tmp_def = new DeformationSolver(forwardSolver->inputMesh, forwardSolver->inputGeometry, convex_to_fill_mesh, convex_to_fill_geometry);   
-    initialize_deformation_params(tmp_def);
-    tmp_def->print_energies_after_transform(A);
+    // auto tmp_def = new DeformationSolver(forwardSolver->inputMesh, forwardSolver->inputGeometry, convex_to_fill_mesh, convex_to_fill_geometry);   
+    // initialize_deformation_params(tmp_def);
+    // tmp_def->print_energies_after_transform(A);
+    polyscope::removeAllStructures();
+    convex_to_fill_mesh = forwardSolver->hullMesh;
+    convex_to_fill_geometry = forwardSolver->hullGeometry;
+    preprocess_mesh(convex_to_fill_mesh, convex_to_fill_geometry, true);
+
+    // transform
+    for (Vertex v: convex_to_fill_mesh->vertices())
+      convex_to_fill_geometry->inputVertexPositions[v] = vec_to_GC_vec3(A * vec32vec(convex_to_fill_geometry->inputVertexPositions[v]));
+    // Register the mesh with polyscope
+    polyscope::SurfaceMesh *psHullFillMesh = polyscope::registerSurfaceMesh(
+      "fillable hull",
+      convex_to_fill_geometry->inputVertexPositions, convex_to_fill_mesh->getFaceVertexList(),
+      polyscopePermutations(*convex_to_fill_mesh));
+    psHullFillMesh->setTransparency(0.35);
+      
+    animate_convex_fill_deformation(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
   }
 
   // IMPLOT attempts
@@ -816,13 +844,20 @@ int main(int argc, char **argv) {
   deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
   polyscope::state::userCallback = myCallback;
 
+  // enrgy log stuff
+  for(int i = 0; i < ENERGY_COUNT; i++)
+        energies[i] = new float[MAX_FILL_ITERS];
+  for(int i = 0; i < MAX_FILL_ITERS; i++)
+    xs[i] = i;
   // polyscope::show();
   while (true) {
     if (animate){
-      deformationSolver->solve_for_bending(1);
+      max_energy = 0.;
+      deformationSolver->solve_for_bending(1, true, &current_fill_iter, energies);
       animate = false;
     }
     if (v2_dice_animate){
+      max_energy = 0.;
       // polyscope::removeAllStructures();
       version2_dice_pipeline(hull_opt_steps);
       v2_dice_animate = false;

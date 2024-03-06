@@ -66,7 +66,10 @@ class DeformationSolver{
        VertexPositionGeometry *convex_geometry;
 
        // CP energy stuff
-       VertexData<SurfacePoint> closest_point_assignment;
+       size_t threshold_exceeded = 0;
+       VertexData<SurfacePoint> closest_point_assignment; // hullMesh -> innerMesh
+       VertexData<bool> freeze_assignment; // hullMesh -> bool
+       VertexData<double> closest_point_distance; // hullMesh -> double
        VertexData<bool> CP_involvement;
        SparseMatrix<double> closest_point_operator;
        SparseMatrix<double> closest_point_flat_operator;
@@ -80,7 +83,7 @@ class DeformationSolver{
               final_membrane_lambda = 1e0,
               init_CP_lambda = 1e1,
               final_CP_lambda = 1e9,
-              reg_lambda = 1e-3;
+              reg_lambda = 0.;
        double final_barrier_lambda = 1e-8,
               init_barrier_lambda = 1e-4;
        // TODO: should this be different for every energy? 
@@ -109,7 +112,7 @@ class DeformationSolver{
        void assign_closest_vertices(VertexPositionGeometry *new_geometry, bool allow_multi_assignment = true);
        void assign_closest_points_barycentric(VertexPositionGeometry *new_geometry);
        // edge/face splits
-       void split_barycentric_closest_points(VertexPositionGeometry *new_geometry);
+       bool split_barycentric_closest_points(VertexPositionGeometry *new_geometry, bool split_close_only = true);
        double closest_point_energy(VertexPositionGeometry *new_geometry);
        double closest_point_energy(Vector<double> flat_new_pos_mat);
        // gradient of CP energy
@@ -138,7 +141,7 @@ class DeformationSolver{
 
        // solver
        DenseMatrix<double> solve_for_bending(int visual_per_step = 0, 
-                                             bool energy_plot = false, int* current_iter = nullptr, float* xs = nullptr, float* ys = nullptr);
+                                             bool energy_plot = false, int* current_iter = nullptr, float** ys = nullptr);
        // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
        void print_energies_after_transform(Eigen::Matrix3d A);
        void test_my_barrier_vs_tinyAD();

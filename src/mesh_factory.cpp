@@ -314,7 +314,7 @@ void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry
       mesh->triangulate(f);
     mesh->compress();
   }
-
+  
   if (do_remesh){
     double some_e_len = geometry->edgeLength(mesh->edge(0));
     RemeshOptions options = defaultRemeshOptions;

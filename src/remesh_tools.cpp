@@ -88,9 +88,10 @@ void joint_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_geometr
 }
 
 
-void split_only_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_geometry, VertexPositionGeometry *deformed_geometry, double target_edge_len){
+bool split_only_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_geometry, VertexPositionGeometry *deformed_geometry, double target_edge_len){
   Vector3 vis_shift = {2,0,0};
-    
+
+  bool change_flag = false; 
   std::vector<Edge> toSplit;
   for (Edge e : mesh->edges()) {
     toSplit.push_back(e);
@@ -106,16 +107,16 @@ void split_only_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_ge
       Vector3 def_newPos = 0.5 * (deformed_geometry->inputVertexPositions[e.firstVertex()] + deformed_geometry->inputVertexPositions[e.secondVertex()]),
               ref_newPos = 0.5 * (ref_geometry->inputVertexPositions[e.firstVertex()] + ref_geometry->inputVertexPositions[e.secondVertex()]);
       Halfedge he = mesh->splitEdgeTriangular(e);
+      change_flag = true;
       deformed_geometry->inputVertexPositions[he.vertex()] = def_newPos;
       ref_geometry->inputVertexPositions[he.vertex()] = ref_newPos;
     }
   }
-
-  
   // debug visuals
   auto old_geo_psmesh = polyscope::registerSurfaceMesh("post remesh old geo", ref_geometry->inputVertexPositions + vis_shift, mesh->getFaceVertexList());
   // auto new_geo_psmesh = polyscope::registerSurfaceMesh("post remesh def geo", deformed_geometry->inputVertexPositions, mesh->getFaceVertexList());
   old_geo_psmesh->setSurfaceColor({0.2,0.2,0.7});
   old_geo_psmesh->setEdgeWidth(1.);
   // new_geo_psmesh->setS
+  return change_flag;
 }
