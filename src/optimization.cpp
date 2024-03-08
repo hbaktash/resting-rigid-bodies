@@ -49,7 +49,15 @@ Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Ei
 Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
                                    Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b){
                                         // Gurobi calling code borrowed from CoMISo
+    // build model
+    GRBModel model = build_QP_model_with_constraints(x_0, cons_A, cons_b);
+    // set objective and solve
+    return update_QP_objective_and_solve(model, Q, g, x_0);
+}
 
+
+GRBModel build_QP_model_with_constraints(Eigen::VectorXd x_0, 
+                                         Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b){
     //----------------------------------------------
     // 0. set up gurobi environment
     //----------------------------------------------
@@ -74,7 +82,7 @@ Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorX
     // initialize vars
     // GRBVar* vars = model.addVars(n_vars,, GRB_CONTINUOUS);
     for (size_t i = 0; i < n_vars; i++) {
-        vars[i] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0., GRB_CONTINUOUS);
+        vars[i] = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0., GRB_CONTINUOUS, "x" + std::to_string(i));
         vars[i].set(GRB_DoubleAttr_Start, x_0[i]); // this correct initialization?
     }
 
@@ -90,11 +98,26 @@ Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorX
         Eigen::VectorXd rowj = cons_A.row(j);
         double rhsj = cons_b[j];
         for (size_t i = 0; i < n_verts; i++){
-            GRBLinExpr face_dist = rowj[0] * vars[3*i + 0] + 
-                                   rowj[1] * vars[3*i + 1] + 
-                                   rowj[2] * vars[3*i + 2];
-            model.addConstr(face_dist <= rhsj);
+            // GRBLinExpr face_dist = ;
+            model.addConstr(rowj[0] * vars[3*i + 0] + 
+                            rowj[1] * vars[3*i + 1] + 
+                            rowj[2] * vars[3*i + 2] <= rhsj);
         }
+    }
+    return model;
+}
+
+
+Eigen::VectorXd update_QP_objective_and_solve(GRBModel &model, 
+                                              Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0){
+    //----------------------------------------------
+    // retreive variables
+    //----------------------------------------------
+    size_t n_vars = x_0.size();
+    std::vector<GRBVar> vars(n_vars);
+    for (int i = 0; i < n_vars; i++) {
+        vars[i] = model.getVarByName("x" + std::to_string(i));
+        vars[i].set(GRB_DoubleAttr_Start, x_0[i]);
     }
 
     //----------------------------------------------
@@ -109,7 +132,7 @@ Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorX
             double val = it.value();
             size_t i = it.row(),
                    j = it.col();
-            objective.addTerm(val, vars[i],  vars[j]);
+            objective.addTerm(val, vars[i], vars[j]);
         }
     }
     // linear terms
@@ -132,10 +155,11 @@ Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorX
     //   3=concurrent,
     //   4=deterministic concurrent, and
     //   5=deterministic concurrent simplex.
-    model.set(GRB_IntParam_Method, -1);
+    model.set(GRB_IntParam_Method, 2);
+    // model.set(GRB_IntParam_BarOrder, 1);
     model.setObjective(objective, GRB_MINIMIZE);
     // model.setObjectiveN(objective, 0, 1, 1); // main objective
-    model.set(GRB_IntParam_LogToConsole, 0);
+    // model.set(GRB_IntParam_LogToConsole, 0);
     model.update();
     //----------------------------------------------
     // 4. solve problem
@@ -164,9 +188,8 @@ Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorX
     } catch (...) {
         std::cout << ANSI_FG_RED << "Error during optimization" << ANSI_RESET << std::endl;
     }
-    return x_0;
+    return x_0;                         
 }
-
 
 
 ///// MOSEK attempt

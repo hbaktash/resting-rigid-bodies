@@ -47,7 +47,9 @@ std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr, cv_mesh_ptr;
 std::unique_ptr<VertexPositionGeometry> geometry_ptr, cv_geometry_ptr;
 ManifoldSurfaceMesh* mesh, *convex_to_fill_mesh;
 VertexPositionGeometry* geometry, *convex_to_fill_geometry;
+bool load_hull_from_file = true;
 Vector3 G, // center of Mass
+        pre_deform_G({-10.,-10.,-10.}),
         initial_g_vec({0,-1,0}),
         default_face_color({0.99,0.99,0.99}),
         curr_face_color({0.1,0.87,0.1});
@@ -97,6 +99,7 @@ bool compute_global_G_effect = true,
      frozen_G = false,
      structured_opt = true,
      dynamic_remesh = true,
+     use_QP_solver = true,
      always_update_structure = true,
      with_hull_projection = false,
      first_time = false;
@@ -105,7 +108,7 @@ float scale_for_remesh = 1.003;
 polyscope::PointCloud *test_pc;
 
 int fair_sides_count = 6; // for optimization
-
+bool do_sobolev_dice_grads = true;
 
 // optimization stuff
 InverseSolver* inverseSolver;
@@ -116,7 +119,6 @@ float stable_normal_update_thresh = -1;
 int ARAP_max_iters = 10;
 
 // deformation
-float scale_for_feasi = 2.;
 DeformationSolver *deformationSolver;
 bool animate = false,
      v2_dice_animate = false;
@@ -128,7 +130,7 @@ float bending_lambda_exps[2] = {1., 1.},
       barrier_lambda_exps[2] = {-4., -8.},
       reg_lambda_exp = -3.,
       internal_p = 0.91,
-      refinement_CP_threshold = 0.1;
+      refinement_CP_threshold = 0.05;
 int filling_max_iter = 10;
 int hull_opt_steps = 50;
 
@@ -231,8 +233,6 @@ void init_convex_shape_to_fill(std::string poly_str, bool triangulate = true){
   convex_to_fill_mesh = cv_mesh_ptr.release();
   convex_to_fill_geometry = cv_geometry_ptr.release();
   preprocess_mesh(convex_to_fill_mesh, convex_to_fill_geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0);
-  convex_to_fill_geometry->inputVertexPositions *= scale_for_feasi;
-  // convex_to_fill_geometry->inputVertexPositions += Vector3::constant(0.5);
 
   // Register the mesh with polyscope
   polyscope::SurfaceMesh *psHullFillMesh = polyscope::registerSurfaceMesh(
@@ -253,8 +253,14 @@ void initialize_deformation_params(DeformationSolver *deformation_solver){
   deformationSolver->final_membrane_lambda = pow(10, membrane_lambda_exps[1]);
   deformationSolver->init_CP_lambda = pow(10, CP_lambda_exps[0]);
   deformationSolver->final_CP_lambda = pow(10, CP_lambda_exps[1]);
-  deformationSolver->init_barrier_lambda = pow(10, barrier_lambda_exps[0]);
-  deformationSolver->final_barrier_lambda = pow(10, barrier_lambda_exps[1]);
+  if (!use_QP_solver){
+    deformationSolver->init_barrier_lambda = pow(10, barrier_lambda_exps[0]);
+    deformationSolver->final_barrier_lambda = pow(10, barrier_lambda_exps[1]);
+  }
+  else {
+    deformationSolver->init_barrier_lambda = 0.;
+    deformationSolver->final_barrier_lambda = 0.;
+  }
   deformation_solver->internal_growth_p = internal_p;
   
   deformation_solver->reg_lambda = pow(10, reg_lambda_exp);
@@ -297,8 +303,11 @@ void update_solver_and_boundaries(){
 
 
 void update_visuals_with_G(Forward3DSolver *tmp_solver = nullptr, BoundaryBuilder *bnd_builder = boundary_builder){
-  if (tmp_solver != nullptr)
+  if (tmp_solver != nullptr){
+    tmp_solver->updated = false;
+    tmp_solver->initialize_pre_computes();
     vis_utils.forwardSolver = tmp_solver;
+  }
   
   vis_utils.draw_G();
   if (gm_is_drawn)
@@ -535,6 +544,7 @@ void version2_dice_pipeline(size_t step_count = 1){
   tmp_inv_solver = new InverseSolver(tmp_bnd_builder);
 
   for (size_t iter = 0; iter < step_count; iter++){
+
     tmp_inv_solver->find_uni_mass_d_pf_dv(frozen_G);
     printf(" vertex derivatives found!\n");
     if (structured_opt){ // if updating the flow structure
@@ -549,31 +559,27 @@ void version2_dice_pipeline(size_t step_count = 1){
     }
     VertexData<Vector3> vertex_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
                                                                                         structured_opt, stable_normal_update_thresh);
-    
     auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
                                                   tmp_solver->inputMesh->getFaceVertexList());
     auto old_tmp_geo = tmp_solver->inputGeometry->inputVertexPositions;
     auto old_tmp_mesh = tmp_solver->inputMesh->getFaceVertexList();
+    
     pip2psmesh->setEnabled(true);
     pip2psmesh->setTransparency(0.7);
-    pip2psmesh->addVertexVectorQuantity(" dice grads", vertex_grads)->setEnabled(true);
+    pip2psmesh->addVertexVectorQuantity(" dice grads raw", vertex_grads)->setEnabled(true);
+    
+    if (do_sobolev_dice_grads){
+      vertex_grads = tmp_inv_solver->sobolev_diffuse_gradients(vertex_grads, 0.1, 2);
+      pip2psmesh->addVertexVectorQuantity(" sobolev diffused dice grads", vertex_grads)->setEnabled(true);
+    }
+
     pip2psmesh->setSurfaceColor({0.1,0.9,0.1});
     pip2psmesh->setEdgeWidth(2.);
     polyscope::screenshot(false);
     polyscope::frameTick();
-    pip2psmesh->setEnabled(false);
-    double opt_step_size = hull_update_line_search(vertex_grads, tmp_solver, frozen_G);
-    auto pip2psmeshnext = polyscope::registerSurfaceMesh("pipe2 next pre hull", old_tmp_geo + opt_step_size * vertex_grads,
-                                                  old_tmp_mesh);
-    pip2psmeshnext->setEnabled(true);
-    pip2psmeshnext->setEdgeWidth(2.);
-    pip2psmeshnext->setSurfaceColor({0.8,0.1,0.1});
-    polyscope::screenshot(false);
-    polyscope::frameTick();
-    pip2psmeshnext->setEnabled(false);
-  
+    // polyscope::show();
 
-    
+    double opt_step_size = hull_update_line_search(vertex_grads, tmp_solver, frozen_G);
     auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(tmp_solver->hullGeometry->inputVertexPositions + opt_step_size * vertex_grads);
     tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, tmp_solver->get_G(), false); 
     // TODO: is this ok?
@@ -596,57 +602,32 @@ void version2_dice_pipeline(size_t step_count = 1){
   }
   tmp_bnd_builder->print_area_of_boundary_loops();
 
+  //DEBUG
+  if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(true);
 
-  polyscope::warning(" dice enrgy search done!", " deforming initial shape");
   polyscope::removeAllStructures();
-  gm_is_drawn = false;
-  // Register the mesh with polyscope
   polyscope::SurfaceMesh *psHullFillMesh = polyscope::registerSurfaceMesh(
     "fillable hull", tmp_solver->inputGeometry->inputVertexPositions, tmp_solver->inputMesh->getFaceVertexList());
   psHullFillMesh->setTransparency(0.45);
   psHullFillMesh->setEdgeWidth(2.);
   psHullFillMesh->setEnabled(true);
-
-  deformationSolver = new DeformationSolver(mesh, geometry, tmp_solver->inputMesh, tmp_solver->inputGeometry);   
-  initialize_deformation_params(deformationSolver);
-  DenseMatrix<double> new_points = deformationSolver->solve_for_bending(1, true, &current_fill_iter, energies);
-
-  // polyscope::SurfaceMesh *final_deformed_psMesh = polyscope::registerSurfaceMesh(
-  //   "v2pipeline final mesh", new_points, mesh->getFaceVertexList(), polyscopePermutations(*mesh));
-
+  gm_is_drawn = false;
+  
+  convex_to_fill_mesh = tmp_solver->inputMesh;
+  convex_to_fill_geometry = tmp_solver->inputGeometry;
+  load_hull_from_file = false;
+  
+  pre_deform_G = tmp_solver->get_G();
   std::cout << "pre-deform G:" << tmp_solver->get_G() << "\n";
-  // convex hull of deformed mesh obtained here
-  Forward3DSolver* final_solver = new Forward3DSolver(mesh, new VertexPositionGeometry(*mesh, new_points), G, true);
-  polyscope::SurfaceMesh *final_hull_psMesh = polyscope::registerSurfaceMesh(
-    "v2pipeline final hull", final_solver->hullGeometry->inputVertexPositions, 
-    final_solver->hullMesh->getFaceVertexList());
-  final_hull_psMesh->setTransparency(0.4);
-
-  // get the probability stuff
-  final_solver->set_uniform_G();
-  std::cout << "post-deform G:" << final_solver->get_G() << "\n";
-  final_solver->updated = false;
-  final_solver->initialize_pre_computes();
-  tmp_bnd_builder = new BoundaryBuilder(final_solver);
-  tmp_bnd_builder->build_boundary_normals();
-  update_visuals_with_G(final_solver, tmp_bnd_builder);
-  printf(" post deform probabilities:\n");
-  tmp_bnd_builder->print_area_of_boundary_loops();
-  printf("post deform dice energy: %f\n", tmp_bnd_builder->get_fair_dice_energy(fair_sides_count));
-  
-  polyscope::warning("testing G effect\n");
-  final_solver->set_G(tmp_solver->get_G());
-  final_solver->updated = false;
-  final_solver->initialize_pre_computes();
-  tmp_bnd_builder = new BoundaryBuilder(final_solver);
-  tmp_bnd_builder->build_boundary_normals();
-  vis_utils = VisualUtils(final_solver);
-  visualize_gauss_map();
-  update_visuals_with_G(final_solver, tmp_bnd_builder);
-  printf(" good G probabilities:\n");
-  tmp_bnd_builder->print_area_of_boundary_loops();
-  printf("good G dice energy: %f\n", tmp_bnd_builder->get_fair_dice_energy(fair_sides_count));
-  
+  std::cout << "*** Test ***\n";
+  Forward3DSolver *tmp_solver2 = new Forward3DSolver(convex_to_fill_mesh, convex_to_fill_geometry, pre_deform_G, false);
+  tmp_solver2->set_uniform_G();
+  tmp_solver2->updated = false;
+  tmp_solver2->initialize_pre_computes();
+  BoundaryBuilder* tmp_bnd_builder2 = new BoundaryBuilder(tmp_solver2);
+  tmp_bnd_builder2->build_boundary_normals();
+  tmp_bnd_builder2->print_area_of_boundary_loops();
+  std::cout << "dice energy check:" << tmp_bnd_builder2->get_fair_dice_energy(fair_sides_count) << "\n";
 }
 
 
@@ -681,8 +662,6 @@ void myCallback() {
       }
       ImGui::EndCombo();
   }
-
-  if (ImGui::SliderFloat("scale for feasibility", &scale_for_feasi, 1., 10.));
   if (ImGui::BeginCombo("##combo2", all_polygons_current_item2.c_str())){ // The second parameter is the label previewed before opening the combo.
       for (std::string tmp_str: all_polyhedra_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
           bool is_selected = (all_polygons_current_item2 == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
@@ -690,6 +669,8 @@ void myCallback() {
               all_polygons_current_item2 = tmp_str;
               init_convex_shape_to_fill(all_polygons_current_item2);
               deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
+              load_hull_from_file = true;
+              pre_deform_G = Vector3({-10.,-10.,-10.}); //
               // 
           }
           if (is_selected)
@@ -700,10 +681,6 @@ void myCallback() {
 
   ImPlot::CreateContext();
   if (ImPlot::BeginPlot("CP + elastic energies", "iter", "energy")) {
-      // printf("current energy iter %d\n", current_fill_iter);
-      // for (int i = 0; i < current_fill_iter; i++){
-      //   std::cout << xs1[i] << " " << ys1[i] <<std::endl;
-      // }
       int current_ENERGY_COUNT = 3;
       for (int i = 0; i < current_ENERGY_COUNT; i++)
         if (max_energy < energies[i][current_fill_iter]) max_energy = energies[i][current_fill_iter];
@@ -719,8 +696,15 @@ void myCallback() {
 
   if (ImGui::Button("deform into convex shape")){
     polyscope::removeAllStructures();
-    init_convex_shape_to_fill(all_polygons_current_item2);
-    
+    if (load_hull_from_file)
+      init_convex_shape_to_fill(all_polygons_current_item2);
+    else {
+      polyscope::SurfaceMesh *psHullFillMesh = polyscope::registerSurfaceMesh(
+      "fillable hull",
+      convex_to_fill_geometry->inputVertexPositions, convex_to_fill_mesh->getFaceVertexList(),
+      polyscopePermutations(*convex_to_fill_mesh));
+      psHullFillMesh->setTransparency(0.35);
+    }
     animate_convex_fill_deformation(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
     // TODO: check what should be done here to avoid the ugly bool trick
     // deformationSolver->solve_for_bending(1);
@@ -734,7 +718,9 @@ void myCallback() {
   if (ImGui::InputFloat2("init/final bending log ", bending_lambda_exps)
     || ImGui::InputFloat2("init/final membrane log ", membrane_lambda_exps)
     || ImGui::InputFloat2("init/final CP log ", CP_lambda_exps)
-    || ImGui::InputFloat2("init/final barrier log ", barrier_lambda_exps));
+    || ImGui::Checkbox("use QP solver ", &use_QP_solver));
+  if(!use_QP_solver) 
+    if (ImGui::InputFloat2("init/final barrier log ", barrier_lambda_exps));
   if (ImGui::SliderFloat("reg lambda; log10", &reg_lambda_exp, -5., 5.));
   
 
@@ -765,15 +751,16 @@ void myCallback() {
   // if (ImGui::Checkbox("structured opt", &structured_opt));
   // if (ImGui::Checkbox("update structured at every step", &always_update_structure));
   // if (ImGui::Checkbox("decrease convex hull points", &with_hull_projection));
-  if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
 
+  if (ImGui::SliderFloat("dice energy step decay", &dice_search_decay, 0., 1.));
+  if (ImGui::SliderInt("hull optimize step count", &hull_opt_steps, 1, 200));
+  if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
+  if (ImGui::Checkbox("Sobolev pre-condition", &do_sobolev_dice_grads));
   if (ImGui::Button("optimize hull (w.r.t. dice energy)")) {
     v2_dice_animate = true;
     if (polyscope::hasSurfaceMesh("v2pipeline final mesh")) polyscope::removeSurfaceMesh("v2pipeline final mesh");
     if (polyscope::hasSurfaceMesh("v2pipeline final hull")) polyscope::removeSurfaceMesh("v2pipeline final hull");
   }
-  if (ImGui::SliderFloat("dice energy step decay", &dice_search_decay, 0., 1.));
-  if (ImGui::SliderInt("hull optimize step count", &hull_opt_steps, 1, 200));
 
   // Test stuff
   if (ImGui::InputFloat3("row0", row0)
@@ -852,9 +839,47 @@ int main(int argc, char **argv) {
   // polyscope::show();
   while (true) {
     if (animate){
-      max_energy = 0.;
-      deformationSolver->solve_for_bending(1, true, &current_fill_iter, energies);
       animate = false;
+      gm_is_drawn = false;
+      max_energy = 0.;
+      Eigen::MatrixXd new_points = deformationSolver->solve_for_bending(1, true, &current_fill_iter, energies);
+      // polyscope::SurfaceMesh *final_deformed_psMesh = polyscope::registerSurfaceMesh(
+      //   "v2pipeline final mesh", new_points, mesh->getFaceVertexList(), polyscopePermutations(*mesh));
+
+      // convex hull of deformed mesh obtained here
+      Forward3DSolver* final_solver = new Forward3DSolver(mesh, new VertexPositionGeometry(*mesh, new_points), G, true);
+      polyscope::SurfaceMesh *final_hull_psMesh = polyscope::registerSurfaceMesh(
+        "v2pipeline final hull", final_solver->hullGeometry->inputVertexPositions, 
+        final_solver->hullMesh->getFaceVertexList());
+      final_hull_psMesh->setTransparency(0.4);
+
+      // get the probability stuff
+      final_solver->set_uniform_G();
+      final_solver->updated = false;
+      final_solver->initialize_pre_computes();
+      BoundaryBuilder* tmp_bnd_builder = new BoundaryBuilder(final_solver);
+      tmp_bnd_builder->build_boundary_normals();
+      std::cout << "post-deform G:" << final_solver->get_G() << "\n";
+      printf(" post deform G stuf:\n");
+      update_visuals_with_G(final_solver, tmp_bnd_builder);
+      tmp_bnd_builder->print_area_of_boundary_loops();
+      printf("post deform dice energy: %f\n", tmp_bnd_builder->get_fair_dice_energy(fair_sides_count));
+      
+      
+      if (pre_deform_G != Vector3({-10.,-10.,-10.})){// only if we coming here after dice energy search
+        printf(" pre deform G stuff:\n");
+        final_solver->set_G(pre_deform_G);
+        final_solver->updated = false;
+        final_solver->initialize_pre_computes();
+        tmp_bnd_builder = new BoundaryBuilder(final_solver);
+        tmp_bnd_builder->build_boundary_normals();
+        vis_utils = VisualUtils(final_solver);
+        update_visuals_with_G(final_solver, tmp_bnd_builder);
+        // visualize_gauss_map();
+        tmp_bnd_builder->print_area_of_boundary_loops();
+        printf("pre deform G dice energy: %f\n", tmp_bnd_builder->get_fair_dice_energy(fair_sides_count));
+        
+      }
     }
     if (v2_dice_animate){
       max_energy = 0.;

@@ -84,8 +84,8 @@ class DeformationSolver{
               init_CP_lambda = 1e1,
               final_CP_lambda = 1e9,
               reg_lambda = 0.;
-       double final_barrier_lambda = 1e-8,
-              init_barrier_lambda = 1e-4;
+       double final_barrier_lambda = 0.,
+              init_barrier_lambda = 0.;
        // TODO: should this be different for every energy? 
        double internal_growth_p = 0.9, // p; for b-(a-b)p^{t}
               internal_pt = 1.;

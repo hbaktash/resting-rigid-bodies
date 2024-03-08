@@ -43,3 +43,9 @@ Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Ei
 
 Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
                                    Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b);
+
+GRBModel build_QP_model_with_constraints(Eigen::VectorXd x_0, 
+                                         Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b);
+
+Eigen::VectorXd update_QP_objective_and_solve(GRBModel &model, 
+                                              Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0);

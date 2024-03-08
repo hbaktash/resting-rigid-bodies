@@ -420,8 +420,8 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
             tripletList.emplace_back(c_v.getIndex(), v3.getIndex(), bary_coor.z);
             for (size_t d = 0; d < 3; d++){
                 flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*v1.getIndex() + d, bary_coor.x);
-                flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*v1.getIndex() + d, bary_coor.y);
-                flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*v1.getIndex() + d, bary_coor.z);
+                flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*v2.getIndex() + d, bary_coor.y);
+                flat_tripletList.emplace_back(3 * c_v.getIndex() + d, 3*v3.getIndex() + d, bary_coor.z);
             }
         }
         else if (min_dist == min_edge_dist){
@@ -861,7 +861,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
             edge_points.push_back(closest_point_assignment[v].interpolate(tmp_geometry->inputVertexPositions));
         }
         polyscope::registerCurveNetwork("CV-CP", edge_points, edge_inds)->setColor({0.,0.,1.});
-        polyscope::show();
+        // polyscope::show();
 
         double CP_energy = closest_point_energy(tmp_geometry);
         // dynamic remesh 
@@ -910,8 +910,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x); //
         auto [membrane_f, membrane_g, membrane_H_proj] = membraneEnergy_func.eval_with_hessian_proj(x); //
         
-        // barrier stuff
-        // auto [barrier_f, barrier_g, barrier_H] = barrierEnergy_func.eval_with_derivatives(x); //
         
         // printf(" finding Barrier terms\n");
         // DenseMatrix<double> x_in_dense_format = vertex_data_to_matrix(tmp_geometry->inputVertexPositions);
@@ -922,6 +920,14 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         Eigen::SparseMatrix<double> total_H = bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + CP_lambda * CP_H + reg_lambda * reg_H; // + barrier_lambda * barrier_H;
         Eigen::VectorXd total_g = bending_lambda * bending_g + membrane_lambda * membrane_g + CP_lambda * CP_g; // reg g is zero at x0 // + barrier_lambda * barrier_g;
         double total_energy = bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy; // reg e is zero at x0 // barrier_lambda * barrier_f;
+        
+        // barrier stuff
+        if (barrier_lambda != 0){
+            auto [barrier_f, barrier_g, barrier_H] = barrierEnergy_func.eval_with_derivatives(x); //
+            total_energy += barrier_lambda * barrier_f;
+            total_g += barrier_lambda * barrier_g;
+            total_H += barrier_lambda * barrier_H;
+        }
 
         // TINYAD_INFO(" my barr vs TinyAD" << 
         //             "\n\t\t\tenergies: " << my_barrier_f << ", " << barrier_f <<
@@ -931,6 +937,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         TINYAD_DEBUG_OUT("\t- Energy in iter " << i << ": bending= " << bending_lambda << "*" << bending_f << 
                          "\n\t\t\t\t membrane  = " << membrane_lambda << " * " << membrane_f <<
                          "\n\t\t\t\t CP        = " << CP_lambda << " * "<< CP_energy << 
+                         (barrier_lambda == 0. ? "" : ("\n\t\t\t\t barrier   = " + std::to_string(barrier_lambda) + " * " + std::to_string(barrierEnergy_func.eval(x)))) <<
                          "\n\t\t\t\t\t total: " << bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy);
         if (energy_plot){
             *current_iter = i;
@@ -939,29 +946,30 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
             energies_log[2][i] = CP_energy;
         }
         Eigen::VectorXd old_x = x;
-        Eigen::VectorXd new_x = solve_QP_with_ineq(total_H/2., //bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + 
-                                                total_g - total_H * x,
-                                                    old_x, //
-                                                    constraint_matrix, constraint_rhs);
-        x = line_search(old_x, new_x - old_x, total_energy, total_g,
+        Eigen::VectorXd d;
+        if (barrier_lambda == 0){ // use QP
+            Eigen::VectorXd new_x = solve_QP_with_ineq(total_H/2., //bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + 
+                                                    total_g - total_H * x,
+                                                        old_x, //
+                                                        constraint_matrix, constraint_rhs);
+            d = new_x - old_x;
+        }
+        else { // my own barrier
+            PositiveDefiniteSolver<double> newtonSolver(total_H);
+            d = newtonSolver.solve(-total_g);
+        }
+        x = line_search(old_x, d, total_energy, total_g,
                         [&] (const Eigen::VectorXd curr_x, bool print = false) {
-                            if (!check_feasibility(unflat_tinyAD(curr_x)))
-                                return std::numeric_limits<double>::infinity();
-                            double bending_e = bendingEnergy_func.eval(curr_x),
+                                if (!check_feasibility(unflat_tinyAD(curr_x)))
+                                    return std::numeric_limits<double>::infinity();
+                                double bending_e = bendingEnergy_func.eval(curr_x),
                                     membrane_e = membraneEnergy_func.eval(curr_x),
                                     CP_e = closest_point_energy(curr_x),
                                     reg_e = (curr_x - old_x).squaredNorm();
-                                //    log_barr_e = get_log_barrier_energy(unflat_tinyAD(curr_x));
-                            double f_new = bending_lambda * bending_e + membrane_lambda * membrane_e + CP_lambda * CP_e + reg_lambda * reg_e; // + barrier_lambda * log_barr_e;  
-                            if (print)
-                                TINYAD_WARNING("$$$$ Energies:"<<
-                                                "\n\t\t\t\t bending= " << bending_lambda << "*" << bending_e << 
-                                                "\n\t\t\t\tmembrane  = " << membrane_lambda << membrane_e <<
-                                                "\n\t\t\t\tCP  = " << CP_lambda << " * "<< CP_e<< 
-                                                "\n\t\t\t\treg_e  = " << reg_lambda << " * "<< reg_e<< 
-                                                // "\n\t\t\t\tbarr= " << barrier_lambda << " * "<< log_barr_e<< 
-                                                "\n\t\t\t\t\t total:" << f_new);
-                            return f_new;
+                                double f_new = bending_lambda * bending_e + membrane_lambda * membrane_e + CP_lambda * CP_e + reg_lambda * reg_e; // + barrier_lambda * log_barr_e;  
+                                if (barrier_lambda != 0.)
+                                    f_new += barrier_lambda * barrierEnergy_func.eval(curr_x);
+                                return f_new;
                             },
                         1., 0.9, 100, 0.); // no clue whats good here for armijo constant; proly nothing since non-linear stuff happening
                     // smax, decay, max_iter, armijo constant

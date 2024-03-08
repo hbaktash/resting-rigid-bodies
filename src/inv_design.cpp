@@ -40,8 +40,8 @@ void InverseSolver::save_initial_pos_and_Ls(){
 }
 
 void InverseSolver::set_fair_distribution() {
-    goal_prob = FaceData<double>(*forwardSolver->hullMesh, 
-                                         1./(double)forwardSolver->hullMesh->nFaces());
+    goal_prob = FaceData<double>(*forwardSolver->hullMesh,
+                                 1./(double)forwardSolver->hullMesh->nFaces());
 }
 
 void InverseSolver::set_fair_distribution_for_sink_faces(size_t goal_stable_count){
@@ -698,4 +698,35 @@ VertexData<Vector3> InverseSolver::diffusive_update_positions(VertexData<Vector3
     forwardSolver->inputGeometry->unrequireCotanLaplacian();
 
     return diffused_updates;
+}
+
+
+VertexData<Vector3> InverseSolver::sobolev_diffuse_gradients(VertexData<Vector3> grads, double sobolev_lambda, size_t sobolev_p){
+    size_t n = forwardSolver->hullMesh->nVertices(), 
+           e = forwardSolver->hullMesh->nEdges();
+    SparseMatrix<double> graph_L(n, n);
+    std::vector<Eigen::Triplet<double>> gL_tripletList;
+    gL_tripletList.reserve(4*e);
+    for (Edge e: forwardSolver->hullMesh->edges()){
+        Vertex v1 = e.halfedge().vertex(),
+               v2 = e.halfedge().twin().vertex();
+        gL_tripletList.push_back(Eigen::Triplet<double>(v1.getIndex(), v2.getIndex(), -1.));
+        gL_tripletList.push_back(Eigen::Triplet<double>(v2.getIndex(), v1.getIndex(), -1.));
+        gL_tripletList.push_back(Eigen::Triplet<double>(v1.getIndex(), v1.getIndex(), 1.));
+        gL_tripletList.push_back(Eigen::Triplet<double>(v2.getIndex(), v2.getIndex(), 1.));
+    }
+    graph_L.setFromTriplets(gL_tripletList.begin(), gL_tripletList.end());
+
+    // Sobolev operator
+    SparseMatrix<double> sobolevOp = graph_L + sobolev_lambda * identityMatrix<double>(n);
+    PositiveDefiniteSolver<double> sobolevSolver(sobolevOp);
+    DenseMatrix<double> sobolev_grads;
+    for (size_t i = 0; i < sobolev_p; i++){
+        sobolev_grads = solve_dense_b(&sobolevSolver, vertex_data_to_matrix(grads));
+    }
+    VertexData<Vector3> sobolev_grads_vd(*forwardSolver->hullMesh);
+    for (Vertex v: forwardSolver->hullMesh->vertices()){
+        sobolev_grads_vd[v] = vec2vec3(sobolev_grads.row(v.getIndex()));
+    }
+    return sobolev_grads_vd;
 }
