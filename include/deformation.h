@@ -69,13 +69,17 @@ class DeformationSolver{
        size_t threshold_exceeded = 0;
        VertexData<SurfacePoint> closest_point_assignment; // hullMesh -> innerMesh
        VertexData<bool> freeze_assignment; // hullMesh -> bool
+       VertexData<bool> marked_to_split; // hullMesh -> bool
+
        VertexData<double> closest_point_distance; // hullMesh -> double
        VertexData<bool> CP_involvement;
        SparseMatrix<double> closest_point_operator;
        SparseMatrix<double> closest_point_flat_operator;
        size_t face_assignments = 0, edge_assignments = 0, vertex_assignments = 0;
 
-       bool dynamic_remesh = true;
+       bool dynamic_remesh = true,
+            curvature_weighted_CP = true;
+
        double refinement_CP_threshold = 0.5;
        double init_bending_lambda = 1e0,
               final_bending_lambda = 1e3,
@@ -112,7 +116,7 @@ class DeformationSolver{
        void assign_closest_vertices(VertexPositionGeometry *new_geometry, bool allow_multi_assignment = true);
        void assign_closest_points_barycentric(VertexPositionGeometry *new_geometry);
        // edge/face splits
-       bool split_barycentric_closest_points(VertexPositionGeometry *new_geometry, bool split_close_only = true);
+       bool split_barycentric_closest_points(VertexPositionGeometry *new_geometry, bool local_split = true);
        double closest_point_energy(VertexPositionGeometry *new_geometry);
        double closest_point_energy(Vector<double> flat_new_pos_mat);
        // gradient of CP energy
@@ -125,6 +129,9 @@ class DeformationSolver{
        std::tuple<double, DenseMatrix<double>, std::vector<DenseMatrix<double>>> get_log_barrier_stuff(DenseMatrix<double> new_pos_mat, Vector<double> weights);
        bool check_feasibility(DenseMatrix<double> new_pos_mat);
        double get_log_barrier_energy(DenseMatrix<double> new_pos_mat);
+       // active set helpers
+       DenseMatrix<bool> get_active_set_matrix(DenseMatrix<double> new_pos_mat, double active_threshold);
+       double get_point_distance_to_convex_hull(Eigen::VectorXd p);
 
        // rest geometry constants for elastic energies
        EdgeData<double> rest_dihedral_angles,

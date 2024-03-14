@@ -287,6 +287,7 @@ void DeformationSolver::assign_closest_vertices(VertexPositionGeometry *new_geom
 
 void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry *new_geometry){
     threshold_exceeded = 0;
+    marked_to_split = VertexData<bool>(*convex_mesh, false);
     closest_point_assignment = VertexData<SurfacePoint>(*convex_mesh, SurfacePoint());
     closest_point_distance = VertexData<double>(*convex_mesh, -1.);
     CP_involvement = VertexData<bool>(*mesh, false);
@@ -310,7 +311,6 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
     // auto bary_pc = polyscope::registerPointCloud("barycenters", barry_points);
     // bary_pc->addVectorQuantity("normals", bary_normals);
     // polyscope::show();
-
     for (Vertex c_v: convex_mesh->vertices()){
         Face closest_face;
         Edge closest_edge;
@@ -406,8 +406,13 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
             
             Vector3 bary_coor = barycentric(on_face_projection, A, B, C);
             closest_point_assignment[c_v] = SurfacePoint(closest_face, bary_coor);
-            if (min_dist < refinement_CP_threshold)
+            double d1 = get_point_distance_to_convex_hull(vec32vec(A)), 
+                   d2 = get_point_distance_to_convex_hull(vec32vec(B)), 
+                   d3 = get_point_distance_to_convex_hull(vec32vec(C));
+            if (d1 <= refinement_CP_threshold && d2 <= refinement_CP_threshold && d3 <= refinement_CP_threshold) {// or max?
+                marked_to_split[c_v] = true;
                 threshold_exceeded++;
+            }
             
             // update CP involvement
             CP_involvement[v1] = true;
@@ -434,8 +439,12 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
                     B = new_geometry->inputVertexPositions[v2];
             double tVal = (on_edge_projection - A).norm()/(A - B).norm();
             closest_point_assignment[c_v] = SurfacePoint(closest_edge, tVal);
-            if (min_dist < refinement_CP_threshold)
+            double d1 = get_point_distance_to_convex_hull(vec32vec(A)), 
+                   d2 = get_point_distance_to_convex_hull(vec32vec(B));
+            if (d1 <= refinement_CP_threshold && d2 <= refinement_CP_threshold){ // or max?
+                marked_to_split[c_v] = true;
                 threshold_exceeded++;
+            }
             
             // update CP involvement
             CP_involvement[v1] = true;
@@ -468,7 +477,7 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
 }
 
 
-bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry *new_geometry, bool split_close_only){  
+bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry *new_geometry, bool local_split){  
     // assign CP should be called already; containers initialized
     size_t mutli_edge_hits = 0, multi_face_hits = 0, multi_vertex_hits = 0;
     EdgeData<bool> edge_is_hit(*mesh, false);
@@ -476,8 +485,10 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
     VertexData<bool> vertex_is_hit(*mesh, false);
     bool split_occured = false;
     for (Vertex cv: convex_mesh->vertices()){
-        if (closest_point_distance[cv] > refinement_CP_threshold && split_close_only)
+        if (!marked_to_split[cv] && local_split)
             continue;
+        // if (closest_point_distance[cv] > refinement_CP_threshold && local_split)
+        //     continue;
         freeze_assignment[cv] = true;
         split_occured = true;
         SurfacePoint assigned_cp = closest_point_assignment[cv];
@@ -529,7 +540,8 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
     }
 
     mesh->compress();
-    printf(" splitting is over. multi edge hits %d, \n\t\t\t\t multi face hits: %d, \n\t\t\t\t multi vertex hits: %d\n", mutli_edge_hits, multi_face_hits, multi_vertex_hits);
+    if (mutli_edge_hits + multi_face_hits + multi_vertex_hits > 0)
+        printf(" splitting is over. multi edge hits %d, \n\t\t\t\t multi face hits: %d, \n\t\t\t\t multi vertex hits: %d\n", mutli_edge_hits, multi_face_hits, multi_vertex_hits);
     return split_occured;
 }
 
@@ -615,6 +627,24 @@ bool DeformationSolver::check_feasibility(DenseMatrix<double> new_pos_mat){
     return (diff_ij.array() > DenseMatrix<double>::Zero(diff_ij.rows(), diff_ij.cols()).array()).all();
 }
 
+DenseMatrix<bool> DeformationSolver::get_active_set_matrix(DenseMatrix<double> new_pos_mat, double active_threshold){
+    size_t n = new_pos_mat.rows();
+    DenseMatrix<double> NP = constraint_matrix * new_pos_mat.transpose(); // nf by n; col j is N*P_j
+    DenseMatrix<double> repeated_rhs = constraint_rhs.replicate(1, n);
+    assert(repeated_rhs.cols() == n); // same as the number of new pos vertices
+    DenseMatrix<double> diff_ij = repeated_rhs - NP; // col j is N*P_j - rhs; i.e. -f_i(P_j) which should be positive
+    DenseMatrix<bool> active_constraints = diff_ij.array() < DenseMatrix<double>::Constant(constraint_matrix.rows(), n, active_threshold).array();
+    return active_constraints;
+}
+
+double DeformationSolver::get_point_distance_to_convex_hull(Eigen::VectorXd p){
+    size_t m = convex_mesh->nFaces();
+    Eigen::VectorXd Np = constraint_matrix * p;
+    assert(repeated_rhs.size() == m); // p or pT?
+    Eigen::MatrixXd diff_ij = constraint_rhs - Np; // col j is N*P_j - rhs; i.e. -f_i(P_j) which should be positive
+    double distance = diff_ij.minCoeff();
+    return distance;
+}
 
 void DeformationSolver::update_bending_rest_constants(){
     // rest dihedrals
@@ -711,8 +741,8 @@ auto DeformationSolver::get_tinyAD_bending_function(){
         //     return (dihedral_angle - rest_dihedral_angles[e]) * sqrt(rest_bending_constant[e]);
         // else 
         //     return (rest_dihedral_angles[e] - dihedral_angle) * sqrt(rest_bending_constant[e]);
-        T current_edge_len = (p2 - p1).norm();
-        return current_edge_len * (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_bending_constant[e];
+        // T current_edge_len = (p2 - p1).norm();
+        return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_bending_constant[e];
     });
 
     return bendingEnergy_func;
@@ -739,7 +769,7 @@ auto DeformationSolver::get_tinyAD_membrane_function(){
         // W(I^{-1} I_tilde)
         
         // T current_triangle_area = 0.5 * (p2 - p1).cross(p3 - p1).norm();
-        return rest_face_areas[f] * ((simil_matrix.transpose() * simil_matrix).trace()*0.5 / simil_matrix.determinant()-1.);
+        return rest_face_areas[f] * ((simil_matrix.transpose() * simil_matrix).trace()*0.5/simil_matrix.determinant() -1.);
         // return rest_face_areas[f] * log((simil_matrix.transpose() * simil_matrix).trace()*0.5 / simil_matrix.determinant()); // 
         // return rest_face_areas[f] * current_triangle_area  * log((simil_matrix.transpose() * simil_matrix).trace()*0.5 / simil_matrix.determinant()); // 
         // return rest_face_areas[f] * current_triangle_area * (simil_matrix.transpose() * simil_matrix).trace()*0.5 / simil_matrix.determinant();
@@ -799,6 +829,16 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
     double initial_mean_edge_len = old_geometry->edgeLengths.toVector().mean();
     old_geometry->unrequireEdgeLengths();
 
+    Eigen::SparseMatrix<double> cv_gauss_curve_diag;
+    if (curvature_weighted_CP){
+        convex_geometry->requireVertexGaussianCurvatures();
+        Eigen::VectorXd convex_gaussian_curvatures = convex_geometry->vertexGaussianCurvatures.toVector();
+        Eigen::VectorXd convex_gaussian_curvatures_for_flat(3*convex_gaussian_curvatures.size());
+        convex_gaussian_curvatures_for_flat << convex_gaussian_curvatures, convex_gaussian_curvatures, convex_gaussian_curvatures; 
+        std::cout << "convex_gaussian_curvatures min and max " << convex_gaussian_curvatures.minCoeff() << " " << convex_gaussian_curvatures.maxCoeff() << std::endl;
+        cv_gauss_curve_diag = convex_gaussian_curvatures_for_flat.asDiagonal();
+    }
+
     // tinyAD stuff
     build_constraint_matrix_and_rhs();
     auto barrierEnergy_func = get_tinyAD_barrier_function();
@@ -813,6 +853,10 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         return to_eigen(old_geometry->inputVertexPositions[v.getIndex()]);
     });
 
+    // GRBEnv env = GRBEnv();
+    // GRBModel QPmodel = GRBModel(env);
+    // build_QP_model_with_constraints(QPmodel, x, constraint_matrix, constraint_rhs);
+            
     while (!check_feasibility(unflat_tinyAD(x))){ // assuming centered; which is
         printf("  -- scaling for feasibility -- \n");
         x *= 0.95;
@@ -834,6 +878,22 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
     freeze_assignment = VertexData<bool>(*convex_mesh, false);
     for (int i = 0; i < filling_max_iter; ++i) {
         
+        // assign closest points
+        assign_closest_points_barycentric(tmp_geometry);
+        //DEBUG
+        polyscope::registerPointCloud("CVs", convex_geometry->inputVertexPositions)->setPointColor({1.,0.,0.})->setEnabled(false);
+        polyscope::registerPointCloud("CPs", unflat_tinyAD(closest_point_flat_operator * x))->setPointColor({0.,1.,0.})->setEnabled(false);
+        std::vector<std::array<size_t, 2>> edge_inds;
+        std::vector<Vector3> edge_points;
+        std::vector<double> edge_lens;
+        for (Vertex v: convex_mesh->vertices()){
+            edge_inds.push_back({2*v.getIndex(),2*v.getIndex() + 1});
+            edge_points.push_back(convex_geometry->inputVertexPositions[v]);
+            edge_points.push_back(closest_point_assignment[v].interpolate(tmp_geometry->inputVertexPositions));
+            edge_lens.push_back((edge_points.back() - edge_points[edge_points.size()-2]).norm());
+        }
+        polyscope::registerCurveNetwork("CV-CP", edge_points, edge_inds)->setColor({0.,0.,1.})->setRadius(0.001)->addEdgeScalarQuantity("edge len", edge_lens);
+        // polyscope::show();
         // visuals
         if (visual_per_step != 0){
             if (i % visual_per_step == 0){
@@ -848,20 +908,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
                 polyscope::frameTick();
             }
         }
-        // assign closest points
-        assign_closest_points_barycentric(tmp_geometry);
-        //DEBUG
-        polyscope::registerPointCloud("CVs", convex_geometry->inputVertexPositions)->setPointColor({1.,0.,0.});
-        polyscope::registerPointCloud("CPs", unflat_tinyAD(closest_point_flat_operator * x))->setPointColor({0.,1.,0.});
-        std::vector<std::array<size_t, 2>> edge_inds;
-        std::vector<Vector3> edge_points;
-        for (Vertex v: convex_mesh->vertices()){
-            edge_inds.push_back({2*v.getIndex(),2*v.getIndex() + 1});
-            edge_points.push_back(convex_geometry->inputVertexPositions[v]);
-            edge_points.push_back(closest_point_assignment[v].interpolate(tmp_geometry->inputVertexPositions));
-        }
-        polyscope::registerCurveNetwork("CV-CP", edge_points, edge_inds)->setColor({0.,0.,1.});
-        // polyscope::show();
 
         double CP_energy = closest_point_energy(tmp_geometry);
         // dynamic remesh 
@@ -887,7 +933,8 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
             x = bendingEnergy_func.x_from_data([&] (Vertex v) { // resized so need to reassign
                 return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
             });
-
+            // build_QP_model_with_constraints(QPmodel, x, constraint_matrix, constraint_rhs);
+    
             // re-assign CP since connectivity has changed
             assign_closest_points_barycentric(tmp_geometry);
             // assign_closest_vertices(tmp_geometry, true);
@@ -898,9 +945,14 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         CP_energy = closest_point_energy(tmp_geometry);
         Eigen::VectorXd x_cv_flat = tinyAD_flatten(vertex_data_to_matrix(convex_geometry->inputVertexPositions));
         Eigen::SparseMatrix<double> A_CP = closest_point_flat_operator;
+        if (curvature_weighted_CP){
+            x_cv_flat = cv_gauss_curve_diag * x_cv_flat;
+            A_CP = cv_gauss_curve_diag * A_CP;
+        }
         Eigen::VectorX<double> CP_g = 2. * A_CP.transpose() * (A_CP * x - x_cv_flat);  // tinyAD_flatten(closest_point_energy_gradient(tmp_geometry));
         Eigen::SparseMatrix<double> CP_H = 2. * A_CP.transpose() * A_CP;
-        
+
+
         // x - x_0 regularizer
         // Eigen::VectorXd reg_g = Eigen::VectorXd::Zero(x.size());
         Eigen::SparseMatrix<double> reg_H = 2.* identityMatrix<double>(x.size());
@@ -909,7 +961,9 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         // elastic stuff
         auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x); //
         auto [membrane_f, membrane_g, membrane_H_proj] = membraneEnergy_func.eval_with_hessian_proj(x); //
-        
+        // DEBUG?
+        // auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_derivatives(x); //
+        // auto [membrane_f, membrane_g, membrane_H_proj] = membraneEnergy_func.eval_with_derivatives(x); //
         
         // printf(" finding Barrier terms\n");
         // DenseMatrix<double> x_in_dense_format = vertex_data_to_matrix(tmp_geometry->inputVertexPositions);
@@ -920,7 +974,8 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         Eigen::SparseMatrix<double> total_H = bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + CP_lambda * CP_H + reg_lambda * reg_H; // + barrier_lambda * barrier_H;
         Eigen::VectorXd total_g = bending_lambda * bending_g + membrane_lambda * membrane_g + CP_lambda * CP_g; // reg g is zero at x0 // + barrier_lambda * barrier_g;
         double total_energy = bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy; // reg e is zero at x0 // barrier_lambda * barrier_f;
-        
+        printf("**** non- zero H elements: %d \n,  bending H elements: %d, \n,  membrane H elements:%d \n, CP H elements: %d\n reg H elements: %d\n", 
+                    total_H.nonZeros(), bending_H_proj.nonZeros(), membrane_H_proj.nonZeros(), CP_H.nonZeros(), reg_H.nonZeros());
         // barrier stuff
         if (barrier_lambda != 0){
             auto [barrier_f, barrier_g, barrier_H] = barrierEnergy_func.eval_with_derivatives(x); //
@@ -936,9 +991,9 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
 
         TINYAD_DEBUG_OUT("\t- Energy in iter " << i << ": bending= " << bending_lambda << "*" << bending_f << 
                          "\n\t\t\t\t membrane  = " << membrane_lambda << " * " << membrane_f <<
-                         "\n\t\t\t\t CP        = " << CP_lambda << " * "<< CP_energy << 
-                         (barrier_lambda == 0. ? "" : ("\n\t\t\t\t barrier   = " + std::to_string(barrier_lambda) + " * " + std::to_string(barrierEnergy_func.eval(x)))) <<
-                         "\n\t\t\t\t\t total: " << bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy);
+                         "\n\t\t\t\t CP        = " << CP_lambda << " * "<< CP_energy);
+        if (barrier_lambda != 0.) TINYAD_DEBUG_OUT("\n\t\t\t\t barrier   = " << barrier_lambda << " * " << barrierEnergy_func.eval(x));
+        TINYAD_DEBUG_OUT("\n\t\t\t\t\t total: " << bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy);
         if (energy_plot){
             *current_iter = i;
             energies_log[0][i] = bending_f;
@@ -948,10 +1003,13 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         Eigen::VectorXd old_x = x;
         Eigen::VectorXd d;
         if (barrier_lambda == 0){ // use QP
+            // Eigen::VectorXd new_x = update_QP_objective_and_solve(QPmodel, total_H/2., total_g - total_H * old_x, old_x);
+            Eigen::MatrixX<bool> active_set = get_active_set_matrix(unflat_tinyAD(x), 0.1);
+            // std::cout << ANSI_FG_GREEN << "total active consts: " << active_set.cast<int>().sum() << "/" << n*constraint_matrix.rows() << ANSI_RESET << std::endl; 
             Eigen::VectorXd new_x = solve_QP_with_ineq(total_H/2., //bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + 
-                                                    total_g - total_H * x,
+                                                       total_g - total_H * x,
                                                         old_x, //
-                                                        constraint_matrix, constraint_rhs);
+                                                        constraint_matrix, constraint_rhs, active_set);
             d = new_x - old_x;
         }
         else { // my own barrier
@@ -971,7 +1029,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
                                     f_new += barrier_lambda * barrierEnergy_func.eval(curr_x);
                                 return f_new;
                             },
-                        1., 0.9, 100, 0.); // no clue whats good here for armijo constant; proly nothing since non-linear stuff happening
+                        1., 0.9, 200, 0.); // no clue whats good here for armijo constant; proly nothing since non-linear stuff happening
                     // smax, decay, max_iter, armijo constant
         // update tmp geometry
         bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) {

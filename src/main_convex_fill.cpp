@@ -99,17 +99,21 @@ bool compute_global_G_effect = true,
      frozen_G = false,
      structured_opt = true,
      dynamic_remesh = true,
+     use_reg = false,
      use_QP_solver = true,
      always_update_structure = true,
      with_hull_projection = false,
-     first_time = false;
+     first_time = false,
+     curvature_weighted_CP = false;
 bool do_remesh = true;
 float scale_for_remesh = 1.003;
 polyscope::PointCloud *test_pc;
 
 int fair_sides_count = 6; // for optimization
 bool do_sobolev_dice_grads = true;
-
+float sobolev_lambda = 0.1,
+      sobolev_lambda_decay = 0.9;
+int sobolev_p = 2;
 // optimization stuff
 InverseSolver* inverseSolver;
 float step_size = 0.01,
@@ -136,6 +140,7 @@ int hull_opt_steps = 50;
 
 static const int MAX_FILL_ITERS = 300,
                  ENERGY_COUNT = 5;
+int current_ENERGY_COUNT = 3;
 int current_fill_iter = -1;
 static float xs[MAX_FILL_ITERS];
 const char* energy_names[ENERGY_COUNT] = {"bending", "membrane", "CP", "barrier", "total"};
@@ -262,8 +267,11 @@ void initialize_deformation_params(DeformationSolver *deformation_solver){
     deformationSolver->final_barrier_lambda = 0.;
   }
   deformation_solver->internal_growth_p = internal_p;
-  
-  deformation_solver->reg_lambda = pow(10, reg_lambda_exp);
+  if (use_reg)
+    deformation_solver->reg_lambda = pow(10, reg_lambda_exp);
+  else 
+    deformation_solver->reg_lambda = 0.;
+  deformation_solver->curvature_weighted_CP = curvature_weighted_CP;
 }
 
 void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
@@ -543,10 +551,18 @@ void version2_dice_pipeline(size_t step_count = 1){
   tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
   tmp_inv_solver = new InverseSolver(tmp_bnd_builder);
 
+  max_energy = 0.;
+  // cur = 2
+  current_fill_iter = -1;
+  current_ENERGY_COUNT = 3;
+  energy_names[0] = "Sblv grad norm";
+  energy_names[1] = "raw grad norm";
+  energy_names[2] = "Sblv/raw grad norm";
+  double current_sobolev_lambda = sobolev_lambda;
   for (size_t iter = 0; iter < step_count; iter++){
 
     tmp_inv_solver->find_uni_mass_d_pf_dv(frozen_G);
-    printf(" vertex derivatives found!\n");
+    // printf(" vertex derivatives found!\n");
     if (structured_opt){ // if updating the flow structure
       tmp_bnd_builder->build_boundary_normals(); // face-last-face is called 
       // boundary_builder->print_area_of_boundary_loops();
@@ -566,10 +582,17 @@ void version2_dice_pipeline(size_t step_count = 1){
     
     pip2psmesh->setEnabled(true);
     pip2psmesh->setTransparency(0.7);
-    pip2psmesh->addVertexVectorQuantity(" dice grads raw", vertex_grads)->setEnabled(true);
+    pip2psmesh->addVertexVectorQuantity(" dice grads raw", vertex_grads)->setVectorLengthScale(0.04)->setEnabled(true);
     
     if (do_sobolev_dice_grads){
-      vertex_grads = tmp_inv_solver->sobolev_diffuse_gradients(vertex_grads, 0.1, 2);
+      
+      current_fill_iter = iter;
+      energies[1][iter] = tinyAD_flatten(vertex_data_to_matrix(vertex_grads)).norm();
+      current_sobolev_lambda *= sobolev_lambda_decay;
+      vertex_grads = tmp_inv_solver->sobolev_diffuse_gradients(vertex_grads, current_sobolev_lambda, sobolev_p);
+      
+      energies[0][iter] = tinyAD_flatten(vertex_data_to_matrix(vertex_grads)).norm();
+      energies[2][iter] = energies[0][iter] / energies[1][iter];
       pip2psmesh->addVertexVectorQuantity(" sobolev diffused dice grads", vertex_grads)->setEnabled(true);
     }
 
@@ -612,7 +635,6 @@ void version2_dice_pipeline(size_t step_count = 1){
   psHullFillMesh->setEdgeWidth(2.);
   psHullFillMesh->setEnabled(true);
   gm_is_drawn = false;
-  
   convex_to_fill_mesh = tmp_solver->inputMesh;
   convex_to_fill_geometry = tmp_solver->inputGeometry;
   load_hull_from_file = false;
@@ -627,6 +649,8 @@ void version2_dice_pipeline(size_t step_count = 1){
   BoundaryBuilder* tmp_bnd_builder2 = new BoundaryBuilder(tmp_solver2);
   tmp_bnd_builder2->build_boundary_normals();
   tmp_bnd_builder2->print_area_of_boundary_loops();
+  if (draw_boundary_patches)
+    draw_stable_patches_on_gauss_map(gm_is_drawn, tmp_bnd_builder2);
   std::cout << "dice energy check:" << tmp_bnd_builder2->get_fair_dice_energy(fair_sides_count) << "\n";
 }
 
@@ -681,7 +705,6 @@ void myCallback() {
 
   ImPlot::CreateContext();
   if (ImPlot::BeginPlot("CP + elastic energies", "iter", "energy")) {
-      int current_ENERGY_COUNT = 3;
       for (int i = 0; i < current_ENERGY_COUNT; i++)
         if (max_energy < energies[i][current_fill_iter]) max_energy = energies[i][current_fill_iter];
       ImPlot::SetupAxes("iter","energy");
@@ -721,7 +744,10 @@ void myCallback() {
     || ImGui::Checkbox("use QP solver ", &use_QP_solver));
   if(!use_QP_solver) 
     if (ImGui::InputFloat2("init/final barrier log ", barrier_lambda_exps));
-  if (ImGui::SliderFloat("reg lambda; log10", &reg_lambda_exp, -5., 5.));
+  if(ImGui::Checkbox("curvature weighted", &curvature_weighted_CP));
+  ImGui::Checkbox("use reg ", &use_reg);
+  if(use_reg) 
+    if (ImGui::SliderFloat("reg lambda; log10", &reg_lambda_exp, -5., 5.));
   
 
   if (ImGui::Button("uniform mass G")){
@@ -756,6 +782,11 @@ void myCallback() {
   if (ImGui::SliderInt("hull optimize step count", &hull_opt_steps, 1, 200));
   if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
   if (ImGui::Checkbox("Sobolev pre-condition", &do_sobolev_dice_grads));
+  if (do_sobolev_dice_grads){
+    if (ImGui::SliderFloat("Sobolev lambda", &sobolev_lambda, 0., 2.));
+    if (ImGui::SliderFloat("Sobolev lambda decay", &sobolev_lambda_decay, 0., 1));
+    if (ImGui::SliderInt("Sobolev power", &sobolev_p, 1, 5));
+  }
   if (ImGui::Button("optimize hull (w.r.t. dice energy)")) {
     v2_dice_animate = true;
     if (polyscope::hasSurfaceMesh("v2pipeline final mesh")) polyscope::removeSurfaceMesh("v2pipeline final mesh");
@@ -842,6 +873,10 @@ int main(int argc, char **argv) {
       animate = false;
       gm_is_drawn = false;
       max_energy = 0.;
+      energy_names[0] = "bending";
+      energy_names[1] = "membrane";
+      current_fill_iter = 0;
+      current_ENERGY_COUNT = 3;
       Eigen::MatrixXd new_points = deformationSolver->solve_for_bending(1, true, &current_fill_iter, energies);
       // polyscope::SurfaceMesh *final_deformed_psMesh = polyscope::registerSurfaceMesh(
       //   "v2pipeline final mesh", new_points, mesh->getFaceVertexList(), polyscopePermutations(*mesh));
@@ -868,6 +903,7 @@ int main(int argc, char **argv) {
       
       if (pre_deform_G != Vector3({-10.,-10.,-10.})){// only if we coming here after dice energy search
         printf(" pre deform G stuff:\n");
+        std::cout<< "pre-deform G:" << pre_deform_G << "\n";
         final_solver->set_G(pre_deform_G);
         final_solver->updated = false;
         final_solver->initialize_pre_computes();
@@ -882,7 +918,11 @@ int main(int argc, char **argv) {
       }
     }
     if (v2_dice_animate){
-      max_energy = 0.;
+      max_energy = 0.01;
+      current_fill_iter = 0;
+      current_ENERGY_COUNT = 3;
+      energy_names[0] = "bending";
+      energy_names[1] = "membrane";
       // polyscope::removeAllStructures();
       version2_dice_pipeline(hull_opt_steps);
       v2_dice_animate = false;

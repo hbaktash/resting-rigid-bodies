@@ -718,7 +718,7 @@ VertexData<Vector3> InverseSolver::sobolev_diffuse_gradients(VertexData<Vector3>
     graph_L.setFromTriplets(gL_tripletList.begin(), gL_tripletList.end());
 
     // Sobolev operator
-    SparseMatrix<double> sobolevOp = graph_L + sobolev_lambda * identityMatrix<double>(n);
+    SparseMatrix<double> sobolevOp = sobolev_lambda * graph_L + identityMatrix<double>(n);
     PositiveDefiniteSolver<double> sobolevSolver(sobolevOp);
     DenseMatrix<double> sobolev_grads;
     for (size_t i = 0; i < sobolev_p; i++){

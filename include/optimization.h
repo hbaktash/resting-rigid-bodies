@@ -25,6 +25,9 @@
 #include <Eigen/Core>
 #include "gurobi_c++.h"
 
+// #include "monty.h"
+// #include "fusion.h"
+
 // using namespace mosek::fusion;
 // using namespace monty;
 
@@ -39,13 +42,18 @@
 
 Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Eigen::VectorXd g, 
                             std::function<double(Eigen::VectorXd)> eval, double s_max = 1.0, 
-                            double shrink = 0.8, int max_iters = 64, double armijo_const = 1e-4);
+                            double shrink = 0.8, int max_iters = 64, double armijo_const = 0.);
 
 Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
-                                   Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b);
+                                   Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, Eigen::MatrixX<bool> active_set = Eigen::MatrixX<bool>::Zero(0,0));
 
-GRBModel build_QP_model_with_constraints(Eigen::VectorXd x_0, 
-                                         Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b);
+void build_QP_model_with_constraints(GRBModel &model, 
+                                     Eigen::VectorXd x_0, 
+                                     Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, Eigen::MatrixX<bool> active_set = Eigen::MatrixX<bool>::Zero(0,0));
 
 Eigen::VectorXd update_QP_objective_and_solve(GRBModel &model, 
                                               Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0);
+
+
+// Eigen::VectorXd solve_QP_with_ineq_MOSEK(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
+//                                          Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b);

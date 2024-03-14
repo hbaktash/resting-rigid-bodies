@@ -47,22 +47,22 @@ Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Ei
 
 
 Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
-                                   Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b){
+                                   Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, Eigen::MatrixX<bool> active_set){
                                         // Gurobi calling code borrowed from CoMISo
     // build model
-    GRBModel model = build_QP_model_with_constraints(x_0, cons_A, cons_b);
+    GRBEnv env     = GRBEnv();
+    GRBModel model = GRBModel(env);
+    build_QP_model_with_constraints(model, x_0, cons_A, cons_b, active_set);
     // set objective and solve
     return update_QP_objective_and_solve(model, Q, g, x_0);
 }
 
 
-GRBModel build_QP_model_with_constraints(Eigen::VectorXd x_0, 
-                                         Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b){
+void build_QP_model_with_constraints(GRBModel &model, Eigen::VectorXd x_0, 
+                                     Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, Eigen::MatrixX<bool> active_set){
     //----------------------------------------------
     // 0. set up gurobi environment
     //----------------------------------------------
-    GRBEnv env     = GRBEnv();
-    GRBModel model = GRBModel(env);
 
     double time_limit = 1e10;
     model.getEnv().set(GRB_DoubleParam_TimeLimit, time_limit);
@@ -99,12 +99,15 @@ GRBModel build_QP_model_with_constraints(Eigen::VectorXd x_0,
         double rhsj = cons_b[j];
         for (size_t i = 0; i < n_verts; i++){
             // GRBLinExpr face_dist = ;
+            if (active_set.size() > 1) // not default argument
+                if (!active_set(j, i)) // skip inactive constraints
+                    continue;
             model.addConstr(rowj[0] * vars[3*i + 0] + 
                             rowj[1] * vars[3*i + 1] + 
                             rowj[2] * vars[3*i + 2] <= rhsj);
         }
     }
-    return model;
+    model.update();
 }
 
 
@@ -155,7 +158,7 @@ Eigen::VectorXd update_QP_objective_and_solve(GRBModel &model,
     //   3=concurrent,
     //   4=deterministic concurrent, and
     //   5=deterministic concurrent simplex.
-    model.set(GRB_IntParam_Method, 2);
+    model.set(GRB_IntParam_Method, -1);
     // model.set(GRB_IntParam_BarOrder, 1);
     model.setObjective(objective, GRB_MINIMIZE);
     // model.setObjectiveN(objective, 0, 1, 1); // main objective
@@ -191,6 +194,39 @@ Eigen::VectorXd update_QP_objective_and_solve(GRBModel &model,
     return x_0;                         
 }
 
+
+// Eigen::VectorXd solve_QP_with_ineq_MOSEK(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
+//                                          Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b){
+// //          min_x  |Ax-b|_2 + lambda1*|x|_1 + lambda2*|x|_2
+
+//     size_t n = x_0.size(),
+//             m = cons_b.size();
+//     Model::t M = new Model(); 
+
+//     // add variables
+//     Variable::t x = M->variable("x", n);
+
+//     // add constraints
+//     auto b = M->parameter("b", m); // cons_b
+//     M->constraint(Expr::vstack(t, Expr::sub(Expr::mul(cons_A, x), b)), Domain::inQCone());
+
+//     // p_i >= |x_i|, i=1..n
+//     auto p = M->variable(n);
+//     M->constraint(Expr::hstack(p, x), Domain::inQCone());
+
+//     // q >= |x|_2
+//     auto q = M->variable();
+//     M->constraint(Expr::vstack(q, x), Domain::inQCone());
+
+//     // Objective, parametrized with lambda1, lambda2
+//     // t + lambda1*sum(p) + lambda2*q
+//     auto lambda1 = M->parameter("lambda1");
+//     auto lambda2 = M->parameter("lambda2");
+//     auto obj = Expr::add(new_array_ptr<Expression::t, 1>({t, Expr::mul(lambda1, Expr::sum(p)), Expr::mul(lambda2, q)}));
+//     M->objective(ObjectiveSense::Minimize, obj);
+
+//     // Return the ready model
+// }
 
 ///// MOSEK attempt
 //     size_t n = x_0.size(),
