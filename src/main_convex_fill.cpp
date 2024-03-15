@@ -112,7 +112,7 @@ polyscope::PointCloud *test_pc;
 int fair_sides_count = 6; // for optimization
 bool do_sobolev_dice_grads = true;
 float sobolev_lambda = 0.1,
-      sobolev_lambda_decay = 0.9;
+      sobolev_lambda_decay = 0.95;
 int sobolev_p = 2;
 // optimization stuff
 InverseSolver* inverseSolver;

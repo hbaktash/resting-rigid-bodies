@@ -477,7 +477,7 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
 }
 
 
-bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry *new_geometry, bool local_split){  
+bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry *new_geometry){  
     // assign CP should be called already; containers initialized
     size_t mutli_edge_hits = 0, multi_face_hits = 0, multi_vertex_hits = 0;
     EdgeData<bool> edge_is_hit(*mesh, false);
@@ -485,7 +485,7 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
     VertexData<bool> vertex_is_hit(*mesh, false);
     bool split_occured = false;
     for (Vertex cv: convex_mesh->vertices()){
-        if (!marked_to_split[cv] && local_split)
+        if (!marked_to_split[cv])
             continue;
         // if (closest_point_distance[cv] > refinement_CP_threshold && local_split)
         //     continue;
@@ -495,22 +495,20 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
         Vertex new_v;
         Vector3 split_p_old_geo,
                 split_p_new_geo;
-        if (assigned_cp.type == SurfacePointType::Edge){
-            if (!edge_is_hit[assigned_cp.edge])
-                edge_is_hit[assigned_cp.edge] = true;
-            else {
-                mutli_edge_hits++;
+
+        // TODO: robust barycenter check
+        double robustness_eps = 1e-2;
+        if (assigned_cp.type == SurfacePointType::Face){
+            Vertex ignorable_vertex = assigned_cp.faceCoords.x < robustness_eps ? assigned_cp.face.halfedge().vertex() :
+                                      assigned_cp.faceCoords.y < robustness_eps ? assigned_cp.face.halfedge().next().vertex() :
+                                      assigned_cp.faceCoords.z < robustness_eps ? assigned_cp.face.halfedge().next().next().vertex() :
+                                      Vertex();
+
+            if (assigned_cp.faceCoords.x < robustness_eps || assigned_cp.faceCoords.y < robustness_eps || assigned_cp.faceCoords.z < robustness_eps){
+                
+                std::cout<< ANSI_FG_MAGENTA << "split bary coords: " << assigned_cp.faceCoords << ANSI_RESET << "\n";
                 continue;
             }
-            // printf("splitting edge %d: %d,%d \n", assigned_cp.edge.getIndex(), assigned_cp.edge.firstVertex().getIndex(), assigned_cp.edge.secondVertex().getIndex());
-            // must be done before spliting
-            split_p_old_geo = assigned_cp.interpolate(old_geometry->inputVertexPositions);
-            split_p_new_geo = assigned_cp.interpolate(new_geometry->inputVertexPositions);
-            // debug 
-            new_v = mesh->splitEdgeTriangular(assigned_cp.edge).vertex();
-
-        }
-        else if (assigned_cp.type == SurfacePointType::Face){
             if (!face_is_hit[assigned_cp.face])
                 face_is_hit[assigned_cp.face] = true;
             else {
@@ -523,6 +521,24 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
             split_p_new_geo = assigned_cp.interpolate(new_geometry->inputVertexPositions);
             
             new_v = mesh->insertVertex(assigned_cp.face);
+        }
+        else if (assigned_cp.type == SurfacePointType::Edge){
+            if (assigned_cp.tEdge < robustness_eps || assigned_cp.tEdge > 1. - robustness_eps){
+                std::cout<< ANSI_FG_MAGENTA << "split ratio: " << assigned_cp.tEdge << ANSI_RESET << "\n";
+                continue;
+            }
+            if (!edge_is_hit[assigned_cp.edge])
+                edge_is_hit[assigned_cp.edge] = true;
+            else { // not handling multi edge hits at the moment
+                mutli_edge_hits++;
+                continue;
+            }
+            // printf("splitting edge %d: %d,%d \n", assigned_cp.edge.getIndex(), assigned_cp.edge.firstVertex().getIndex(), assigned_cp.edge.secondVertex().getIndex());
+            // must be done before spliting
+            split_p_old_geo = assigned_cp.interpolate(old_geometry->inputVertexPositions);
+            split_p_new_geo = assigned_cp.interpolate(new_geometry->inputVertexPositions);
+            // debug 
+            new_v = mesh->splitEdgeTriangular(assigned_cp.edge).vertex();
         }
         else {
             // printf("splitting vertex %d\n", assigned_cp.vertex.getIndex());
@@ -974,8 +990,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         Eigen::SparseMatrix<double> total_H = bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + CP_lambda * CP_H + reg_lambda * reg_H; // + barrier_lambda * barrier_H;
         Eigen::VectorXd total_g = bending_lambda * bending_g + membrane_lambda * membrane_g + CP_lambda * CP_g; // reg g is zero at x0 // + barrier_lambda * barrier_g;
         double total_energy = bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy; // reg e is zero at x0 // barrier_lambda * barrier_f;
-        printf("**** non- zero H elements: %d \n,  bending H elements: %d, \n,  membrane H elements:%d \n, CP H elements: %d\n reg H elements: %d\n", 
-                    total_H.nonZeros(), bending_H_proj.nonZeros(), membrane_H_proj.nonZeros(), CP_H.nonZeros(), reg_H.nonZeros());
         // barrier stuff
         if (barrier_lambda != 0){
             auto [barrier_f, barrier_g, barrier_H] = barrierEnergy_func.eval_with_derivatives(x); //

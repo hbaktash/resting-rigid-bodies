@@ -60,6 +60,9 @@ Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorX
 
 void build_QP_model_with_constraints(GRBModel &model, Eigen::VectorXd x_0, 
                                      Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, Eigen::MatrixX<bool> active_set){
+    // log to console
+    model.set(GRB_IntParam_LogToConsole, 0);
+    
     //----------------------------------------------
     // 0. set up gurobi environment
     //----------------------------------------------
@@ -162,7 +165,6 @@ Eigen::VectorXd update_QP_objective_and_solve(GRBModel &model,
     // model.set(GRB_IntParam_BarOrder, 1);
     model.setObjective(objective, GRB_MINIMIZE);
     // model.setObjectiveN(objective, 0, 1, 1); // main objective
-    // model.set(GRB_IntParam_LogToConsole, 0);
     model.update();
     //----------------------------------------------
     // 4. solve problem
