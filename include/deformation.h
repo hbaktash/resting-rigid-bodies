@@ -116,6 +116,7 @@ class DeformationSolver{
        void assign_closest_vertices(VertexPositionGeometry *new_geometry, bool allow_multi_assignment = true);
        void assign_closest_points_barycentric(VertexPositionGeometry *new_geometry);
        // edge/face splits
+       SurfacePoint get_robust_barycentric_point(SurfacePoint p, double threshold);
        bool split_barycentric_closest_points(VertexPositionGeometry *new_geometry);
        double closest_point_energy(VertexPositionGeometry *new_geometry);
        double closest_point_energy(Vector<double> flat_new_pos_mat);

@@ -477,6 +477,41 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
 }
 
 
+SurfacePoint DeformationSolver::get_robust_barycentric_point(SurfacePoint p, double threshold){
+    if (p.type == SurfacePointType::Face){
+        Vector3 bary_coords = p.faceCoords;
+        bool remove_x = bary_coords.x < threshold,
+             remove_y = bary_coords.y < threshold,
+             remove_z = bary_coords.z < threshold;
+        if      (remove_x && !remove_y && !remove_z)
+            return SurfacePoint(p.face.halfedge().next(), 1. - bary_coords.y); 
+        else if (!remove_x && remove_y && !remove_z)
+            return SurfacePoint(p.face.halfedge().next().next(), 1. - bary_coords.z);
+        else if (!remove_x && !remove_y && remove_z)
+            return SurfacePoint(p.face.halfedge(), 1. - bary_coords.x);
+        else if (remove_x && remove_y && !remove_z)
+            return SurfacePoint(p.face.halfedge().next().tipVertex()); // vertex 2
+        else if (!remove_x && remove_y && remove_z)
+            return SurfacePoint(p.face.halfedge().vertex()); // vertex 0
+        else if (remove_x && !remove_y && remove_z)
+            return SurfacePoint(p.face.halfedge().next().tailVertex()); // vertex 1
+        else if (!remove_x && !remove_y && !remove_z) // all-remove not possible
+            return p; 
+        else throw std::logic_error(" barycenteric weights should sum to one!");
+    }
+    else if (p.type == SurfacePointType::Edge){
+        if (p.tEdge < threshold)
+            return SurfacePoint(p.edge.firstVertex());
+        else if (1. - p.tEdge < threshold)
+            return SurfacePoint(p.edge.secondVertex());
+        else 
+            return p;
+    }
+    else {
+        return p;
+    }
+}
+
 bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry *new_geometry){  
     // assign CP should be called already; containers initialized
     size_t mutli_edge_hits = 0, multi_face_hits = 0, multi_vertex_hits = 0;
@@ -491,63 +526,54 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
         //     continue;
         freeze_assignment[cv] = true;
         split_occured = true;
+        
         SurfacePoint assigned_cp = closest_point_assignment[cv];
+        double robustness_eps = 1e-2;
+        SurfacePoint robust_sp = get_robust_barycentric_point(assigned_cp, robustness_eps);
+
         Vertex new_v;
         Vector3 split_p_old_geo,
                 split_p_new_geo;
 
         // TODO: robust barycenter check
-        double robustness_eps = 1e-2;
-        if (assigned_cp.type == SurfacePointType::Face){
-            Vertex ignorable_vertex = assigned_cp.faceCoords.x < robustness_eps ? assigned_cp.face.halfedge().vertex() :
-                                      assigned_cp.faceCoords.y < robustness_eps ? assigned_cp.face.halfedge().next().vertex() :
-                                      assigned_cp.faceCoords.z < robustness_eps ? assigned_cp.face.halfedge().next().next().vertex() :
-                                      Vertex();
-
-            if (assigned_cp.faceCoords.x < robustness_eps || assigned_cp.faceCoords.y < robustness_eps || assigned_cp.faceCoords.z < robustness_eps){
-                
-                std::cout<< ANSI_FG_MAGENTA << "split bary coords: " << assigned_cp.faceCoords << ANSI_RESET << "\n";
-                continue;
-            }
-            if (!face_is_hit[assigned_cp.face])
-                face_is_hit[assigned_cp.face] = true;
+        if (robust_sp.type == SurfacePointType::Face){
+            if (!face_is_hit[robust_sp.face])
+                face_is_hit[robust_sp.face] = true;
             else {
                 multi_face_hits++;
+                freeze_assignment[cv] = false;
                 continue;
             } 
-            // printf("splitting face %d\n", assigned_cp.face.getIndex());
+            // printf("splitting face %d\n", robust_sp.face.getIndex());
             // must be done before spliting
-            split_p_old_geo = assigned_cp.interpolate(old_geometry->inputVertexPositions);
-            split_p_new_geo = assigned_cp.interpolate(new_geometry->inputVertexPositions);
+            split_p_old_geo = robust_sp.interpolate(old_geometry->inputVertexPositions);
+            split_p_new_geo = robust_sp.interpolate(new_geometry->inputVertexPositions);
             
-            new_v = mesh->insertVertex(assigned_cp.face);
+            new_v = mesh->insertVertex(robust_sp.face);
         }
-        else if (assigned_cp.type == SurfacePointType::Edge){
-            if (assigned_cp.tEdge < robustness_eps || assigned_cp.tEdge > 1. - robustness_eps){
-                std::cout<< ANSI_FG_MAGENTA << "split ratio: " << assigned_cp.tEdge << ANSI_RESET << "\n";
-                continue;
-            }
-            if (!edge_is_hit[assigned_cp.edge])
-                edge_is_hit[assigned_cp.edge] = true;
+        else if (robust_sp.type == SurfacePointType::Edge){
+            if (!edge_is_hit[robust_sp.edge])
+                edge_is_hit[robust_sp.edge] = true;
             else { // not handling multi edge hits at the moment
                 mutli_edge_hits++;
+                freeze_assignment[cv] = false;
                 continue;
             }
-            // printf("splitting edge %d: %d,%d \n", assigned_cp.edge.getIndex(), assigned_cp.edge.firstVertex().getIndex(), assigned_cp.edge.secondVertex().getIndex());
+            // printf("splitting edge %d: %d,%d \n", robust_sp.edge.getIndex(), robust_sp.edge.firstVertex().getIndex(), robust_sp.edge.secondVertex().getIndex());
             // must be done before spliting
-            split_p_old_geo = assigned_cp.interpolate(old_geometry->inputVertexPositions);
-            split_p_new_geo = assigned_cp.interpolate(new_geometry->inputVertexPositions);
+            split_p_old_geo = robust_sp.interpolate(old_geometry->inputVertexPositions);
+            split_p_new_geo = robust_sp.interpolate(new_geometry->inputVertexPositions);
             // debug 
-            new_v = mesh->splitEdgeTriangular(assigned_cp.edge).vertex();
+            new_v = mesh->splitEdgeTriangular(robust_sp.edge).vertex();
         }
         else {
-            // printf("splitting vertex %d\n", assigned_cp.vertex.getIndex());
+            // printf("splitting vertex %d\n", robust_sp.vertex.getIndex());
             // must be done before spliting
-            split_p_old_geo = assigned_cp.interpolate(old_geometry->inputVertexPositions);
-            split_p_new_geo = assigned_cp.interpolate(new_geometry->inputVertexPositions);
-            new_v = assigned_cp.vertex;
-            if (!vertex_is_hit[assigned_cp.vertex])
-                vertex_is_hit[assigned_cp.vertex] = true;
+            split_p_old_geo = robust_sp.interpolate(old_geometry->inputVertexPositions);
+            split_p_new_geo = robust_sp.interpolate(new_geometry->inputVertexPositions);
+            new_v = robust_sp.vertex;
+            if (!vertex_is_hit[robust_sp.vertex])
+                vertex_is_hit[robust_sp.vertex] = true;
             else 
                 multi_vertex_hits++;
         }
