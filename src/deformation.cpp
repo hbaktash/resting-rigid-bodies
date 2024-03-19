@@ -312,6 +312,8 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
     // bary_pc->addVectorQuantity("normals", bary_normals);
     // polyscope::show();
     for (Vertex c_v: convex_mesh->vertices()){
+        if (frozen_assignment[c_v].getIndex() != INVALID_IND)
+            continue;
         Face closest_face;
         Edge closest_edge;
         Vertex closest_vertex;
@@ -323,7 +325,7 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
 
         Vector3 c_p = convex_geometry->inputVertexPositions[c_v];
 
-        if (!freeze_assignment[c_v]){
+        if (!vertex_only_assignment[c_v]){
             // there should be a smarter way of checking all elements in one loop; maybe even without a flagging them??
             for (Face f: mesh->faces()){ 
                 Vector3 f_normal = new_geometry->faceNormal(f);
@@ -459,6 +461,11 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
             }
         }
         else {// min_dist == min_vertex_dist
+            if (vertex_only_assignment[c_v] && min_dist <= refinement_CP_threshold){
+                frozen_assignment[c_v] = closest_vertex;
+                closest_point_distance[c_v] = 0.;
+                continue;
+            }
             vertex_assignments++;
 
             closest_point_assignment[c_v] = SurfacePoint(closest_vertex); 
@@ -474,6 +481,36 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
     closest_point_operator.setFromTriplets(tripletList.begin(), tripletList.end());
     closest_point_flat_operator.setFromTriplets(flat_tripletList.begin(), flat_tripletList.end());
     printf("  ** stats for CP: vertices %d, edges: %d, faces: %d \n", vertex_assignments, edge_assignments, face_assignments);
+}
+
+
+std::vector<size_t> DeformationSolver::get_frozen_indices() {
+    std::vector<size_t> frozen_indices;
+    for (Vertex v: convex_mesh->vertices()){
+        if (frozen_assignment[v].getIndex() != INVALID_IND){
+            size_t i = v.getIndex();
+            frozen_indices.push_back(3*i + 0);
+            frozen_indices.push_back(3*i + 1);
+            frozen_indices.push_back(3*i + 2);
+        }
+    }
+    return frozen_indices;
+}
+
+
+Eigen::VectorXd DeformationSolver::get_frozen_x(){
+    Eigen::VectorXd frozen_x = Eigen::VectorXd::Zero(3*mesh->nVertices());
+    for (Vertex cv: convex_mesh->vertices()){
+        Vertex inner_assignment = frozen_assignment[cv];
+        if (inner_assignment.getIndex() != INVALID_IND){
+            size_t i = inner_assignment.getIndex();
+            Vector3 cp = convex_geometry->inputVertexPositions[cv];
+            frozen_x[3*i + 0] = cp.x;
+            frozen_x[3*i + 1] = cp.y;
+            frozen_x[3*i + 2] = cp.z;
+        }
+    }
+    return frozen_x;
 }
 
 
@@ -524,13 +561,12 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
             continue;
         // if (closest_point_distance[cv] > refinement_CP_threshold && local_split)
         //     continue;
-        freeze_assignment[cv] = true;
+        vertex_only_assignment[cv] = true;
         split_occured = true;
-        
         SurfacePoint assigned_cp = closest_point_assignment[cv];
-        double robustness_eps = 1e-2;
-        SurfacePoint robust_sp = get_robust_barycentric_point(assigned_cp, robustness_eps);
-
+        SurfacePoint robust_sp = get_robust_barycentric_point(assigned_cp, split_robustness_threshold);
+        if (robust_sp.type != assigned_cp.type)
+            polyscope::registerPointCloud("robusted SP", std::vector<Vector3>({assigned_cp.interpolate(new_geometry->inputVertexPositions) ,robust_sp.interpolate(new_geometry->inputVertexPositions)}))->setPointColor({0.8,0.1,0.1});
         Vertex new_v;
         Vector3 split_p_old_geo,
                 split_p_new_geo;
@@ -541,7 +577,7 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
                 face_is_hit[robust_sp.face] = true;
             else {
                 multi_face_hits++;
-                freeze_assignment[cv] = false;
+                vertex_only_assignment[cv] = false;
                 continue;
             } 
             // printf("splitting face %d\n", robust_sp.face.getIndex());
@@ -556,7 +592,7 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
                 edge_is_hit[robust_sp.edge] = true;
             else { // not handling multi edge hits at the moment
                 mutli_edge_hits++;
-                freeze_assignment[cv] = false;
+                vertex_only_assignment[cv] = false;
                 continue;
             }
             // printf("splitting edge %d: %d,%d \n", robust_sp.edge.getIndex(), robust_sp.edge.firstVertex().getIndex(), robust_sp.edge.secondVertex().getIndex());
@@ -580,7 +616,6 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
         old_geometry->inputVertexPositions[new_v] = split_p_old_geo;
         new_geometry->inputVertexPositions[new_v] = split_p_new_geo;
     }
-
     mesh->compress();
     if (mutli_edge_hits + multi_face_hits + multi_vertex_hits > 0)
         printf(" splitting is over. multi edge hits %d, \n\t\t\t\t multi face hits: %d, \n\t\t\t\t multi vertex hits: %d\n", mutli_edge_hits, multi_face_hits, multi_vertex_hits);
@@ -674,7 +709,7 @@ DenseMatrix<bool> DeformationSolver::get_active_set_matrix(DenseMatrix<double> n
     DenseMatrix<double> NP = constraint_matrix * new_pos_mat.transpose(); // nf by n; col j is N*P_j
     DenseMatrix<double> repeated_rhs = constraint_rhs.replicate(1, n);
     assert(repeated_rhs.cols() == n); // same as the number of new pos vertices
-    DenseMatrix<double> diff_ij = repeated_rhs - NP; // col j is N*P_j - rhs; i.e. -f_i(P_j) which should be positive
+    DenseMatrix<double> diff_ij = repeated_rhs - NP; // col j is N*P_j - rhs; all positive
     DenseMatrix<bool> active_constraints = diff_ij.array() < DenseMatrix<double>::Constant(constraint_matrix.rows(), n, active_threshold).array();
     return active_constraints;
 }
@@ -917,7 +952,8 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
            membrane_lambda = init_membrane_lambda,
            CP_lambda = init_CP_lambda;
 
-    freeze_assignment = VertexData<bool>(*convex_mesh, false);
+    vertex_only_assignment = VertexData<bool>(*convex_mesh, false);
+    frozen_assignment = VertexData<Vertex>(*convex_mesh, Vertex());
     for (int i = 0; i < filling_max_iter; ++i) {
         
         // assign closest points
@@ -934,7 +970,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
             edge_points.push_back(closest_point_assignment[v].interpolate(tmp_geometry->inputVertexPositions));
             edge_lens.push_back((edge_points.back() - edge_points[edge_points.size()-2]).norm());
         }
-        polyscope::registerCurveNetwork("CV-CP", edge_points, edge_inds)->setColor({0.,0.,1.})->setRadius(0.001)->addEdgeScalarQuantity("edge len", edge_lens);
+        polyscope::registerCurveNetwork("CV-CP", edge_points, edge_inds)->setColor({0.,0.,1.})->setRadius(0.0001)->addEdgeScalarQuantity("edge len", edge_lens);
         // polyscope::show();
         // visuals
         if (visual_per_step != 0){
@@ -1044,12 +1080,12 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         Eigen::VectorXd d;
         if (barrier_lambda == 0){ // use QP
             // Eigen::VectorXd new_x = update_QP_objective_and_solve(QPmodel, total_H/2., total_g - total_H * old_x, old_x);
-            Eigen::MatrixX<bool> active_set = get_active_set_matrix(unflat_tinyAD(x), 0.1);
+            Eigen::MatrixX<bool> active_set = get_active_set_matrix(unflat_tinyAD(x), active_set_threshold);
             // std::cout << ANSI_FG_GREEN << "total active consts: " << active_set.cast<int>().sum() << "/" << n*constraint_matrix.rows() << ANSI_RESET << std::endl; 
-            Eigen::VectorXd new_x = solve_QP_with_ineq(total_H/2., //bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + 
-                                                       total_g - total_H * x,
-                                                        old_x, //
-                                                        constraint_matrix, constraint_rhs, active_set);
+            Eigen::VectorXd new_x = solve_QP_with_ineq(total_H/2., total_g - total_H * x, old_x, //
+                                                       constraint_matrix, constraint_rhs, 
+                                                       get_frozen_indices(), get_frozen_x(),
+                                                       active_set);
             d = new_x - old_x;
         }
         else { // my own barrier

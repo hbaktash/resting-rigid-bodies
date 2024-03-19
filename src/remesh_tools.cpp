@@ -102,7 +102,7 @@ bool split_only_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_ge
     Edge e = toSplit.back();
     toSplit.pop_back();
     double length_e = deformed_geometry->edgeLength(e);
-    double threshold = 3. * target_edge_len;
+    double threshold = 2. * target_edge_len;
     if (length_e > threshold) {
       Vector3 def_newPos = 0.5 * (deformed_geometry->inputVertexPositions[e.firstVertex()] + deformed_geometry->inputVertexPositions[e.secondVertex()]),
               ref_newPos = 0.5 * (ref_geometry->inputVertexPositions[e.firstVertex()] + ref_geometry->inputVertexPositions[e.secondVertex()]);

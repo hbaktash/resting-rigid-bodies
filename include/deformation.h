@@ -68,8 +68,11 @@ class DeformationSolver{
        // CP energy stuff
        size_t threshold_exceeded = 0;
        VertexData<SurfacePoint> closest_point_assignment; // hullMesh -> innerMesh
-       VertexData<bool> freeze_assignment; // hullMesh -> bool
+       VertexData<bool> vertex_only_assignment; // hullMesh -> bool
        VertexData<bool> marked_to_split; // hullMesh -> bool
+       VertexData<Vertex> frozen_assignment; // hullMesh -> innerMesh
+       std::vector<size_t> get_frozen_indices();
+       Eigen::VectorXd get_frozen_x();
 
        VertexData<double> closest_point_distance; // hullMesh -> double
        VertexData<bool> CP_involvement;
@@ -78,9 +81,12 @@ class DeformationSolver{
        size_t face_assignments = 0, edge_assignments = 0, vertex_assignments = 0;
 
        bool dynamic_remesh = true,
-            curvature_weighted_CP = true;
+            curvature_weighted_CP = true,
+            snap_after_split = true;
 
-       double refinement_CP_threshold = 0.5;
+       double refinement_CP_threshold = 0.01,
+              active_set_threshold = 0.08,
+              split_robustness_threshold = 0.05;
        double init_bending_lambda = 1e0,
               final_bending_lambda = 1e3,
               init_membrane_lambda = 1e3,

@@ -47,22 +47,26 @@ Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Ei
 
 
 Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
-                                   Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, Eigen::MatrixX<bool> active_set){
+                                   Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, 
+                                   std::vector<size_t> frozen_indices, Eigen::VectorXd frozen_x,
+                                   Eigen::MatrixX<bool> active_set){
                                         // Gurobi calling code borrowed from CoMISo
     // build model
     GRBEnv env     = GRBEnv();
     GRBModel model = GRBModel(env);
-    build_QP_model_with_constraints(model, x_0, cons_A, cons_b, active_set);
+    build_QP_model_with_constraints(model, x_0, cons_A, cons_b, frozen_indices, frozen_x, active_set);
     // set objective and solve
     return update_QP_objective_and_solve(model, Q, g, x_0);
 }
 
 
 void build_QP_model_with_constraints(GRBModel &model, Eigen::VectorXd x_0, 
-                                     Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, Eigen::MatrixX<bool> active_set){
+                                     Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, 
+                                     std::vector<size_t> frozen_indices, Eigen::VectorXd frozen_x,
+                                     Eigen::MatrixX<bool> active_set){
     // log to console
     model.set(GRB_IntParam_LogToConsole, 0);
-    
+
     //----------------------------------------------
     // 0. set up gurobi environment
     //----------------------------------------------
@@ -96,7 +100,7 @@ void build_QP_model_with_constraints(GRBModel &model, Eigen::VectorXd x_0,
     // 2. setup constraints
     //----------------------------------------------
 
-    // coherent angles sum to π in each triangle
+    // add linear inequalities
     for (size_t j = 0; j < n_fc; j++) {
         Eigen::VectorXd rowj = cons_A.row(j);
         double rhsj = cons_b[j];
@@ -110,6 +114,12 @@ void build_QP_model_with_constraints(GRBModel &model, Eigen::VectorXd x_0,
                             rowj[2] * vars[3*i + 2] <= rhsj);
         }
     }
+    // add frozen inequalities
+    for (size_t i = 0; i < frozen_indices.size(); i++){
+        size_t idx = frozen_indices[i];
+        model.addConstr(vars[idx] == frozen_x[i]);
+    }
+
     model.update();
 }
 

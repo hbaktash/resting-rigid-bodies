@@ -111,7 +111,7 @@ polyscope::PointCloud *test_pc;
 
 int fair_sides_count = 6; // for optimization
 bool do_sobolev_dice_grads = true;
-float sobolev_lambda = 0.1,
+float sobolev_lambda = 2.,
       sobolev_lambda_decay = 0.95;
 int sobolev_p = 2;
 // optimization stuff
@@ -134,7 +134,9 @@ float bending_lambda_exps[2] = {1., 1.},
       barrier_lambda_exps[2] = {-4., -8.},
       reg_lambda_exp = -3.,
       internal_p = 0.91,
-      refinement_CP_threshold = 0.05;
+      refinement_CP_threshold = 0.01,
+      active_set_threshold = 0.08,
+      split_robustness_threshold = 0.05;
 int filling_max_iter = 10;
 int hull_opt_steps = 50;
 
@@ -249,7 +251,6 @@ void init_convex_shape_to_fill(std::string poly_str, bool triangulate = true){
 
 void initialize_deformation_params(DeformationSolver *deformation_solver){
   deformationSolver->dynamic_remesh = dynamic_remesh;
-  deformation_solver->refinement_CP_threshold = refinement_CP_threshold;
   deformation_solver->filling_max_iter = filling_max_iter;  
   
   deformationSolver->init_bending_lambda = pow(10, bending_lambda_exps[0]);
@@ -272,6 +273,9 @@ void initialize_deformation_params(DeformationSolver *deformation_solver){
   else 
     deformation_solver->reg_lambda = 0.;
   deformation_solver->curvature_weighted_CP = curvature_weighted_CP;
+  deformation_solver->active_set_threshold = active_set_threshold;
+  deformation_solver->refinement_CP_threshold = refinement_CP_threshold;
+  deformation_solver->split_robustness_threshold = split_robustness_threshold;
 }
 
 void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
@@ -738,17 +742,19 @@ void myCallback() {
   if (ImGui::Checkbox("dynamic remesh", &dynamic_remesh));
   if (ImGui::SliderFloat("growth p", &internal_p, 0., 1.));
   if (ImGui::SliderFloat("refinement CP threshold ", &refinement_CP_threshold, 0., 1.));
+  if (ImGui::SliderFloat("split rubostness threshold ", &split_robustness_threshold, 0., 1.));
   if (ImGui::InputFloat2("init/final bending log ", bending_lambda_exps)
     || ImGui::InputFloat2("init/final membrane log ", membrane_lambda_exps)
     || ImGui::InputFloat2("init/final CP log ", CP_lambda_exps)
     || ImGui::Checkbox("use QP solver ", &use_QP_solver));
   if(!use_QP_solver) 
     if (ImGui::InputFloat2("init/final barrier log ", barrier_lambda_exps));
+  else
+    if (ImGui::InputFloat("active set threshold ", &active_set_threshold));
   if(ImGui::Checkbox("curvature weighted", &curvature_weighted_CP));
   ImGui::Checkbox("use reg ", &use_reg);
   if(use_reg) 
     if (ImGui::SliderFloat("reg lambda; log10", &reg_lambda_exp, -5., 5.));
-  
 
   if (ImGui::Button("uniform mass G")){
     G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
@@ -783,7 +789,7 @@ void myCallback() {
   if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
   if (ImGui::Checkbox("Sobolev pre-condition", &do_sobolev_dice_grads));
   if (do_sobolev_dice_grads){
-    if (ImGui::SliderFloat("Sobolev lambda", &sobolev_lambda, 0., 2.));
+    if (ImGui::SliderFloat("Sobolev lambda", &sobolev_lambda, 0., 5.));
     if (ImGui::SliderFloat("Sobolev lambda decay", &sobolev_lambda_decay, 0., 1));
     if (ImGui::SliderInt("Sobolev power", &sobolev_p, 1, 5));
   }
