@@ -45,11 +45,12 @@ using namespace geometrycentral::surface;
 // == Geometry-central data
 std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr, cv_mesh_ptr;
 std::unique_ptr<VertexPositionGeometry> geometry_ptr, cv_geometry_ptr;
-ManifoldSurfaceMesh* mesh, *convex_to_fill_mesh;
-VertexPositionGeometry* geometry, *convex_to_fill_geometry;
+ManifoldSurfaceMesh *mesh, *convex_to_fill_mesh;
+VertexPositionGeometry *geometry, *convex_to_fill_geometry, *deformed_geometry;
 bool load_hull_from_file = true;
 Vector3 G, // center of Mass
         pre_deform_G({-10.,-10.,-10.}),
+        post_deform_G({-10.,-10.,-10.}),
         initial_g_vec({0,-1,0}),
         default_face_color({0.99,0.99,0.99}),
         curr_face_color({0.1,0.87,0.1});
@@ -125,13 +126,16 @@ int ARAP_max_iters = 10;
 // deformation
 DeformationSolver *deformationSolver;
 bool animate = false,
-     v2_dice_animate = false;
+     animate_G_deform = false,
+     v2_dice_animate = false,
+     enforce_snapping = false;
 float dice_search_decay = 0.95;
 
 float bending_lambda_exps[2] = {1., 1.},
       membrane_lambda_exps[2] = {3., 3.},
       CP_lambda_exps[2] = {1., 7.},
       barrier_lambda_exps[2] = {-4., -8.},
+      G_lambda_exps[2] = {1,5},
       reg_lambda_exp = -3.,
       internal_p = 0.91,
       refinement_CP_threshold = 0.01,
@@ -276,6 +280,7 @@ void initialize_deformation_params(DeformationSolver *deformation_solver){
   deformation_solver->active_set_threshold = active_set_threshold;
   deformation_solver->refinement_CP_threshold = refinement_CP_threshold;
   deformation_solver->split_robustness_threshold = split_robustness_threshold;
+  deformation_solver->enforce_snapping = enforce_snapping;
 }
 
 void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
@@ -531,6 +536,14 @@ void animate_convex_fill_deformation(ManifoldSurfaceMesh *_mesh, VertexPositionG
   animate = true;
 }
 
+void animate_G_diff_deformation(Vector3 ideal_G){
+  if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(true);
+  deformationSolver->goal_G = ideal_G;   
+  deformationSolver->init_G_lambda = pow(10, G_lambda_exps[0]);
+  deformationSolver->final_G_lambda = pow(10, G_lambda_exps[1]);
+  initialize_deformation_params(deformationSolver);
+  animate_G_deform = true;
+}
 
 void version2_dice_pipeline(size_t step_count = 1){
   // forwardSolver->set_uniform_G();
@@ -645,19 +658,7 @@ void version2_dice_pipeline(size_t step_count = 1){
   
   pre_deform_G = tmp_solver->get_G();
   std::cout << "pre-deform G:" << tmp_solver->get_G() << "\n";
-  std::cout << "*** Test ***\n";
-  Forward3DSolver *tmp_solver2 = new Forward3DSolver(convex_to_fill_mesh, convex_to_fill_geometry, pre_deform_G, false);
-  tmp_solver2->set_uniform_G();
-  tmp_solver2->updated = false;
-  tmp_solver2->initialize_pre_computes();
-  BoundaryBuilder* tmp_bnd_builder2 = new BoundaryBuilder(tmp_solver2);
-  tmp_bnd_builder2->build_boundary_normals();
-  tmp_bnd_builder2->print_area_of_boundary_loops();
-  if (draw_boundary_patches)
-    draw_stable_patches_on_gauss_map(gm_is_drawn, tmp_bnd_builder2);
-  std::cout << "dice energy check:" << tmp_bnd_builder2->get_fair_dice_energy(fair_sides_count) << "\n";
 }
-
 
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
@@ -720,7 +721,17 @@ void myCallback() {
       ImPlot::EndPlot();
   }
   ImPlot::DestroyContext();
+  if (ImGui::Button("deform for G differece")){
+    polyscope::removeAllStructures();
 
+    polyscope::SurfaceMesh *psHullFillMesh = polyscope::registerSurfaceMesh(
+    "fillable hull",
+    convex_to_fill_geometry->inputVertexPositions, convex_to_fill_mesh->getFaceVertexList(),
+    polyscopePermutations(*convex_to_fill_mesh));
+    psHullFillMesh->setTransparency(0.35);
+    animate_G_diff_deformation(pre_deform_G);
+  }
+  if (ImGui::InputFloat2("init/final Gdiff log ", G_lambda_exps));
   if (ImGui::Button("deform into convex shape")){
     polyscope::removeAllStructures();
     if (load_hull_from_file)
@@ -742,6 +753,7 @@ void myCallback() {
   if (ImGui::Checkbox("dynamic remesh", &dynamic_remesh));
   if (ImGui::SliderFloat("growth p", &internal_p, 0., 1.));
   if (ImGui::SliderFloat("refinement CP threshold ", &refinement_CP_threshold, 0., 1.));
+  if(ImGui::Checkbox("enforce snapping at threshold", &enforce_snapping));
   if (ImGui::SliderFloat("split rubostness threshold ", &split_robustness_threshold, 0., 1.));
   if (ImGui::InputFloat2("init/final bending log ", bending_lambda_exps)
     || ImGui::InputFloat2("init/final membrane log ", membrane_lambda_exps)
@@ -881,9 +893,11 @@ int main(int argc, char **argv) {
       max_energy = 0.;
       energy_names[0] = "bending";
       energy_names[1] = "membrane";
+      energy_names[2] = "CP";
       current_fill_iter = 0;
       current_ENERGY_COUNT = 3;
       Eigen::MatrixXd new_points = deformationSolver->solve_for_bending(1, true, &current_fill_iter, energies);
+
       // polyscope::SurfaceMesh *final_deformed_psMesh = polyscope::registerSurfaceMesh(
       //   "v2pipeline final mesh", new_points, mesh->getFaceVertexList(), polyscopePermutations(*mesh));
 
@@ -900,7 +914,8 @@ int main(int argc, char **argv) {
       final_solver->initialize_pre_computes();
       BoundaryBuilder* tmp_bnd_builder = new BoundaryBuilder(final_solver);
       tmp_bnd_builder->build_boundary_normals();
-      std::cout << "post-deform G:" << final_solver->get_G() << "\n";
+      post_deform_G = final_solver->get_G();
+      std::cout << "post-deform G:" << post_deform_G << "\n";
       printf(" post deform G stuf:\n");
       update_visuals_with_G(final_solver, tmp_bnd_builder);
       tmp_bnd_builder->print_area_of_boundary_loops();
@@ -922,6 +937,17 @@ int main(int argc, char **argv) {
         printf("pre deform G dice energy: %f\n", tmp_bnd_builder->get_fair_dice_energy(fair_sides_count));
         
       }
+    }
+    if (animate_G_deform){
+      animate_G_deform = false;
+      gm_is_drawn = false;
+      max_energy = 0.1;
+      energy_names[0] = "bending";
+      energy_names[1] = "membrane";
+      energy_names[2] = "G diff";
+      current_fill_iter = 0;
+      current_ENERGY_COUNT = 3;
+      Eigen::MatrixXd new_points = deformationSolver->solve_for_G(1, true, &current_fill_iter, energies);
     }
     if (v2_dice_animate){
       max_energy = 0.01;

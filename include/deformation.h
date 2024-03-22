@@ -37,6 +37,7 @@
 #include <igl/arap.h>
 #include <Eigen/Core>
 #include "utils.h"
+#include "geometry_utils.h"
 
 #include "optimization.h"
 
@@ -60,7 +61,7 @@ Vector3 barycentric(Vector3 p, Vector3 A, Vector3 B, Vector3 C);
 class DeformationSolver{
     public:
        ManifoldSurfaceMesh *mesh;
-       VertexPositionGeometry *old_geometry;
+       VertexPositionGeometry *old_geometry, *deformed_geometry;
        
        ManifoldSurfaceMesh *convex_mesh;
        VertexPositionGeometry *convex_geometry;
@@ -70,8 +71,9 @@ class DeformationSolver{
        VertexData<SurfacePoint> closest_point_assignment; // hullMesh -> innerMesh
        VertexData<bool> vertex_only_assignment; // hullMesh -> bool
        VertexData<bool> marked_to_split; // hullMesh -> bool
+       bool enforce_snapping = false;
        VertexData<Vertex> frozen_assignment; // hullMesh -> innerMesh
-       std::vector<size_t> get_frozen_indices();
+       Eigen::VectorX<bool> get_frozen_flags();
        Eigen::VectorXd get_frozen_x();
 
        VertexData<double> closest_point_distance; // hullMesh -> double
@@ -159,6 +161,21 @@ class DeformationSolver{
        // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
        void print_energies_after_transform(Eigen::Matrix3d A);
        void test_my_barrier_vs_tinyAD();
+
+       DenseMatrix<double> solve_for_center_of_mass(int visual_per_step = 0, 
+                                                    bool energy_plot = false, int* current_iter = nullptr, float** ys = nullptr);
+
+       Vector3 current_G, goal_G;
+       double current_volume;
+
+       VertexData<DenseMatrix<double>> per_vertex_G_jacobian(VertexPositionGeometry *tmp_geometry);
+       Eigen::VectorXd flat_distance_multiplier(VertexPositionGeometry *tmp_geometry);
+       Eigen::MatrixXd per_vertex_G_derivative(VertexPositionGeometry *tmp_geometry);
+       double init_G_lambda = 1e1,
+              final_G_lambda = 1e3;
+       DenseMatrix<double> solve_for_G(int visual_per_step = 0, 
+                                       bool energy_plot = false, int* current_iter = nullptr, float** ys = nullptr);
+
 };
 
 

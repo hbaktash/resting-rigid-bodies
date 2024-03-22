@@ -33,6 +33,7 @@ geometrycentral::Vector3 to_geometrycentral(
 
 geometrycentral::Vector<double> tinyAD_flatten(geometrycentral::DenseMatrix<double> mat){
     size_t n = mat.rows();
+    assert(mat.cols() == 3);
     geometrycentral::Vector<double> ans(n*3);
     for (size_t i = 0; i < n; i++){
         for (size_t j = 0; j < 3; j++)
