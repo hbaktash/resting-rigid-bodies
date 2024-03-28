@@ -138,9 +138,9 @@ float bending_lambda_exps[2] = {1., 1.},
       G_lambda_exps[2] = {1,5},
       reg_lambda_exp = -3.,
       internal_p = 0.91,
-      refinement_CP_threshold = 0.01,
+      refinement_CP_threshold = 0.001,
       active_set_threshold = 0.08,
-      split_robustness_threshold = 0.05;
+      split_robustness_threshold = 0.1;
 int filling_max_iter = 10;
 int hull_opt_steps = 50;
 
@@ -921,8 +921,12 @@ int main(int argc, char **argv) {
       tmp_bnd_builder->print_area_of_boundary_loops();
       printf("post deform dice energy: %f\n", tmp_bnd_builder->get_fair_dice_energy(fair_sides_count));
       
-      
-      if (pre_deform_G != Vector3({-10.,-10.,-10.})){// only if we coming here after dice energy search
+      bool test_predeformation = true;
+      if (pre_deform_G == Vector3({-10.,-10.,-10.})){
+        test_predeformation = false;
+        pre_deform_G = find_center_of_mass(*deformationSolver->convex_mesh, *deformationSolver->convex_geometry).first;
+      }
+      if (test_predeformation){
         printf(" pre deform G stuff:\n");
         std::cout<< "pre-deform G:" << pre_deform_G << "\n";
         final_solver->set_G(pre_deform_G);
@@ -935,8 +939,8 @@ int main(int argc, char **argv) {
         // visualize_gauss_map();
         tmp_bnd_builder->print_area_of_boundary_loops();
         printf("pre deform G dice energy: %f\n", tmp_bnd_builder->get_fair_dice_energy(fair_sides_count));
-        
       }
+        
     }
     if (animate_G_deform){
       animate_G_deform = false;

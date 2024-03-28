@@ -140,7 +140,7 @@ class DeformationSolver{
        double get_log_barrier_energy(DenseMatrix<double> new_pos_mat);
        // active set helpers
        DenseMatrix<bool> get_active_set_matrix(DenseMatrix<double> new_pos_mat, double active_threshold);
-       double get_point_distance_to_convex_hull(Eigen::VectorXd p);
+       double get_point_distance_to_convex_hull(Eigen::VectorXd p, bool from_faces = true);
 
        // rest geometry constants for elastic energies
        EdgeData<double> rest_dihedral_angles,
@@ -155,6 +155,8 @@ class DeformationSolver{
        auto get_tinyAD_membrane_function(); // FaceData<Eigen::Matrix2d> &rest_tensors_inverted, FaceData<double> &rest_face_areas
        auto get_tinyAD_barrier_function();
 
+       EdgeData<double> bending_per_edge;
+       FaceData<double> membrane_per_vertex;
        // solver
        DenseMatrix<double> solve_for_bending(int visual_per_step = 0, 
                                              bool energy_plot = false, int* current_iter = nullptr, float** ys = nullptr);
@@ -169,7 +171,7 @@ class DeformationSolver{
        double current_volume;
 
        VertexData<DenseMatrix<double>> per_vertex_G_jacobian(VertexPositionGeometry *tmp_geometry);
-       Eigen::VectorXd flat_distance_multiplier(VertexPositionGeometry *tmp_geometry);
+       Eigen::VectorXd flat_distance_multiplier(VertexPositionGeometry *tmp_geometry, bool from_faces);
        Eigen::MatrixXd per_vertex_G_derivative(VertexPositionGeometry *tmp_geometry);
        double init_G_lambda = 1e1,
               final_G_lambda = 1e3;
