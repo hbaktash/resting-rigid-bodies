@@ -76,21 +76,21 @@ void BoundaryBuilder::build_boundary_normals(){
     // for quick assignment of face-boundary-loops
     face_attraction_boundary = FaceData<std::vector<BoundaryNormal*>>(*forward_solver->hullMesh);
     face_region_area = FaceData<double>(*forward_solver->hullMesh, 0.);
-    // back-flow them all..
+    // back-flow from all terminal edges
     // printf("  back-flowing terminal edges \n");
     for (Edge e: terminal_edges){
         // printf("- starting at terminal edge: %d\n", e.getIndex());
-        assert(edge_boundary_normals[e].size() == 1);
+        assert(edge_boundary_normals[e].size() == 1); // otherwise we proly have a Gomboc?
         BoundaryNormal *bnd_normal = edge_boundary_normals[e].front();
         for (Vertex v: {e.firstVertex(), e.secondVertex()}){
             Vector3 tmp_normal = bnd_normal->normal,
-                    f1_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f1),
-                    f2_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f2),
-                    v_normal = forward_solver->vertex_stable_normal[v];
+                    f1_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f1),
+                    f2_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f2),
+                    v_normal   = forward_solver->vertex_stable_normal[v];
             // Vector3 imm_f1_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().face()), // immediate face neighbors
             //         imm_f2_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().twin().face());
             
-            double f1_area_sign = dot(f1_normal, cross(v_normal, tmp_normal)) >= 0 ? 1. : -1.;
+            double f1_area_sign = dot(f1_normal, cross(v_normal, tmp_normal)) >= 0 ? 1. : -1.; // f1 on rhs of bndN->vN
             if (forward_solver->vertex_is_stabilizable[v])
                 flow_back_boundary_on_edge(bnd_normal, Edge(), v, 
                                                f1_area_sign, f1_normal, f2_normal);
@@ -118,7 +118,6 @@ void BoundaryBuilder::build_boundary_normals(){
 // recursively follow the boundary curve to a source
 void BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
                                                  double f1_area_sign, Vector3 f1_normal, Vector3 f2_normal){
-    FaceData<std::vector<std::tuple<BoundaryNormal*, BoundaryNormal*, double>>> face_chain_area;
     // bnd_normal has to be in boundary normals of dest_e; won't assert tho for better performance
     Vertex v = common_vertex; // given as argument for better performance
     // printf("back-flowing to vertex %d\n", v.getIndex());

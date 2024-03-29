@@ -97,7 +97,7 @@ bool draw_boundary_patches = true;
 bool test_guess = false;
 bool compute_global_G_effect = true,
      deform_after = true,
-     frozen_G = false,
+     frozen_G = true,
      structured_opt = true,
      dynamic_remesh = true,
      use_reg = false,
@@ -140,7 +140,7 @@ float bending_lambda_exps[2] = {1., 1.},
       internal_p = 0.91,
       refinement_CP_threshold = 0.001,
       active_set_threshold = 0.08,
-      split_robustness_threshold = 0.1;
+      split_robustness_threshold = 0.2;
 int filling_max_iter = 10;
 int hull_opt_steps = 50;
 
@@ -550,7 +550,14 @@ void version2_dice_pipeline(size_t step_count = 1){
   ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
   VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
   Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G, false);
-  tmp_solver->set_uniform_G(); // frozen G matters here or not ???
+  if (frozen_G){
+    auto GV_pair = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry);
+    tmp_solver->set_G(GV_pair.first);
+    tmp_solver->volume = GV_pair.second;
+  }
+  else {
+    tmp_solver->set_uniform_G(); // frozen G matters here or not ???
+  }
   printf("initalize precomputes\n");
   tmp_solver->initialize_pre_computes();
   printf("finding vertex derivatives\n");
@@ -625,8 +632,6 @@ void version2_dice_pipeline(size_t step_count = 1){
     // TODO: is this ok?
   
     // visuals
-
-
     if (!frozen_G){
       tmp_solver->set_uniform_G();
     }
@@ -785,6 +790,7 @@ void myCallback() {
   
   if (ImGui::SliderFloat("starting step size", &step_size3, 0., 1.0));
   if (ImGui::SliderInt("fair dice side count", &fair_sides_count, 1, 10));
+  if (ImGui::Checkbox("frozen G", &frozen_G));
 
   // // V3 stuff 
   // if (ImGui::Button("take fair step (joint gradient)")) {
@@ -952,6 +958,18 @@ int main(int argc, char **argv) {
       current_fill_iter = 0;
       current_ENERGY_COUNT = 3;
       Eigen::MatrixXd new_points = deformationSolver->solve_for_G(1, true, &current_fill_iter, energies);
+
+      Forward3DSolver* final_solver = new Forward3DSolver(mesh, new VertexPositionGeometry(*mesh, new_points), G, true);
+      // get the probability stuff
+      final_solver->set_uniform_G();
+      final_solver->updated = false;
+      final_solver->initialize_pre_computes();
+      BoundaryBuilder* tmp_bnd_builder = new BoundaryBuilder(final_solver);
+      tmp_bnd_builder->build_boundary_normals();
+      printf(" post G fix stuf:\n");
+      update_visuals_with_G(final_solver, tmp_bnd_builder);
+      tmp_bnd_builder->print_area_of_boundary_loops();
+      printf("post G fix dice energy: %f\n", tmp_bnd_builder->get_fair_dice_energy(fair_sides_count));
     }
     if (v2_dice_animate){
       max_energy = 0.01;
