@@ -69,12 +69,17 @@ class BoundaryBuilder {
         FaceData<std::vector<std::tuple<BoundaryNormal*, BoundaryNormal*, double>>> face_chain_area;
         FaceData<double> face_region_area;
 
+        std::vector<Edge> find_terminal_edges();
         // backtrack and boundary normals starting from singular edges leading to different stable faces 
         void build_boundary_normals();
+        void build_boundary_normals_with_gradients();
 
         // flow back from a edge with boundary normal; till u find a source
         void flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
                                         double f1_area_sign, Vector3 f1_normal, Vector3 f2_normal);
+        void flow_back_boundary_on_edge_with_gradient(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
+                                        double f1_area_sign, Vector3 f1_normal, Vector3 f2_normal);
+
 
         void print_area_of_boundary_loops();
         double get_fair_dice_energy(size_t side_count);

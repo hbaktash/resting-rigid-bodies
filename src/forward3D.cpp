@@ -18,20 +18,6 @@
 */
 #include "forward3D.h"
 
-
-// forward solver functions
-Vector3 project_on_plane(Vector3 point, Vector3 offset, Vector3 normal){
-    Vector3 unit_normal = normal.normalize();
-    return point + unit_normal * dot(offset - point, unit_normal);
-}
-
-Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B){
-    Vector3 PB = B - P,
-            AB = B - A;
-    Vector3 ortho_p = PB - AB*dot(AB, PB)/dot(AB,AB);
-    return ortho_p;
-}
-
 Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPositionGeometry* inputGeo_,
                              Vector3 inputG_, bool concave_input){
     inputMesh = inputMesh_;

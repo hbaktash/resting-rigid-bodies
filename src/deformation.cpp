@@ -1006,8 +1006,11 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         // visuals
         if (visual_per_step != 0){
             if (i % visual_per_step == 0){
-                // printf(" visualizing step %d\n", i);
+                printf(" visualizing step %d, mesh size: %d\n", i, mesh->nVertices());
                 auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
+                printf(" tmp geo container size %d\n", tmp_geometry->inputVertexPositions.size());
+                printf(" ps mesh size %d\n", tmp_PSmesh->vertexDataSize);
+
                 tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
                 tmp_PSmesh->setEdgeWidth(1.);
                 tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
@@ -1041,8 +1044,9 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
             x = bendingEnergy_func.x_from_data([&] (Vertex v) { // resized so need to reassign
                 return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);
             });
-            // build_QP_model_with_constraints(QPmodel, x, constraint_matrix, constraint_rhs);
-    
+
+            tmp_geometry = new VertexPositionGeometry(*mesh, unflat_tinyAD(x)); // TODO: for size reasons
+            
             // re-assign CP since connectivity has changed
             assign_closest_points_barycentric(tmp_geometry);
             // assign_closest_vertices(tmp_geometry, true);
@@ -1141,7 +1145,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) {
             tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
         });
-        
+
         double step_norm = (x - old_x).norm();
         // printf(" step norm is %9f\n", step_norm);
         internal_pt *= internal_growth_p;
@@ -1164,8 +1168,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
     polyscope::frameTick();
 
     DenseMatrix<double> new_points_mat = unflat_tinyAD(x); 
-    std::cout << "new points size: " << new_points_mat.rows() << " " << new_points_mat.cols() << std::endl;
-    std::cout << "mesh size: " << mesh->nVertices() << std::endl;
     deformed_geometry = new VertexPositionGeometry(*mesh, new_points_mat); // TODO: update earlier? per temp geo?
     return new_points_mat;
 }
@@ -1255,7 +1257,6 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
     assert(check_feasibility(unflat_tinyAD(x))); // the deformed shape should be feasible
     std::cout << "temp geo vs def geo: \n -- "<< tmp_geometry->mesh.nVertices() << "\n -- " << deformed_geometry->mesh.nVertices() << "\n";
 
-    
     // some parameters
     double bending_lambda = final_bending_lambda,
            membrane_lambda = final_membrane_lambda,
@@ -1270,7 +1271,7 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
         // visuals
         if (visual_per_step != 0){
             if ((i+1) % visual_per_step == 0){
-                printf(" visualizing step %d\n", i);        
+                printf(" visualizing step %d\n", i);
                 polyscope::registerPointCloud("G", std::vector<Vector3>({current_G}))->setPointColor({1.,0.,0.})->setPointRadius(0.01)->setEnabled(true);
                 polyscope::registerPointCloud("goal G", std::vector<Vector3>({goal_G}))->setPointColor({0.,0.,1.})->setPointRadius(0.01)->setEnabled(true);
                 
@@ -1302,8 +1303,8 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
         //     });
         // }
         // get G diff energy and derivative
-        double G_Ghat_f = (current_G - goal_G).norm2();
-        Eigen::VectorXd G_Ghat_g = tinyAD_flatten(per_vertex_G_derivative(tmp_geometry));
+        double Gdiff_f = (current_G - goal_G).norm2();
+        Eigen::VectorXd Gdiff_g = tinyAD_flatten(per_vertex_G_derivative(tmp_geometry));
 
         // ||x - x_0|| regularizer
         // Eigen::VectorXd reg_g = Eigen::VectorXd::Zero(x.size());
@@ -1313,8 +1314,8 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
         auto [bending_f, bending_g] = bendingEnergy_func.eval_with_gradient(x); //
         auto [membrane_f, membrane_g] = membraneEnergy_func.eval_with_gradient(x); //
 
-        Eigen::VectorXd total_g = bending_lambda * bending_g + membrane_lambda * membrane_g + G_lambda * G_Ghat_g; // reg g is zero at x0 // + barrier_lambda * barrier_g;
-        double total_energy = bending_lambda * bending_f + membrane_lambda * membrane_f + G_lambda * G_Ghat_f; // reg e is zero at x0 // barrier_lambda * barrier_f;
+        Eigen::VectorXd total_g = bending_lambda * bending_g + membrane_lambda * membrane_g + G_lambda * Gdiff_g; // reg g is zero at x0 // + barrier_lambda * barrier_g;
+        double total_energy = bending_lambda * bending_f + membrane_lambda * membrane_f + G_lambda * Gdiff_f; // reg e is zero at x0 // barrier_lambda * barrier_f;
 
         Eigen::VectorXd flat_dist_mult = flat_distance_multiplier(tmp_geometry, true);
         
@@ -1330,19 +1331,19 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
         // std::cout << "temp sol size:" << mesh->nVertices() << " gghat size: " << G_Ghat_g.size() << "unflat gghat size" << unflat_tinyAD(G_Ghat_g).rows() << std::endl;
         polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("bending g", unflat_tinyAD(bending_g))->setEnabled(false);
         polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("membrane g", unflat_tinyAD(membrane_g))->setEnabled(false);
-        polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("Gdiff un-wieghted", unflat_tinyAD(G_Ghat_g))->setEnabled(true);
+        polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("Gdiff un-wieghted", unflat_tinyAD(Gdiff_g))->setEnabled(true);
         polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("total g wieghted", unflat_tinyAD(total_g))->setEnabled(true);
         polyscope::frameTick();
 
         TINYAD_DEBUG_OUT("\t- Energy in iter " << i << ": bending= " << bending_lambda << "*" << bending_f << 
                          "\n\t\t\t\t membrane  = " << membrane_lambda << " * " << membrane_f <<
-                         "\n\t\t\t\t G diff    = " << G_lambda << " * "<< G_Ghat_f);
-        TINYAD_DEBUG_OUT("\n\t\t\t\t\t total: " << bending_lambda * bending_f + membrane_lambda * membrane_f + G_lambda * G_Ghat_f);
+                         "\n\t\t\t\t G diff    = " << G_lambda << " * "<< Gdiff_f);
+        TINYAD_DEBUG_OUT("\n\t\t\t\t\t total: " << bending_lambda * bending_f + membrane_lambda * membrane_f + G_lambda * Gdiff_f);
         if (energy_plot){
             *current_iter = i;
             energies_log[0][i] = bending_f;
             energies_log[1][i] = membrane_f;
-            energies_log[2][i] = G_Ghat_f;
+            energies_log[2][i] = Gdiff_f;
         }
         Eigen::VectorXd old_x = x;
         Eigen::VectorXd d = -total_g;

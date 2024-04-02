@@ -41,17 +41,9 @@ BoundaryBuilder::BoundaryBuilder(Forward3DSolver *forward_solver_){
     // geometry = forward_solver->hullGeometry;
 }
 
-
-void BoundaryBuilder::build_boundary_normals(){
-    vertex_boundary_normal = VertexData<BoundaryNormal*>(*forward_solver->hullMesh, nullptr);
-    edge_boundary_normals  = EdgeData<std::vector<BoundaryNormal*>>(*forward_solver->hullMesh);
-    
-    BoundaryNormal::counter = 0;
-    // 
+std::vector<Edge> BoundaryBuilder::find_terminal_edges(){
     std::vector<Edge> terminal_edges;
-    // 
     // printf("  buidling face-last-face\n");
-    forward_solver->build_face_last_faces(); // calls face next face within
     // printf("  finding terminal edges \n");
     for (Edge e: forward_solver->hullMesh->edges()){
         if (forward_solver->edge_next_vertex[e].getIndex() == INVALID_IND){ // singular edge
@@ -72,6 +64,19 @@ void BoundaryBuilder::build_boundary_normals(){
             }
         }
     }
+    return terminal_edges;
+}
+
+void BoundaryBuilder::build_boundary_normals(){
+    vertex_boundary_normal = VertexData<BoundaryNormal*>(*forward_solver->hullMesh, nullptr);
+    edge_boundary_normals  = EdgeData<std::vector<BoundaryNormal*>>(*forward_solver->hullMesh);
+    
+    BoundaryNormal::counter = 0;
+    // 
+    // printf("  buidling face-last-face\n");
+    forward_solver->build_face_last_faces(); // calls face next face within
+    // printf("  finding terminal edges \n");
+    std::vector<Edge> terminal_edges = find_terminal_edges();
 
     // for quick assignment of face-boundary-loops
     face_attraction_boundary = FaceData<std::vector<BoundaryNormal*>>(*forward_solver->hullMesh);
@@ -106,10 +111,6 @@ void BoundaryBuilder::build_boundary_normals(){
             }
         }
     }
-    // for (Face f: forward_solver->hullMesh->faces()){
-    //     if (face_region_area[f] > 0)
-    //         face_region_area[f] /= (4.*PI); // sum to one
-    // }
 }
 
 
@@ -156,7 +157,7 @@ void BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
             Vector3 e_bnd_normal = intersect_arc_ray_with_arc(vertex_stable_normal, bnd_normal->normal, 
                                                             tmp_f1_normal, tmp_f2_normal);
             // printf("at tmp_e %d, %d. side v %d. e: %d, %d \n", dest_e.firstVertex().getIndex(), dest_e.secondVertex().getIndex(), v.getIndex(), e.firstVertex().getIndex(), e.secondVertex().getIndex());
-            if(e_bnd_normal.norm() == 0.) 
+            if(e_bnd_normal.norm() == 0.)
                 return; // not a source for the given bnd_normal
             // found the source normal
 
@@ -249,4 +250,24 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
     printf("sorted probs: \n");
     for (double prob: probs)
         printf("  -%f\n", prob);
+}
+
+
+void BoundaryBuilder::build_boundary_normals_with_gradients(){
+    vertex_boundary_normal = VertexData<BoundaryNormal*>(*forward_solver->hullMesh, nullptr);
+    edge_boundary_normals  = EdgeData<std::vector<BoundaryNormal*>>(*forward_solver->hullMesh);
+    
+    BoundaryNormal::counter = 0;
+    // 
+    // printf("  buidling face-last-face\n");
+    forward_solver->build_face_last_faces(); // calls face next face within
+    // printf("  finding terminal edges \n");
+    std::vector<Edge> terminal_edges = find_terminal_edges(); // stable edges leading to two different faces
+
+    // for quick assignment of face-boundary-loops
+    face_attraction_boundary = FaceData<std::vector<BoundaryNormal*>>(*forward_solver->hullMesh);
+    face_region_area = FaceData<double>(*forward_solver->hullMesh, 0.);
+    // back-flow from all terminal edges
+    // printf("  back-flowing terminal edges \n");
+    
 }

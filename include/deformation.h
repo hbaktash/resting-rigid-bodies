@@ -166,7 +166,6 @@ class DeformationSolver{
 
        DenseMatrix<double> solve_for_center_of_mass(int visual_per_step = 0, 
                                                     bool energy_plot = false, int* current_iter = nullptr, float** ys = nullptr);
-
        Vector3 current_G, goal_G;
        double current_volume;
 

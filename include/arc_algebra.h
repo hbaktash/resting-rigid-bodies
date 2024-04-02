@@ -52,3 +52,8 @@ double angle_on_sphere(Vector3 P1, Vector3 A, Vector3 P2);
 // angle between two spherical arcs; <P1AP2
 double angle_on_sphere(Vector3 P1, Vector3 A, Vector3 P2);
 
+
+// not so arc
+Vector3 project_on_plane(Vector3 p, Vector3 offset, Vector3 normal);
+
+Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B);

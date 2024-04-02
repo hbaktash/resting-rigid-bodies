@@ -120,3 +120,22 @@ double triangle_patch_area_on_sphere(Vector3 A, Vector3 B, Vector3 C){
 }
 
 
+Vector3 project_on_plane(Vector3 point, Vector3 offset, Vector3 normal){
+    Vector3 unit_normal = normal.normalize();
+    return point + unit_normal * dot(offset - point, unit_normal);
+}
+
+
+Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B){
+    Vector3 PB = B - P,
+            AB = B - A;
+    Vector3 ortho_p = PB - AB*dot(AB, PB)/dot(AB,AB);
+    return ortho_p;
+}
+
+
+// Derivatives
+std::tuple<Vector3, Vector3, Vector3> point_to_segment_normal_grads(Vector3 P, Vector3 A, Vector3 B){
+    // grad P, grad A, grad B
+    return std::tuple<Vector3, Vector3, Vector3>({Vector3::constant(0.), Vector3::constant(0.), Vector3::constant(0.)});
+}

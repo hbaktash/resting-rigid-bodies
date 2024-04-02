@@ -112,6 +112,7 @@ bool split_only_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_ge
       ref_geometry->inputVertexPositions[he.vertex()] = ref_newPos;
     }
   }
+  mesh->compress();
   // debug visuals
   auto old_geo_psmesh = polyscope::registerSurfaceMesh("post remesh old geo", ref_geometry->inputVertexPositions + vis_shift, mesh->getFaceVertexList());
   // auto new_geo_psmesh = polyscope::registerSurfaceMesh("post remesh def geo", deformed_geometry->inputVertexPositions, mesh->getFaceVertexList());

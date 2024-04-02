@@ -32,8 +32,6 @@
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
-Vector3 project_on_plane(Vector3 p, Vector3 offset, Vector3 normal);
-Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B);
 
 class Forward3DSolver {
   private:
