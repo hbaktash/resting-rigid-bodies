@@ -61,10 +61,23 @@ else()
   message( FATAL_ERROR "Unrecognized compiler [${CMAKE_CXX_COMPILER_ID}]" )
 endif()
 
+set(CMAKE_CUDA_ARCHITECTURES OFF)
+set(AUTODIFF_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(AUTODIFF_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(AUTODIFF_BUILD_PYTHON OFF CACHE BOOL "" FORCE)
+set(AUTODIFF_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 # == Deps
 add_subdirectory(deps/geometry-central)
 add_subdirectory(deps/polyscope)
 add_subdirectory(deps/qhull)
+
+add_subdirectory(deps/autodiff)
+# FetchContent_Declare(
+#   autodiff
+#   GIT_REPOSITORY https://github.com/autodiff/autodiff/
+#   GIT_TAG        v1.0.3
+# )
+# FetchContent_MakeAvailable(autodiff)
 # add_subdirectory(deps/pymesh)
 # add_subdirectory(deps/bullet3)
 
@@ -85,61 +98,63 @@ else ()
 endif ()
 
 
+# find_package(autodiff)
+
 # == Build our project stuff
 
-set(polygons_SRCS 
-  src/main.cpp
-  src/forward.cpp
-	# add any other source files here
-)
+# set(polygons_SRCS 
+#   src/main.cpp
+#   src/forward.cpp
+# 	# add any other source files here
+# )
 
-set(polyhedra_SRCS 
-  src/main3D.cpp
-  src/arc_algebra.cpp
-  src/forward3D.cpp
-  src/mesh_factory.cpp
-  src/geometry_utils.cpp
-  src/coloring.cpp
-  src/visual_utils.cpp
-  src/markov_model.cpp
-  src/boundary_tools.cpp
-  src/convex_hull.cpp
-  src/utils.cpp
-	# add any other source files here
-)
+# set(polyhedra_SRCS 
+#   src/main3D.cpp
+#   src/arc_algebra.cpp
+#   src/forward3D.cpp
+#   src/mesh_factory.cpp
+#   src/geometry_utils.cpp
+#   src/coloring.cpp
+#   src/visual_utils.cpp
+#   src/markov_model.cpp
+#   src/boundary_tools.cpp
+#   src/convex_hull.cpp
+#   src/utils.cpp
+# 	# add any other source files here
+# )
 
-set(bullet_SRCS 
-  src/main_bullet.cpp
-  src/forward3D.cpp
-  src/mesh_factory.cpp
-  src/geometry_utils.cpp
-  src/bullet_sim.cpp
-  src/coloring.cpp
-  src/visual_utils.cpp
-  src/arc_algebra.cpp
-  src/boundary_tools.cpp
-  src/convex_hull.cpp
-  src/utils.cpp
-  # add any other source files here
-)
+# set(bullet_SRCS 
+#   src/main_bullet.cpp
+#   src/forward3D.cpp
+#   src/mesh_factory.cpp
+#   src/geometry_utils.cpp
+#   src/bullet_sim.cpp
+#   src/coloring.cpp
+#   src/visual_utils.cpp
+#   src/arc_algebra.cpp
+#   src/boundary_tools.cpp
+#   src/convex_hull.cpp
+#   src/utils.cpp
+#   # add any other source files here
+# )
 
-set(inverse_SRCS 
-  src/main_inverse.cpp
-  src/arc_algebra.cpp
-  src/forward3D.cpp
-  src/mesh_factory.cpp
-  src/geometry_utils.cpp
-  src/coloring.cpp
-  src/visual_utils.cpp
-  src/markov_model.cpp
-  src/boundary_tools.cpp
-  src/inv_design.cpp
-  src/convex_hull.cpp
-  src/deformation.cpp
-  src/remesh_tools.cpp
-  src/utils.cpp
-	# add any other source files here
-)
+# set(inverse_SRCS 
+#   src/main_inverse.cpp
+#   src/arc_algebra.cpp
+#   src/forward3D.cpp
+#   src/mesh_factory.cpp
+#   src/geometry_utils.cpp
+#   src/coloring.cpp
+#   src/visual_utils.cpp
+#   src/markov_model.cpp
+#   src/boundary_tools.cpp
+#   src/inv_design.cpp
+#   src/convex_hull.cpp
+#   src/deformation.cpp
+#   src/remesh_tools.cpp
+#   src/utils.cpp
+# 	# add any other source files here
+# )
 
 set(convex_fill 
   src/main_convex_fill.cpp
@@ -179,41 +194,45 @@ set(convex_fill
 # )
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
-add_executable(polygons "${polygons_SRCS}")
-target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-# add the args.hxx project which we use for command line args
-target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
-# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/CGAL/include")
-# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/boost_1_82_0")
-# target_compile_features(LIBRARY_NAME PUBLIC cxx_std_14)
-target_link_libraries(polygons geometry-central polyscope)
+
+# add_executable(polygons "${polygons_SRCS}")
+# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# # add the args.hxx project which we use for command line args
+# target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+# # target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+# # target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/CGAL/include")
+# # target_include_directories(polygons PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/boost_1_82_0")
+# # target_compile_features(LIBRARY_NAME PUBLIC cxx_std_14)
+# target_link_libraries(polygons geometry-central polyscope)
 
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
-add_executable(polyhedra "${polyhedra_SRCS}")
-target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-# add the args.hxx project which we use for command line args
-target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_link_libraries(polyhedra PUBLIC geometry-central polyscope qhullcpp qhullstatic_r)
+
+# add_executable(polyhedra "${polyhedra_SRCS}")
+# target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+# target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# # add the args.hxx project which we use for command line args
+# target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+# target_link_libraries(polyhedra PUBLIC geometry-central polyscope qhullcpp qhullstatic_r)
 
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 # SET(qhull_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/build")
 # Find_Package(qhull)
-add_executable(invDesign "${inverse_SRCS}")
-# target_link_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
-# target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
-target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-# add the args.hxx project which we use for command line args
-target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
-target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
-target_include_directories(invDesign PUBLIC "${MOSEK_INCLUDE_DIRS}")
-target_link_directories(invDesign PUBLIC ${MOSEK_LIBRARY_DIR})
-target_link_libraries(invDesign PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
+
+
+# add_executable(invDesign "${inverse_SRCS}")
+# # target_link_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
+# # target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
+# target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+# target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# # add the args.hxx project which we use for command line args
+# target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+# # target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+# target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
+# target_include_directories(invDesign PUBLIC "${MOSEK_INCLUDE_DIRS}")
+# # target_link_directories(invDesign PUBLIC ${MOSEK_LIBRARY_DIR})
+# target_link_libraries(invDesign PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 # SET(qhull_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/build")
@@ -223,19 +242,21 @@ add_executable(convexFill "${convex_fill}")
 # target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
 target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
 target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-# add the args.hxx project which we use for command line args
 target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+# target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
 target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
 
 target_include_directories(convexFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
+
+target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
 # target_link_libraries(convexFill PUBLIC ${GUROBI_CXX_LIBRARY} ${GUROBI_CXX_DEBUG_LIBRARY})
 # target_link_libraries(convexFill PUBLIC ${GUROBI_LIBRARIES})
+
 
 # target_include_directories(convexFill PUBLIC ${MOSEK_INCLUDE_DIRS})
 # target_link_directories   (convexFill PUBLIC ${MOSEK_LIBRARY_DIR})
 
-target_link_libraries(convexFill PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib
+target_link_libraries(convexFill PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib
 
 # # paper figure stuff
 # add_executable(paper_figs "${paper_figs}")
@@ -250,19 +271,19 @@ target_link_libraries(convexFill PUBLIC geometry-central polyscope qhullcpp qhul
 
 # Bullet stuff
 
-SET(Bullet_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/bullet3/build_cmake")
-Find_Package(Bullet CONFIG)
-SET(BULLET_INCLUDE_DIR ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_INCLUDE_DIR})
-SET(BLA ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
-add_executable(bullet_sim "${bullet_SRCS}")
+# SET(Bullet_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/bullet3/build_cmake")
+# Find_Package(Bullet CONFIG)
+# SET(BULLET_INCLUDE_DIR ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_INCLUDE_DIR})
+# SET(BLA ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+# add_executable(bullet_sim "${bullet_SRCS}")
 
-target_include_directories(bullet_sim PUBLIC ${BULLET_INCLUDE_DIR})
-target_compile_definitions(bullet_sim PUBLIC ${BULLET_DEFINITIONS})
-target_link_directories(bullet_sim PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
-target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-# add the args.hxx project which we use for command line args
-target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+# target_include_directories(bullet_sim PUBLIC ${BULLET_INCLUDE_DIR})
+# target_compile_definitions(bullet_sim PUBLIC ${BULLET_DEFINITIONS})
+# target_link_directories(bullet_sim PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+# target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+# target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# # add the args.hxx project which we use for command line args
+# target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 
-target_link_libraries(bullet_sim PUBLIC BulletDynamics BulletCollision LinearMath geometry-central polyscope qhullcpp qhullstatic_r)
+# target_link_libraries(bullet_sim PUBLIC BulletDynamics BulletCollision LinearMath geometry-central polyscope qhullcpp qhullstatic_r)
 # target_link_libraries(bullet_sim )

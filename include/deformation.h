@@ -34,7 +34,7 @@
 
 #include <remesh_tools.h>
 
-#include <igl/arap.h>
+// #include <igl/arap.h>
 #include <Eigen/Core>
 #include "utils.h"
 #include "geometry_utils.h"
@@ -182,9 +182,9 @@ class DeformationSolver{
 
 
 // ARAP
-geometrycentral::DenseMatrix<double> get_ARAP_positions(DenseMatrix<double> old_pos_mat,
-                                       DenseMatrix<double> new_pos_mat,
-                                       DenseMatrix<double> init_sol,
-                                       ManifoldSurfaceMesh &inner_mesh,
-                                       Vector<int> hull_indices);
+// geometrycentral::DenseMatrix<double> get_ARAP_positions(DenseMatrix<double> old_pos_mat,
+//                                        DenseMatrix<double> new_pos_mat,
+//                                        DenseMatrix<double> init_sol,
+//                                        ManifoldSurfaceMesh &inner_mesh,
+//                                        Vector<int> hull_indices);
 

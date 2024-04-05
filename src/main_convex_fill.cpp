@@ -313,7 +313,22 @@ void update_solver_and_boundaries(){
   // printf("forward precomputes \n");
   forwardSolver->initialize_pre_computes();
   printf("building boundary normals \n");
-  boundary_builder->build_boundary_normals();
+  // boundary_builder->build_boundary_normals();
+  autodiff::MatrixX3var poses_ad = vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions);
+  autodiff::Vector3var G_ad = vec32vec(G);
+  boundary_builder->build_boundary_normals_for_autodiff(poses_ad, G_ad);
+  autodiff::MatrixXvar dfdv_mat;
+  for (Face f: forwardSolver->hullMesh->faces()){
+    if (forwardSolver->face_last_face[f] == f){
+      autodiff::VectorXvar poses_ad_vec = autodiff::VectorXvar{poses_ad.reshaped()};
+      autodiff::VectorXvar dfdv = autodiff::gradient(boundary_builder->face_region_area_ad[f], poses_ad_vec);
+      dfdv_mat = dfdv.reshaped(poses_ad.rows(), poses_ad.cols());
+      break;
+    }
+  }
+  Eigen::MatrixXd dfdv_mat_eigen = dfdv_mat.cast<double>();
+  polyscope::getSurfaceMesh("init hull mesh")->addVertexVectorQuantity("ad grads", dfdv_mat_eigen)->setEnabled(true);
+
   // boundary_builder->print_area_of_boundary_loops();
   // printf("precomputes took %d\n", clock() - t1);
 }
@@ -715,8 +730,8 @@ void myCallback() {
 
   ImPlot::CreateContext();
   if (ImPlot::BeginPlot("CP + elastic energies", "iter", "energy")) {
-      for (int i = 0; i < current_ENERGY_COUNT; i++)
-        if (max_energy < energies[i][current_fill_iter]) max_energy = energies[i][current_fill_iter];
+      // for (int i = 0; i < current_ENERGY_COUNT; i++)
+      //   if (max_energy < energies[i][current_fill_iter]) max_energy = energies[i][current_fill_iter];
       ImPlot::SetupAxes("iter","energy");
       ImPlot::SetupAxisLimits(ImAxis_X1,0, current_fill_iter);
       ImPlot::SetupAxisLimits(ImAxis_Y1,0, max_energy);

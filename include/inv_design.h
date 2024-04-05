@@ -75,7 +75,7 @@ class InverseSolver{
         VertexData<DenseMatrix<double>> dG_dv; // interior vertex related
         void find_dG_dvs();                    
         // dp_f/dv
-        bool compute_global_G_effect = true;
+        // bool compute_global_G_effect = true;
         FaceData<VertexData<Vector3>> uni_mass_d_pf_dv;
         // after chain and product rule
         void find_uni_mass_d_pf_dv(bool frozen_G = false, bool check_FD = false);
@@ -88,7 +88,8 @@ class InverseSolver{
         // pre-step for updates 
         void subdivide_for_aggressive_updates(VertexData<Vector3> hull_updates);
         
-        // position update for interior vertices
+
+        // *** Deformations
         // ARAP
         size_t arap_max_iter = 10;
         PositiveDefiniteSolver<double> *constrained_L_solver;
@@ -102,7 +103,7 @@ class InverseSolver{
         DenseMatrix<double> solve_constrained_Laplace(Vector<size_t> interior_indices, DenseMatrix<double> old_pos, DenseMatrix<double> new_pos,
                                                       bool update_solver_decomp = true);
         VertexData<DenseMatrix<double>> find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos);
-        VertexData<Vector3> ARAP_update_positions(VertexData<Vector3> hull_updates);
+        // VertexData<Vector3> ARAP_update_positions(VertexData<Vector3> hull_updates);
         VertexData<Vector3> laplace_update_positions(VertexData<Vector3> hull_updates);
         // Laplacian edit
         // Greedy stuff

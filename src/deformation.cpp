@@ -73,29 +73,29 @@ Vector3 barycentric(Vector3 p, Vector3 A, Vector3 B, Vector3 C) {
     return ans;
 }
 
-geometrycentral::DenseMatrix<double> get_ARAP_positions(
-                                       geometrycentral::DenseMatrix<double> old_pos_mat,
-                                       geometrycentral::DenseMatrix<double> new_pos_mat, 
-                                       geometrycentral::DenseMatrix<double> init_sol, 
-                                       ManifoldSurfaceMesh &inner_mesh,
-                                       geometrycentral::Vector<int> hull_indices){
-    Eigen::MatrixXd V,U, bc;
-    Eigen::MatrixXi F;
-    Eigen::VectorXi S,b;
-    igl::ARAPData arap_data;
-    arap_data.max_iter = 20;
-    SparseMatrix<double> L;
-    F = inner_mesh.getFaceVertexMatrix<size_t>().cast<int>();
-    V = old_pos_mat;
-    b = hull_indices;
-    // igl::arap_precomputation(old_pos_mat, F, 3, hull_indices, arap_data);
-    igl::arap_precomputation(V, F, 3, b, arap_data);
-    // geometrycentral::DenseMatrix<double> U = init_sol; 
-    U = init_sol;
-    bc = new_pos_mat(hull_indices, Eigen::all);
-    igl::arap_solve(bc, arap_data, U);
-    return U;
-}
+// geometrycentral::DenseMatrix<double> get_ARAP_positions(
+//                                        geometrycentral::DenseMatrix<double> old_pos_mat,
+//                                        geometrycentral::DenseMatrix<double> new_pos_mat, 
+//                                        geometrycentral::DenseMatrix<double> init_sol, 
+//                                        ManifoldSurfaceMesh &inner_mesh,
+//                                        geometrycentral::Vector<int> hull_indices){
+//     Eigen::MatrixXd V,U, bc;
+//     Eigen::MatrixXi F;
+//     Eigen::VectorXi S,b;
+//     igl::ARAPData arap_data;
+//     arap_data.max_iter = 20;
+//     SparseMatrix<double> L;
+//     F = inner_mesh.getFaceVertexMatrix<size_t>().cast<int>();
+//     V = old_pos_mat;
+//     b = hull_indices;
+//     // igl::arap_precomputation(old_pos_mat, F, 3, hull_indices, arap_data);
+//     igl::arap_precomputation(V, F, 3, b, arap_data);
+//     // geometrycentral::DenseMatrix<double> U = init_sol; 
+//     U = init_sol;
+//     bc = new_pos_mat(hull_indices, Eigen::all);
+//     igl::arap_solve(bc, arap_data, U);
+//     return U;
+// }
 
 
 DeformationSolver::DeformationSolver(ManifoldSurfaceMesh *_mesh, VertexPositionGeometry *_old_geometry,
@@ -729,7 +729,7 @@ double DeformationSolver::get_point_distance_to_convex_hull(Eigen::VectorXd p, b
     if (from_faces){
         size_t m = convex_mesh->nFaces();
         Eigen::VectorXd Np = constraint_matrix * p;
-        assert(repeated_rhs.size() == m); // p or pT?
+        assert(Np.size() == m); // p or pT?
         Eigen::MatrixXd diff_ij = constraint_rhs - Np; // col j is N*P_j - rhs; i.e. -f_i(P_j) which should be positive
         distance = diff_ij.minCoeff();
     }

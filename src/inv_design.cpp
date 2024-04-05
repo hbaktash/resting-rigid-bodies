@@ -300,27 +300,15 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool frozen_G, bool check_FD){
     // printf("here\n");
     for (Face f: forwardSolver->hullMesh->faces()){
         uni_mass_d_pf_dv[f] = VertexData<Vector3>(*forwardSolver->hullMesh, zvec);
-        if (!frozen_G && compute_global_G_effect){
-            for (Vertex v: forwardSolver->hullMesh->vertices()){
-                // center of mass only term
-                Vector3 term1 = d_pf_dv[f][v];
-                
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            if (!frozen_G){ // && compute_global_G_effectl; wtf was i thinking with that?
+                // center of mass term
                 Vertex org_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]);
-                // geometric term: gauss map geometry
                 Vector<double> term2 = dG_dv[org_vertex].transpose() * vec32vec(d_pf_d_G[f]);
-                uni_mass_d_pf_dv[f][v] = term1 + Vector3({term2[0], term2[1], term2[2]});
+                uni_mass_d_pf_dv[f][v] = d_pf_dv[f][v] + Vector3({term2[0], term2[1], term2[2]});
             }
-        }
-        else {
-            for (Vertex v: f.adjacentVertices()){
-                if (frozen_G)
-                    uni_mass_d_pf_dv[f][v] = d_pf_dv[f][v];
-                else {
-                    Vertex org_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]);
-                    Vector<double> term2 = dG_dv[org_vertex].transpose() * vec32vec(d_pf_d_G[f]);
-                    uni_mass_d_pf_dv[f][v] = d_pf_dv[f][v] + Vector3({term2[0], term2[1], term2[2]});
-                }
-            }
+            else 
+                uni_mass_d_pf_dv[f][v] = d_pf_dv[f][v];
         }
     }
     if (check_FD){
@@ -383,18 +371,9 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(size_t goal_
         double goal_multiplier = with_flow_structure ? 
                         (goal_prob[flow_structure[f]]* 4.*PI - boundaryBuilder->face_region_area[flow_structure[f]]):
                         (goal_prob[f]* 4.*PI - boundaryBuilder->face_region_area[f]);
-        if (compute_global_G_effect) {
-            for (Vertex v: forwardSolver->hullMesh->vertices()){
-                total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
-                                                goal_multiplier;
-            }
-        }
-        else {
-            for (Vertex v: f.adjacentVertices()){
-                total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
-                                                goal_multiplier;
-                // printf("      -- tmp grad norm for v %d: %f \n", v.getIndex(), uni_mass_d_pf_dv[f][v].norm());
-            }
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
+                                            goal_multiplier;
         }
         // printf("   finding total grad for f %d area: %f goal area: %f \n", f.getIndex(),
         //                                                                 boundaryBuilder->face_region_area[last_sink_face]/(4.*PI),
@@ -568,68 +547,68 @@ VertexData<Vector3> InverseSolver::laplace_update_positions(VertexData<Vector3> 
 }
 
 
-VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> new_positions){
-    size_t n = forwardSolver->inputMesh->nVertices();
-    size_t max_iters = arap_max_iter; // shouldn't need much given the small updates?
+// VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> new_positions){
+//     size_t n = forwardSolver->inputMesh->nVertices();
+//     size_t max_iters = arap_max_iter; // shouldn't need much given the small updates?
 
-    VertexData<Vector3> old_positions = forwardSolver->inputGeometry->inputVertexPositions;
-    if (use_old_geometry){
-        old_positions = initial_geometry->inputVertexPositions;
-        printf("using old positions\n");
-    }
-    DenseMatrix<double> old_pos_mat = vertex_data_to_matrix(old_positions);
-    DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_positions);
+//     VertexData<Vector3> old_positions = forwardSolver->inputGeometry->inputVertexPositions;
+//     if (use_old_geometry){
+//         old_positions = initial_geometry->inputVertexPositions;
+//         printf("using old positions\n");
+//     }
+//     DenseMatrix<double> old_pos_mat = vertex_data_to_matrix(old_positions);
+//     DenseMatrix<double> new_pos_mat = vertex_data_to_matrix(new_positions);
     
-    // constrained matrix
-    Vector<size_t> interior_indices = forwardSolver->interior_indices;
-    update_Ls(); // whether to use initial Laplacian or the current one
-    DenseMatrix<double> init_sol = solve_constrained_Laplace(interior_indices, old_pos_mat, new_pos_mat);;
+//     // constrained matrix
+//     Vector<size_t> interior_indices = forwardSolver->interior_indices;
+//     update_Ls(); // whether to use initial Laplacian or the current one
+//     DenseMatrix<double> init_sol = solve_constrained_Laplace(interior_indices, old_pos_mat, new_pos_mat);;
     
-    polyscope::registerSurfaceMesh("z ARAP Laplace init", init_sol,
-                                           forwardSolver->inputMesh->getFaceVertexList());
-    DenseMatrix<double> tmp_pos_mat = init_sol;
-    if (libigl_ARAP){
-        tmp_pos_mat = get_ARAP_positions(old_pos_mat, new_pos_mat, init_sol, *forwardSolver->inputMesh, forwardSolver->hull_indices.cast<int>());
-    }
-    else {
-        for (size_t i = 0; i < max_iters; i++){
-            // evaluate R_i's
-            VertexData<DenseMatrix<double>> rotations = find_rotations(old_pos_mat, tmp_pos_mat);
-            // find positions; p'
-            DenseMatrix<double> b(n,3);
-            //  - LHS
-            b.fill(0.);
-            for (Vertex v: forwardSolver->inputMesh->vertices()){
-                auto p_v = old_pos_mat.row(v.getIndex());
-                DenseMatrix<double> R_v = rotations[v];
-                // if (forwardSolver->on_hull_index[v] != INVALID_IND)
-                //     R_v = identityMatrix<double>(3).toDense();
-                for (Vertex v_neigh: v.adjacentVertices()){
-                    DenseMatrix<double> R_v_neigh = rotations[v_neigh];
-                    // if (forwardSolver->on_hull_index[v_neigh] != INVALID_IND)
-                    //     R_v_neigh = identityMatrix<double>(3).toDense();
-                    auto p_v_neigh = old_pos_mat.row(v_neigh.getIndex());
-                    b(v.getIndex(), Eigen::all) += current_Ls.coeff(v.getIndex(), v_neigh.getIndex()) * 
-                                        ((R_v + R_v_neigh).transpose() * (p_v - p_v_neigh).transpose()).transpose();
-                }
-            }
-            b = b/2.;
-            // solving with constraints
-            DenseMatrix<double> padded_handles(n,3); // zeros for un-constrained vertices
-            padded_handles.fill(0.);
-            padded_handles(forwardSolver->hull_indices, Eigen::all) = new_pos_mat(forwardSolver->hull_indices, Eigen::all);
-            tmp_pos_mat(interior_indices, Eigen::all) = solve_dense_b(constrained_L_solver,  
-                                                (b - current_Ls*padded_handles)(interior_indices, Eigen::all));
-            polyscope::registerSurfaceMesh("z ARAP iter " + std::to_string(i), tmp_pos_mat,
-                                                forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
-        }
-    }
-    VertexData<Vector3> update_vecs(*forwardSolver->inputMesh);
-    for (Vertex v: forwardSolver->inputMesh->vertices()){
-        update_vecs[v] = vec2vec3(tmp_pos_mat.row(v.getIndex())) - forwardSolver->inputGeometry->inputVertexPositions[v];
-    }
-    return update_vecs;
-}
+//     polyscope::registerSurfaceMesh("z ARAP Laplace init", init_sol,
+//                                            forwardSolver->inputMesh->getFaceVertexList());
+//     DenseMatrix<double> tmp_pos_mat = init_sol;
+//     if (libigl_ARAP){
+//         tmp_pos_mat = get_ARAP_positions(old_pos_mat, new_pos_mat, init_sol, *forwardSolver->inputMesh, forwardSolver->hull_indices.cast<int>());
+//     }
+//     else {
+//         for (size_t i = 0; i < max_iters; i++){
+//             // evaluate R_i's
+//             VertexData<DenseMatrix<double>> rotations = find_rotations(old_pos_mat, tmp_pos_mat);
+//             // find positions; p'
+//             DenseMatrix<double> b(n,3);
+//             //  - LHS
+//             b.fill(0.);
+//             for (Vertex v: forwardSolver->inputMesh->vertices()){
+//                 auto p_v = old_pos_mat.row(v.getIndex());
+//                 DenseMatrix<double> R_v = rotations[v];
+//                 // if (forwardSolver->on_hull_index[v] != INVALID_IND)
+//                 //     R_v = identityMatrix<double>(3).toDense();
+//                 for (Vertex v_neigh: v.adjacentVertices()){
+//                     DenseMatrix<double> R_v_neigh = rotations[v_neigh];
+//                     // if (forwardSolver->on_hull_index[v_neigh] != INVALID_IND)
+//                     //     R_v_neigh = identityMatrix<double>(3).toDense();
+//                     auto p_v_neigh = old_pos_mat.row(v_neigh.getIndex());
+//                     b(v.getIndex(), Eigen::all) += current_Ls.coeff(v.getIndex(), v_neigh.getIndex()) * 
+//                                         ((R_v + R_v_neigh).transpose() * (p_v - p_v_neigh).transpose()).transpose();
+//                 }
+//             }
+//             b = b/2.;
+//             // solving with constraints
+//             DenseMatrix<double> padded_handles(n,3); // zeros for un-constrained vertices
+//             padded_handles.fill(0.);
+//             padded_handles(forwardSolver->hull_indices, Eigen::all) = new_pos_mat(forwardSolver->hull_indices, Eigen::all);
+//             tmp_pos_mat(interior_indices, Eigen::all) = solve_dense_b(constrained_L_solver,  
+//                                                 (b - current_Ls*padded_handles)(interior_indices, Eigen::all));
+//             polyscope::registerSurfaceMesh("z ARAP iter " + std::to_string(i), tmp_pos_mat,
+//                                                 forwardSolver->inputMesh->getFaceVertexList())->setEnabled(false);
+//         }
+//     }
+//     VertexData<Vector3> update_vecs(*forwardSolver->inputMesh);
+//     for (Vertex v: forwardSolver->inputMesh->vertices()){
+//         update_vecs[v] = vec2vec3(tmp_pos_mat.row(v.getIndex())) - forwardSolver->inputGeometry->inputVertexPositions[v];
+//     }
+//     return update_vecs;
+// }
 
 VertexData<Vector3> InverseSolver::trivial_update_positions(VertexData<Vector3> hull_updates){
     VertexData<Vector3> updates(*forwardSolver->inputMesh, Vector3::zero());
