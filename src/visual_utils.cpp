@@ -172,42 +172,42 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
                                           polyscope::SurfaceMesh* hosting_psMesh,
                                           Vector3 center, double radius, size_t seg_count,
                                           bool on_height_surface){
-  std::vector<Vector3> boundary_normals(BoundaryNormal::counter);
-  std::set<std::pair<size_t, size_t>> drawn_pairs;
-  // printf("showing boundary patches\n");
-  // printf("  building pairs\n ");
-  for (Edge e: boundary_builder->forward_solver->hullMesh->edges()){
-    for (BoundaryNormal *tmp_bnd_normal: boundary_builder->edge_boundary_normals[e]){
-      if (tmp_bnd_normal != nullptr){
-        Vector3 tmp_normal = tmp_bnd_normal->normal;
-        boundary_normals[tmp_bnd_normal->index] = tmp_normal; // + gm_shift;
-        for (BoundaryNormal *neigh_bnd_normal: tmp_bnd_normal->neighbors){
-          Vector3 neigh_normal = neigh_bnd_normal->normal;
-          boundary_normals[neigh_bnd_normal->index] = neigh_normal;
-          std::pair<size_t, size_t> tmp_pair = {tmp_bnd_normal->index, neigh_bnd_normal->index};
-          if (drawn_pairs.find(tmp_pair) == drawn_pairs.end()){
-            drawn_pairs.insert(tmp_pair);
-            // printf("here!!! %d, %d \n", tmp_pair.first, tmp_pair.second);
-          }
-        }
-      }
-    }
-  }
-  glm::vec3 arc_color = glm::vec3({1.,0,0}); // default color
-  std::vector<std::pair<size_t, size_t>> ind_pairs_vector;
-  // Using vector::assign
-  ind_pairs_vector.assign(drawn_pairs.begin(), drawn_pairs.end());
-  // printf("  drawing the arc network on GM\n ");
-  draw_arc_network_on_sphere(ind_pairs_vector, boundary_normals, 
-                            center, radius, seg_count, 
-                            "region boundaries", nullptr, 1., arc_color);
-  if (on_height_surface){
-    // printf("  drawing the arc network on height surface\n ");
-    draw_arc_network_on_lifted_suface(ind_pairs_vector, boundary_normals, *boundary_builder->forward_solver, 
-                                      center, 0., seg_count, 
-                                      "region boundaries ", nullptr, arc_color);
-  }
-  return {ind_pairs_vector, boundary_normals};
+  // std::vector<Vector3> boundary_normals(BoundaryNormal::counter);
+  // std::set<std::pair<size_t, size_t>> drawn_pairs;
+  // // printf("showing boundary patches\n");
+  // // printf("  building pairs\n ");
+  // for (Edge e: boundary_builder->forward_solver->hullMesh->edges()){
+  //   for (BoundaryNormal *tmp_bnd_normal: boundary_builder->edge_boundary_normals[e]){
+  //     if (tmp_bnd_normal != nullptr){
+  //       Vector3 tmp_normal = tmp_bnd_normal->normal;
+  //       boundary_normals[tmp_bnd_normal->index] = tmp_normal; // + gm_shift;
+  //       for (BoundaryNormal *neigh_bnd_normal: tmp_bnd_normal->neighbors){
+  //         Vector3 neigh_normal = neigh_bnd_normal->normal;
+  //         boundary_normals[neigh_bnd_normal->index] = neigh_normal;
+  //         std::pair<size_t, size_t> tmp_pair = {tmp_bnd_normal->index, neigh_bnd_normal->index};
+  //         if (drawn_pairs.find(tmp_pair) == drawn_pairs.end()){
+  //           drawn_pairs.insert(tmp_pair);
+  //           // printf("here!!! %d, %d \n", tmp_pair.first, tmp_pair.second);
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
+  // glm::vec3 arc_color = glm::vec3({1.,0,0}); // default color
+  // std::vector<std::pair<size_t, size_t>> ind_pairs_vector;
+  // // Using vector::assign
+  // ind_pairs_vector.assign(drawn_pairs.begin(), drawn_pairs.end());
+  // // printf("  drawing the arc network on GM\n ");
+  // draw_arc_network_on_sphere(ind_pairs_vector, boundary_normals, 
+  //                           center, radius, seg_count, 
+  //                           "region boundaries", nullptr, 1., arc_color);
+  // if (on_height_surface){
+  //   // printf("  drawing the arc network on height surface\n ");
+  //   draw_arc_network_on_lifted_suface(ind_pairs_vector, boundary_normals, *boundary_builder->forward_solver, 
+  //                                     center, 0., seg_count, 
+  //                                     "region boundaries ", nullptr, arc_color);
+  // }
+  // return {ind_pairs_vector, boundary_normals};
 }
 
 

@@ -20,6 +20,19 @@
 #include "inv_design.h"
 
 
+
+// tmp tools
+Vector3 vec2vec3(Vector<double> v){
+    Vector3 ans({v[0], v[1], v[2]});
+    return ans;
+}
+
+
+Vector3 vec3d_to_vec3(Eigen::Vector3d v){
+    Vector3 ans({v[0], v[1], v[2]});
+    return ans;
+}
+
 // optimization stuff
 
 InverseSolver::InverseSolver(BoundaryBuilder* boundaryBuilder){
@@ -113,24 +126,31 @@ void InverseSolver::update_fair_distribution(double normal_threshold){
 }
 
 
-void InverseSolver::find_d_pf_d_Gs(bool check_FD){
+void InverseSolver::find_d_pf_d_Gs(bool use_autodiff, bool check_FD){
     Vector3 zero_vec = Vector3::zero();
     Vector3 G = forwardSolver->get_G();
     d_pf_d_G = FaceData<Vector3>(*forwardSolver->hullMesh, zero_vec);
     for (Face f: forwardSolver->hullMesh->faces()){
-        Vector3 f_g_grad = zero_vec;
-        // assuming "regularity"
-        for (Halfedge he: f.adjacentHalfedges()){
-            Vertex v0 = he.tailVertex(),
-                   v1 = he.tipVertex(),
-                   v2 = he.next().tipVertex();
-            Vector3 p0 = forwardSolver->hullGeometry->inputVertexPositions[v0], 
-                    p1 = forwardSolver->hullGeometry->inputVertexPositions[v1], 
-                    p2 = forwardSolver->hullGeometry->inputVertexPositions[v2];
-            Vector3 tmp_angle_G_grad = dihedral_angle_grad_G(G, p1, p0, p2);
-            f_g_grad += tmp_angle_G_grad;
+        if (!use_autodiff){
+            Vector3 f_g_grad = zero_vec;
+            // assuming "regularity"
+            for (Halfedge he: f.adjacentHalfedges()){
+                Vertex v0 = he.tailVertex(),
+                    v1 = he.tipVertex(),
+                    v2 = he.next().tipVertex();
+                Vector3 p0 = forwardSolver->hullGeometry->inputVertexPositions[v0], 
+                        p1 = forwardSolver->hullGeometry->inputVertexPositions[v1], 
+                        p2 = forwardSolver->hullGeometry->inputVertexPositions[v2];
+                Vector3 tmp_angle_G_grad = dihedral_angle_grad_G(G, p1, p0, p2);
+                f_g_grad += tmp_angle_G_grad;
+            }
+            d_pf_d_G[f] = f_g_grad;
         }
-        d_pf_d_G[f] = f_g_grad;
+        else {
+            if (forwardSolver->face_last_face[f] == f){ // unstable faces have zero in exact grad
+                d_pf_d_G[f] = vec3d_to_vec3(boundaryBuilder->df_dG_grads[f]);
+            }
+        }
     }
     if (check_FD){
         printf("FD check: \n");
@@ -173,7 +193,7 @@ Vector3 InverseSolver::find_total_g_grad() {
 
 
 // vertex grads
-void InverseSolver::find_d_pf_dvs(bool check_FD) {
+void InverseSolver::find_d_pf_dvs(bool use_autodiff, bool check_FD) {
     if (!forwardSolver->updated)
         forwardSolver->initialize_pre_computes();
     Vector3 zvec = Vector3::zero();
@@ -181,16 +201,22 @@ void InverseSolver::find_d_pf_dvs(bool check_FD) {
     d_pf_dv = FaceData<VertexData<Vector3>>(*forwardSolver->hullMesh);
     for (Face f: forwardSolver->hullMesh->faces()){
         d_pf_dv[f] = VertexData<Vector3>(*forwardSolver->hullMesh, zvec);
-        for (Halfedge he: f.adjacentHalfedges()){
-            Vertex v0 = he.tailVertex(),
-                   v1 = he.tipVertex(),
-                   v2 = he.next().tipVertex();
-            Vector3 p0 = forwardSolver->hullGeometry->inputVertexPositions[v0], 
-                    p1 = forwardSolver->hullGeometry->inputVertexPositions[v1], 
-                    p2 = forwardSolver->hullGeometry->inputVertexPositions[v2];
-            d_pf_dv[f][v0] += dihedral_angle_grad_B(G, p1, p0, p2);
-            d_pf_dv[f][v1] += dihedral_angle_grad_A(G, p1, p0, p2);
-            d_pf_dv[f][v2] += dihedral_angle_grad_C(G, p1, p0, p2);
+        if (use_autodiff)
+            if(forwardSolver->face_last_face[f] == f)
+                for (Vertex v: forwardSolver->hullMesh->vertices())
+                    d_pf_dv[f][v] = vec3d_to_vec3(boundaryBuilder->df_dv_grads_ad[f].row(v.getIndex()));
+        else {
+            for (Halfedge he: f.adjacentHalfedges()){
+                Vertex v0 = he.tailVertex(),
+                    v1 = he.tipVertex(),
+                    v2 = he.next().tipVertex();
+                Vector3 p0 = forwardSolver->hullGeometry->inputVertexPositions[v0], 
+                        p1 = forwardSolver->hullGeometry->inputVertexPositions[v1], 
+                        p2 = forwardSolver->hullGeometry->inputVertexPositions[v2];
+                d_pf_dv[f][v0] += dihedral_angle_grad_B(G, p1, p0, p2);
+                d_pf_dv[f][v1] += dihedral_angle_grad_A(G, p1, p0, p2);
+                d_pf_dv[f][v2] += dihedral_angle_grad_C(G, p1, p0, p2);
+            }
         }
     }
     if (check_FD){
@@ -245,11 +271,6 @@ VertexData<Vector3> InverseSolver::find_total_vertex_grads() {
 }
 
 
-Vector3 vec2vec3(Vector<double> v){
-    Vector3 ans({v[0], v[1], v[2]});
-    return ans;
-}
-
 // populating VertexData<DenseMatrix<double>> dv_d_G;
 void InverseSolver::find_dG_dvs(){
     // TODO; generalize for polygonal faces
@@ -285,16 +306,15 @@ void InverseSolver::find_dG_dvs(){
 }
 
 // Vertex grads; Uni mass
-void InverseSolver::find_uni_mass_d_pf_dv(bool frozen_G, bool check_FD){
+void InverseSolver::find_uni_mass_d_pf_dv(bool use_autodiff, bool frozen_G, bool check_FD){
+    
+    uni_mass_d_pf_dv = FaceData<VertexData<Vector3>>(*forwardSolver->hullMesh);
     //  assuming that we only move convex hull vertices
-    //  and that input is convex
     if (!frozen_G){
-        find_d_pf_d_Gs();
+        find_d_pf_d_Gs(use_autodiff);
         find_dG_dvs();
     }
-    find_d_pf_dvs();
-
-    uni_mass_d_pf_dv = FaceData<VertexData<Vector3>>(*forwardSolver->hullMesh);
+    find_d_pf_dvs(use_autodiff);
     Vector3 zvec = Vector3::zero();
     Vector3 G = forwardSolver->get_G();
     // printf("here\n");
@@ -334,7 +354,7 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool frozen_G, bool check_FD){
                 forwardSolver->initialize_pre_computes();
                 boundaryBuilder->build_boundary_normals();
                 Vector<double> new_face_areas = boundaryBuilder->face_region_area.toVector();
-                for (Face f: v.adjacentFaces()){
+                for (Face f: v.adjacentFaces()){ // TODO fix this; should loop over all vertices now with exact grads
                     double proj_grad = dot(uni_mass_d_pf_dv[f][v], dp),
                            fd_grad = (new_face_areas[f.getIndex()] - old_face_areas[f.getIndex()])/step;
                     if (proj_grad - fd_grad > 1e-4){
@@ -545,7 +565,6 @@ VertexData<Vector3> InverseSolver::laplace_update_positions(VertexData<Vector3> 
     }
     return update_vecs;
 }
-
 
 // VertexData<Vector3> InverseSolver::ARAP_update_positions(VertexData<Vector3> new_positions){
 //     size_t n = forwardSolver->inputMesh->nVertices();

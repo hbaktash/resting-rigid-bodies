@@ -41,7 +41,7 @@ class BoundaryNormal {
         Vector3 normal;
         autodiff::Vector3var normal_ad;
 
-        std::vector<BoundaryNormal*> neighbors;
+        // std::vector<BoundaryNormal*> neighbors;
 
         Vertex host_v;
         Edge host_e;
@@ -53,7 +53,7 @@ class BoundaryNormal {
         BoundaryNormal(Vector3 _normal);
 
         // 
-        void add_neighbor(BoundaryNormal* _neigh);
+        // void add_neighbor(BoundaryNormal* _neigh);
 };
 
 
@@ -70,27 +70,30 @@ class BoundaryBuilder {
 
         // containers
         VertexData<BoundaryNormal*> vertex_boundary_normal;
-        EdgeData<std::vector<BoundaryNormal*>> edge_boundary_normals; // could have multiple on a non-singular edge
+        // EdgeData<std::vector<BoundaryNormal*>> edge_boundary_normals; // could have multiple on a non-singular edge
+        EdgeData<std::vector<Vector3>> edge_boundary_normals;
         // FaceData<std::vector<BoundaryNormal*>> face_attraction_boundary; // for future passes over face region boundaries  
         FaceData<std::vector<std::tuple<BoundaryNormal*, BoundaryNormal*, double>>> face_chain_area;
         FaceData<double> face_region_area;
         // for autodiff
         FaceData<autodiff::var> face_region_area_ad;
-        FaceData<autodiff::MatrixX3var> face_region_areas_gradient_ad;
+        FaceData<Eigen::MatrixX3d> df_dv_grads_ad;
+        FaceData<Eigen::Vector3d> df_dG_grads;
 
         std::vector<Edge> find_terminal_edges();
         // backtrack and boundary normals starting from singular edges leading to different stable faces 
         void build_boundary_normals();
         // flow back from a edge with boundary normal; till u find a source
-        void flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
+        bool flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
                                         double f1_area_sign);
 
         // same shit but for autodiff
-        void build_boundary_normals_for_autodiff(autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G);
-        void flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
-                                        double f1_area_sign, autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G);
+        void build_boundary_normals_for_autodiff(autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G, 
+                                                 bool generate_gradients);
+        bool flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
+                                                     double f1_area_sign, autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G);
         // get actual gradients
-        void 
+        void compute_df_dv_grads_autodiff();
 
         void print_area_of_boundary_loops();
         double get_fair_dice_energy(size_t side_count);

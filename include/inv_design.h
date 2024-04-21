@@ -61,12 +61,12 @@ class InverseSolver{
         // note: pf = face region area
         // G grad; vertices frozen
         FaceData<Vector3> d_pf_d_G;            // convex-hull related
-        void find_d_pf_d_Gs(bool check_FD = false);
+        void find_d_pf_d_Gs(bool use_autodiff, bool check_FD = false);
         // accumulate over all faces
         Vector3 find_total_g_grad();
         // vertex grad; G frozen
         FaceData<VertexData<Vector3>> d_pf_dv; // convex-hull related
-        void find_d_pf_dvs(bool check_FD = false); 
+        void find_d_pf_dvs(bool use_autodiff, bool check_FD = false); 
         // accumulate over all faces
         VertexData<Vector3> find_total_vertex_grads();
 
@@ -78,7 +78,7 @@ class InverseSolver{
         // bool compute_global_G_effect = true;
         FaceData<VertexData<Vector3>> uni_mass_d_pf_dv;
         // after chain and product rule
-        void find_uni_mass_d_pf_dv(bool frozen_G = false, bool check_FD = false);
+        void find_uni_mass_d_pf_dv(bool use_autodiff, bool frozen_G = false, bool check_FD = false);
         // accumulate over all faces
         FaceData<Face> flow_structure;
         VertexData<Vector3> find_uni_mass_total_vertex_grads(size_t goal_stable_count,
