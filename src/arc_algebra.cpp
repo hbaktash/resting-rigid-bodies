@@ -133,7 +133,6 @@ Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B){
     Vector3 PB = B - P,
             AB = B - A;
     Vector3 ortho_p = PB - AB*dot(AB, PB)/dot(AB,AB);
-    Eigen::VectorXd t;
     return ortho_p;
 }
 
@@ -142,35 +141,35 @@ Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B){
 
 // autodiff version
 
-autodiff::Vector3var point_to_segment_normal_ad(autodiff::MatrixX3var &poses, autodiff::Vector3var &G, Edge e){
-    Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
-    autodiff::Vector3var PB = poses.row(v2.getIndex()) - G.transpose(),
-                         AB = poses.row(v2.getIndex()) - poses.row(v1.getIndex());
-    return PB - AB * AB.dot(PB)/AB.dot(AB);
-}
+// autodiff::Vector3var point_to_segment_normal_ad(autodiff::MatrixX3var &poses, autodiff::Vector3var &G, Edge e){
+//     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
+//     autodiff::Vector3var PB = poses.row(v2.getIndex()) - G.transpose(),
+//                          AB = poses.row(v2.getIndex()) - poses.row(v1.getIndex());
+//     return PB - AB * AB.dot(PB)/AB.dot(AB);
+// }
 
 
 // ** only called when intersection has happens
-autodiff::Vector3var intersect_arc_ray_with_arc_ad(autodiff::MatrixX3var &poses, autodiff::Vector3var &G, Vertex v,
-                                                   autodiff::Vector3var &R2, autodiff::Vector3var &A, autodiff::Vector3var &B,
-                                                   bool sign_change){
-    // assertions have been made in earlier non-AD call of intersect_arc_ray_with_arc(...)
-    // i dont know how intermeditate variables are handled in autodiff; so keeping theese function as direct as possible
-    autodiff::Vector3var p = ((poses.row(v.getIndex()) - G.transpose()).cross(R2)).cross(A.cross(B));
-    if (sign_change)
-        return -p;
-    return p;
-}
+// autodiff::Vector3var intersect_arc_ray_with_arc_ad(autodiff::MatrixX3var &poses, autodiff::Vector3var &G, Vertex v,
+//                                                    autodiff::Vector3var &R2, autodiff::Vector3var &A, autodiff::Vector3var &B,
+//                                                    bool sign_change){
+//     // assertions have been made in earlier non-AD call of intersect_arc_ray_with_arc(...)
+//     // i dont know how intermeditate variables are handled in autodiff; so keeping theese function as direct as possible
+//     autodiff::Vector3var p = ((poses.row(v.getIndex()) - G.transpose()).cross(R2)).cross(A.cross(B));
+//     if (sign_change)
+//         return -p;
+//     return p;
+// }
 
 
-autodiff::Vector3var face_normal_ad(autodiff::MatrixX3var &poses, Face f){
-    // Gather vertex positions for next three vertices
-    Halfedge he = f.halfedge();
-    Vertex v1 = he.vertex(),
-           v2 = he.next().vertex(),
-           v3 = he.next().next().vertex();
-    return (poses.row(v2.getIndex()) - poses.row(v1.getIndex())).cross(poses.row(v3.getIndex()) - poses.row(v1.getIndex()));
-}
+// autodiff::Vector3var face_normal_ad(autodiff::MatrixX3var &poses, Face f){
+//     // Gather vertex positions for next three vertices
+//     Halfedge he = f.halfedge();
+//     Vertex v1 = he.vertex(),
+//            v2 = he.next().vertex(),
+//            v3 = he.next().next().vertex();
+//     return ((poses.row(v2.getIndex()) - poses.row(v1.getIndex())).cross(poses.row(v3.getIndex()) - poses.row(v1.getIndex())));//.normalized();
+// }
 
 
 autodiff::var triangle_patch_area_on_sphere_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C){

@@ -87,7 +87,7 @@ glm::vec3 vecF_color({0.1, 0.1, 0.1});
 BoundaryBuilder *boundary_builder;
 polyscope::PointCloud *boundary_normals_pc;
 polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
-bool draw_boundary_patches = true;
+bool draw_boundary_patches = false;
 bool test_guess = true;
 bool compute_global_G_effect = true,
      deform_after = true,
@@ -128,6 +128,11 @@ std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string(
 std::string all_polygons_current_item = "sliced tet",
             all_polygons_current_item2 = "tet";
 static const char* all_polygons_current_item_c_str = "bunnylp";
+
+// oris
+std::vector<std::string> all_stable_face_items = {"nothing yet"};
+std::string all_stable_face_current_item = "nothing yet";
+static const char* all_stable_face_current_item_c_str = "nothing yet";
 
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false, 
@@ -347,7 +352,9 @@ void myCallback() {
               G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
               update_solver_and_boundaries();
               boundary_builder->print_area_of_boundary_loops();
+              printf("here1\n");
               update_visuals_with_G(forwardSolver, boundary_builder);
+              printf("here2\n");
               if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(false);
               if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);
           }
@@ -376,7 +383,62 @@ void myCallback() {
   }
   if (ImGui::Checkbox("draw artificial R3 boundaries", &test_guess)) draw_stable_patches_on_gauss_map();
   if (ImGui::Button("show all stable oris (sorted by prob)")){
-    vis_utils.visualize_all_stable_orientations();
+    // vis_utils.visualize_all_stable_orientations();
+    //
+    forwardSolver->set_uniform_G();
+    forwardSolver->initialize_pre_computes();
+    BoundaryBuilder *bnd_builder = new BoundaryBuilder(forwardSolver);
+    bnd_builder->build_boundary_normals();
+
+    std::vector<std::pair<Face, double>> probs;
+    for (Face f: forwardSolver->hullMesh->faces())
+        if (bnd_builder->face_region_area[f] > 0)
+            probs.push_back({f, bnd_builder->face_region_area[f]/(4.*PI)});
+    std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
+    all_stable_face_items = {};
+    for (auto p: probs){
+      Face f = p.first;
+      double prob = p.second;
+      all_stable_face_items.push_back("f " + std::to_string(f.getIndex()) + " prob: " + std::to_string(prob));
+    }
+  }
+  if (ImGui::BeginCombo("##combo2", all_stable_face_current_item.c_str())){
+      for (std::string tmp_str: all_stable_face_items){ 
+          bool is_selected = (all_stable_face_current_item == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
+          if (ImGui::Selectable(tmp_str.c_str(), is_selected)){ // selected smth
+              all_stable_face_current_item = tmp_str;
+              
+              size_t pos = 0;
+              std::string token;
+              pos = tmp_str.find(" ");
+              token = tmp_str.substr(0, pos);
+              tmp_str.erase(0, pos + 1);
+              pos = tmp_str.find(" ");
+              token = tmp_str.substr(0, pos);
+              size_t f_ind = std::stoi(token);
+              
+              double floor_z = -1.;
+              Vector3 floor_vec = Vector3({0,0,floor_z});
+              VertexData<Vector3> rotated_poses(*forwardSolver->inputMesh);
+              size_t i = 0;
+              Face f = forwardSolver->hullMesh->face(f_ind);
+              //   double prob = p.second;
+              Vector3 f_normal = forwardSolver->hullGeometry->faceNormal(f);
+              Vector3 rot_axis = cross(f_normal, floor_vec);
+              double rot_angle = angle(f_normal, floor_vec);
+              Vector3 offset = floor_vec - forwardSolver->hullGeometry->inputVertexPositions[f.halfedge().vertex()].rotateAround(rot_axis, rot_angle);
+              for (Vertex v: forwardSolver->inputMesh->vertices()){
+                rotated_poses[v] = forwardSolver->inputGeometry->inputVertexPositions[v].rotateAround(rot_axis, rot_angle) + offset;
+              }
+              double y_shift = 0.;
+              Vector3 vis_shift({y_shift * 2., -2., 0.});
+              auto tmp_ori_mesh = polyscope::registerSurfaceMesh("tmp orientation", -1. * rotated_poses + vis_shift, forwardSolver->inputMesh->getFaceVertexList());
+              tmp_ori_mesh->setSurfaceColor({0.1, 0.4, 0.02});
+          }
+          if (is_selected)
+              ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
+      }
+      ImGui::EndCombo();
   }
 }
 

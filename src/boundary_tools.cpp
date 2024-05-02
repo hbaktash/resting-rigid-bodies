@@ -77,7 +77,7 @@ void BoundaryBuilder::build_boundary_normals(){
     // printf("  back-flowing terminal edges \n");
     int i = 0;
     for (Edge e: terminal_edges){
-        printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
+        // printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
         // assert(edge_boundary_normals[e].size() == 1); // otherwise we proly have a Gomboc?
         Vector3 stable_edge_normal = forward_solver->edge_stable_normal[e];
         BoundaryNormal *bnd_normal = new BoundaryNormal(stable_edge_normal);
@@ -104,8 +104,9 @@ void BoundaryBuilder::build_boundary_normals(){
                                                f1_area_sign);
             else {
                 for (Edge neigh_e: v.adjacentEdges()){
-                    if (neigh_e != e){
-                        printf("-SE %d-", neigh_e.getIndex());
+                    if (neigh_e != e &&
+                        forward_solver->edge_next_vertex[neigh_e] == v){ // neigh_e is a source for this vertex
+                        // printf("-SE %d-", neigh_e.getIndex());
                         // face_attraction_boundary[bnd_normal->f1].push_back(bnd_normal);
                         // face_attraction_boundary[bnd_normal->f2].push_back(bnd_normal);
                         flow_back_boundary_on_edge(bnd_normal, neigh_e, v, 
@@ -113,11 +114,10 @@ void BoundaryBuilder::build_boundary_normals(){
                     }
                 }
             }
+            // printf(" \n One side done! \n");
         }
     }
 }
-
-
 
 
 // recursively follow the boundary curve to a source
@@ -125,7 +125,7 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
                                                  double f1_area_sign){
     // bnd_normal has to be in boundary normals of dest_e; won't assert tho for better performance
     Vertex v = common_vertex; // given as argument for better performance
-    std::cout<<"."<<std::flush;
+    // std::cout<<"."<<std::endl;
     Vector3 tmp_normal({0.,0.,0.}), next_normal({0.,0.,0.});
     if (forward_solver->vertex_is_stabilizable[v]){ // we are at a source
         BoundaryNormal *curr_vertex_boundary_normal = vertex_boundary_normal[v];
@@ -143,8 +143,7 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
 
         tmp_normal = bnd_normal->normal;
         next_normal = curr_vertex_boundary_normal->normal;
-        std::cout<<" V! "<<std::flush;
-
+        // printf("  -> V done! \n ");
     }
     else {
         // vertex is not an equilibria; i.e. source is outside the vertex
@@ -165,11 +164,11 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
                                                               tmp_f1_normal, tmp_f2_normal, sign_change);
             // printf("at tmp_e %d, %d. side v %d. e: %d, %d \n", dest_e.firstVertex().getIndex(), dest_e.secondVertex().getIndex(), v.getIndex(), e.firstVertex().getIndex(), e.secondVertex().getIndex());
             if(e_bnd_normal.norm() == 0.){
-                printf(" -src but miss- ");
+                // printf(" -src but miss- ");
                 return false; // not a source for the given bnd_normal
             }
             // found the source normal
-
+            // printf(" -> e %d ", src_e.getIndex());
 
             BoundaryNormal *new_boundary_normal = new BoundaryNormal(e_bnd_normal);
             // edge_boundary_normals[src_e].push_back(new_boundary_normal);
@@ -189,13 +188,14 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
             // go with the back-flow
             Vertex next_v = src_e.otherVertex(v);
             if (forward_solver->vertex_is_stabilizable[next_v]){
-                std::cout << "v" << std::flush;           
+                // printf(" v ");
                 flow_back_boundary_on_edge(new_boundary_normal, Edge(), next_v, f1_area_sign);
             }
-            else{
+            else {
                 for (Edge next_src_e: next_v.adjacentEdges()){
-                    if (next_src_e != src_e){
-                        std::cout << "e " << next_src_e.getIndex() << std::flush;
+                    if (next_src_e != src_e &&
+                        forward_solver->edge_next_vertex[next_src_e] == next_v){ // next_src_e is a source for this next vertex
+                        // std::cout << " e " << next_src_e.getIndex() << std::endl;
                         // non_singularity and divisive-ness will be checked inside the function
                         bool res = flow_back_boundary_on_edge(new_boundary_normal, next_src_e, next_v, f1_area_sign);
                         if (res) // got to maximum and returning
@@ -204,13 +204,14 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
                 }
             }
         }
-        else
-            std::cout << " not src! " << std::flush;
+        else{
+            // std::cout << " not src! " << std::endl;
+            ;
+        }
     }
-    std::cout << "F" << std::flush;
-    
+    // std::cout << "here???\n" << std::endl;
     if (tmp_normal.norm() == 0.){ // when does this happen?
-        std::cout << "ret\n" << std::flush;
+        // std::cout << "ret\n" << std::endl;
         return false;
     }
     Vector3 f1_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f1), // f1,f2 are the same along the current path to maximum
@@ -228,7 +229,7 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
     else 
         face_region_area[bnd_normal->f2] -= triangle_patch_area_on_sphere(f2_normal, bnd_normal->normal, next_normal);
     
-    printf(" gg \n");
+    // printf(" -ret- ");
     return true;
     // TODO: take care of when f1,f2 on the same side when starting from saddle 
 }
@@ -279,6 +280,11 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
 
 
 
+
+
+
+
+
 // autodiff stuff
 // --------------------------------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------------------------------
@@ -286,8 +292,34 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
 
 
 
-void BoundaryBuilder::build_boundary_normals_for_autodiff(autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G,
+
+
+
+
+
+void BoundaryBuilder::build_boundary_normals_for_autodiff( // autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G,
                                                           bool generate_gradients){
+    
+    // assigning the autodiff variables
+    var_positions = vertex_data_to_matrix(forward_solver->hullGeometry->inputVertexPositions);
+    var_positions_vec = autodiff::VectorXvar{var_positions.reshaped()};
+    // var_positions = VertexData<autodiff::Vector3var>(*forward_solver->hullMesh);
+    for (Vertex v: forward_solver->hullMesh->vertices())
+        var_positions.row(v.getIndex()) = vec32vec(forward_solver->hullGeometry->inputVertexPositions[v]);
+    var_G = autodiff::Vector3var{forward_solver->get_G().x, forward_solver->get_G().y, forward_solver->get_G().z};//vec32vec(forward_solver->get_G());
+
+    //
+    face_normals_ad = FaceData<autodiff::Vector3var>(*forward_solver->hullMesh);
+    for (Face f: forward_solver->hullMesh->faces()){
+        Halfedge he = f.halfedge();
+        Vertex v1 = he.vertex(),
+            v2 = he.next().vertex(),
+            v3 = he.next().next().vertex();
+        // face_normals_ad[f] = (var_positions.row(v2.getIndex()) - var_positions.row(v1.getIndex())).cross(var_positions.row(v3.getIndex()) - var_positions.row(v1.getIndex())).normalized();
+        face_normals_ad[f] = (var_positions.row(v2.getIndex()) - var_positions.row(v1.getIndex())).cross(var_positions.row(v3.getIndex()) - var_positions.row(v1.getIndex())).normalized();
+    }
+
+    //
     vertex_boundary_normal = VertexData<BoundaryNormal*>(*forward_solver->hullMesh, nullptr);
     // edge_boundary_normals  = EdgeData<std::vector<BoundaryNormal*>>(*forward_solver->hullMesh);
     edge_boundary_normals = EdgeData<std::vector<Vector3>>(*forward_solver->hullMesh);
@@ -296,6 +328,10 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff(autodiff::MatrixX3var 
         Eigen::MatrixX3d zero_mat = Eigen::MatrixX3d::Zero(var_positions.rows(), 3);
         df_dv_grads_ad = FaceData<Eigen::MatrixX3d>(*forward_solver->hullMesh, zero_mat);
         Eigen::Vector3d zero_vec = Eigen::Vector3d::Zero();
+        // df_dv_grads_ad = FaceData<VertexData<Eigen::Vector3d>>(*forward_solver->hullMesh);
+        // for (Face f: forward_solver->hullMesh->faces()){
+        //     df_dv_grads_ad[f] = VertexData<Eigen::Vector3d>(*forward_solver->hullMesh, zero_vec);
+        // }
         df_dG_grads = FaceData<Eigen::Vector3d>(*forward_solver->hullMesh, zero_vec);
     }
     BoundaryNormal::counter = 0;
@@ -319,16 +355,18 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff(autodiff::MatrixX3var 
 
     // for quick assignment of face-boundary-loops
     face_region_area = FaceData<double>(*forward_solver->hullMesh, 0.);
-    face_region_area_ad = FaceData<autodiff::var>(*forward_solver->hullMesh, 0.);
+    // face_region_area_ad = FaceData<autodiff::var>(*forward_solver->hullMesh, 0.);
     // back-flow from all terminal edges
-    printf("  back-flowing terminal edges \n");
+    printf("  back-flowing terminal edges %d \n", terminal_edges.size());
     int i = 0;
     for (Edge e: terminal_edges){
         printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
         // assert(edge_boundary_normals[e].size() == 1); // otherwise we proly have a Gomboc!
         Vector3 stable_edge_normal = forward_solver->edge_stable_normal[e];
         BoundaryNormal *bnd_normal = new BoundaryNormal(stable_edge_normal);
-        bnd_normal->normal_ad = point_to_segment_normal_ad(var_positions, var_G, e);
+        // bnd_normal->normal_ad = point_to_segment_normal_ad(e);
+        autodiff::Vector3var bnd_normal_ad = point_to_segment_normal_ad(e);
+       
         Face f1 = e.halfedge().face(),
              f2 = e.halfedge().twin().face();
         bnd_normal->f1 = forward_solver->face_last_face[f1];
@@ -337,6 +375,16 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff(autodiff::MatrixX3var 
         // for visuals
         edge_boundary_normals[e].push_back(bnd_normal->normal);
         for (Vertex v: {e.firstVertex(), e.secondVertex()}){
+            
+            // // TESTING dependency speed-ups
+            std::set<Vertex> effective_vertices;
+            effective_vertices.insert(e.firstVertex());
+            effective_vertices.insert(e.secondVertex());
+            for (Vertex tmp_v: bnd_normal->f1.adjacentVertices())
+                effective_vertices.insert(tmp_v);
+            for (Vertex tmp_v: bnd_normal->f2.adjacentVertices())
+                effective_vertices.insert(tmp_v);
+            
             Vector3 tmp_normal = bnd_normal->normal,
                     f1_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f1),
                     f2_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f2),
@@ -345,19 +393,25 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff(autodiff::MatrixX3var 
             //         imm_f2_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().twin().face());
             double f1_area_sign = dot(f1_normal, cross(v_normal, tmp_normal)) >= 0 ? 1. : -1.; // f1 on rhs of bndN->vN
             if (forward_solver->vertex_is_stabilizable[v]){
-                printf("-SV-\n");
-                flow_back_boundary_on_edge_for_autodiff(bnd_normal, Edge(), v, f1_area_sign, var_positions, var_G);
+                // printf("-SV-\n");
+                flow_back_boundary_on_edge_for_autodiff(bnd_normal, bnd_normal_ad, Edge(), v, f1_area_sign //, var_positions, var_G
+                                                        // ,effective_vertices
+                                                        );
             }
             else {
                 for (Edge neigh_e: v.adjacentEdges()){
-                    if (neigh_e != e){
+                    if (neigh_e != e &&
+                        forward_solver->edge_next_vertex[neigh_e] == v){ // neigh_e is a source for this vertex
                         // face_attraction_boundary[bnd_normal->f1].push_back(bnd_normal);
                         // face_attraction_boundary[bnd_normal->f2].push_back(bnd_normal);
-                        printf("\n-Se %d-", neigh_e.getIndex());
-                        flow_back_boundary_on_edge_for_autodiff(bnd_normal, neigh_e, v, f1_area_sign, var_positions, var_G);
+                        // printf(" -Se %d-", neigh_e.getIndex());
+                        bool res = flow_back_boundary_on_edge_for_autodiff(bnd_normal, bnd_normal_ad, neigh_e, v, f1_area_sign //, effective_vertices //, var_positions, var_G
+                        );
+                        if (res) break; // kinda redundant; since source-ness is checked before going in
                     }
                 }
             }
+            printf(" \n One side done! \n");
         }
     }
     double total_area = 0.;
@@ -370,8 +424,6 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff(autodiff::MatrixX3var 
         }
     }
     std::cout << "total face areas: " << total_area << "---" << total_area_ad << std::endl;
-    
-    
     // -------- gradients --------
     // if (generate_gradients){
     //     // df/dv
@@ -393,13 +445,17 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff(autodiff::MatrixX3var 
 }
 
 
-bool BoundaryBuilder::flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
-                                                        double f1_area_sign, autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G){
+bool BoundaryBuilder::flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bnd_normal, autodiff::Vector3var bnd_normal_ad, Edge src_e, 
+                                                        Vertex common_vertex, double f1_area_sign
+                                                        //, std::set<Vertex> &effective_vertices
+                                                        //, autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G
+                                                        ){
     // bnd_normal has to be in boundary normals of dest_e; won't assert tho for better performance
     Vertex v = common_vertex; // given as argument for better performance
-    std::cout<<" . "<<std::flush;
+    // std::cout<<" . "<<std::endl;
     
     BoundaryNormal* next_bnd_normal = nullptr;
+    autodiff::Vector3var next_bnd_normal_ad;
     if (forward_solver->vertex_is_stabilizable[v]){ // we are at a source
         // BoundaryNormal *curr_vertex_boundary_normal = vertex_boundary_normal[v];
         next_bnd_normal = vertex_boundary_normal[v];
@@ -407,14 +463,20 @@ bool BoundaryBuilder::flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bn
             Vector3 stable_vertex_normal = forward_solver->vertex_stable_normal[v];
             next_bnd_normal = new BoundaryNormal(stable_vertex_normal);
             // ad stuff
-            next_bnd_normal->normal_ad = var_positions.row(v.getIndex()) - var_G.transpose(); // not normalizing; for more stability of gradients?
+            next_bnd_normal_ad = var_positions.row(v.getIndex()) - var_G.transpose(); // var_G
+            // next_bnd_normal->normal_ad = var_positions.row(v.getIndex()) - var_G.transpose(); // not normalizing; for more stability of gradients?
             
             vertex_boundary_normal[v] = next_bnd_normal;
             next_bnd_normal->host_v = v;
         }
         // next_bnd_normal->add_neighbor(bnd_normal);
         // bnd_normal->add_neighbor(next_bnd_normal);
-        std::cout << "V!\n" << std::flush;
+        // effective_vertices.insert(v);
+        evaluate_boundary_patch_area_and_grads_ad(bnd_normal, bnd_normal_ad, next_bnd_normal, next_bnd_normal_ad, f1_area_sign
+                                                //   ,effective_vertices
+                                                  );
+
+        printf("  -> V done! \n");
     }
     else {
         // vertex is not an equilibria; i.e. source is outside the vertex
@@ -434,20 +496,20 @@ bool BoundaryBuilder::flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bn
             Vector3 e_bnd_normal = intersect_arc_ray_with_arc(vertex_stable_normal, bnd_normal->normal, 
                                                               tmp_f1_normal, tmp_f2_normal, sign_change);
             if(e_bnd_normal.norm() == 0.){
-                printf(" -src but miss- ");
+                // printf(" -src but miss- ");
                 return false; // not a source for the given bnd_normal
             }
+            printf(" -> e %d ", src_e.getIndex());
             // edge_boundary_normals[src_e].push_back(next_bnd_normal);
             edge_boundary_normals[src_e].push_back(e_bnd_normal);
             // found the source normal
             // BoundaryNormal *new_boundary_normal = new BoundaryNormal(e_bnd_normal);
             next_bnd_normal = new BoundaryNormal(e_bnd_normal);
             // ad stuff
-            autodiff::Vector3var tmp_f1_normal_ad = face_normal_ad(var_positions, f1),
-                                 tmp_f2_normal_ad = face_normal_ad(var_positions, f2);
-            next_bnd_normal->normal_ad = intersect_arc_ray_with_arc_ad(var_positions, var_G, v, 
-                                                                            bnd_normal->normal_ad,
-                                                                            tmp_f1_normal_ad, tmp_f2_normal_ad, sign_change);
+            next_bnd_normal_ad = intersect_arcs_ad(v, bnd_normal_ad, face_normals_ad[f1], face_normals_ad[f2], sign_change);
+            // next_bnd_normal->normal_ad = intersect_arcs_ad(v, bnd_normal->normal_ad, face_normals_ad[f1], face_normals_ad[f2], sign_change);
+            
+            // intersect_arc_ray_with_arc_ad(var_positions, var_G, v, bnd_normal->normal_ad, tmp_f1_normal_ad, tmp_f2_normal_ad, sign_change);
 
             // bnd_normal->add_neighbor(next_bnd_normal);
             // next_bnd_normal->add_neighbor(bnd_normal);
@@ -457,102 +519,189 @@ bool BoundaryBuilder::flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bn
             next_bnd_normal->f1 = bnd_normal->f1;
             next_bnd_normal->f2 = bnd_normal->f2;
             
+            printf(" eval \n");
+            // effective_vertices.insert(v);
+            // for (Vertex tmp_v: f1.adjacentVertices())
+            //     effective_vertices.insert(tmp_v);
+            // for (Vertex tmp_v: f2.adjacentVertices())
+            //     effective_vertices.insert(tmp_v);
+
+            evaluate_boundary_patch_area_and_grads_ad(bnd_normal, bnd_normal_ad, next_bnd_normal, next_bnd_normal_ad, f1_area_sign
+                                                    //   ,effective_vertices
+                                                      );
             // go with the back-flow
             // printf("recursion back flow!\n");
             Vertex next_v = src_e.otherVertex(v);
             if (forward_solver->vertex_is_stabilizable[next_v]){
-                std::cout << "v" << std::flush;
-                flow_back_boundary_on_edge_for_autodiff(next_bnd_normal, Edge(), next_v, f1_area_sign, var_positions, var_G);
+                printf("v ");
+                flow_back_boundary_on_edge_for_autodiff(next_bnd_normal, next_bnd_normal_ad, Edge(), next_v, f1_area_sign //, var_positions, var_G
+                                                        // ,effective_vertices
+                                                        );
             }
             else{
                 for (Edge next_src_e: next_v.adjacentEdges()){
-                    if (next_src_e != src_e){
+                    if (next_src_e != src_e && 
+                        forward_solver->edge_next_vertex[next_src_e] == next_v){
                         // non_singularity and divisive-ness will be checked inside the function
-                        std::cout << "e " << next_src_e.getIndex() << std::flush;
-                        bool res = flow_back_boundary_on_edge_for_autodiff(next_bnd_normal, next_src_e, next_v, f1_area_sign, var_positions, var_G);
+                        // std::cout << " e " << next_src_e.getIndex();
+                        bool res = flow_back_boundary_on_edge_for_autodiff(next_bnd_normal, next_bnd_normal_ad, next_src_e, next_v, f1_area_sign //, var_positions, var_G
+                                                                        //    ,effective_vertices
+                                                                           );
                         if (res) // got to maximum and returning
                             break;
                     }
                 }
             }
         }
-        else 
-            std::cout << " not src! " << std::flush;
+        else {
+            ;
+            // printf("here?\n");
+            // std::cout << " not src! " << std::endl;
+        }
     }
     // printf("area computes!\n");
     // printf(" computing face areas: %d, %d\n", bnd_normal->f1.getIndex(), bnd_normal->f2.getIndex());
-                        
-    std::cout << " F " << std::flush;
-        
-    if (bnd_normal->normal.norm() == 0. || next_bnd_normal == nullptr) { // if next is not found.
-        std::cout << "ret \n" << std::flush;
+
+    if (bnd_normal->normal.norm() == 0. || next_bnd_normal == nullptr) { // not src probably
+        // std::cout << "ret \n" << std::endl;
         return false;
     }
     // printf("fetching normals and signs %d, %d\n", bnd_normal == nullptr, next_bnd_normal==nullptr);
-    bool verbose = abs(face_region_area[bnd_normal->f1] - face_region_area_ad[bnd_normal->f1]) > 1e-4;
-    if (verbose){
-        printf("  Verboses!\n -00 NO AD %f, %f\n", face_region_area[bnd_normal->f1], face_region_area[bnd_normal->f2]);
-        std::cout << "  -00    AD " << face_region_area_ad[bnd_normal->f1] << ", " << face_region_area_ad[bnd_normal->f2] << "\n";
-    }
-    Vector3 tmp_normal = bnd_normal->normal;
-    Vector3 next_normal = next_bnd_normal->normal;
-    Vector3 f1_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f1), // f1,f2 are the same along the current path to maximum
-            f2_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f2);
-    double curr_f1_alignment = dot(f1_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.; // checking alignment again since it could change along the way
-    double curr_f2_alignment = dot(f2_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.;
-    double f1_sign_change = f1_area_sign == curr_f1_alignment ? 1. : -1;
-    double f2_sign_change = (-f1_area_sign == curr_f2_alignment) ? 1.: -1;
-    autodiff::Vector3var f1_normal_ad = face_normal_ad(var_positions, bnd_normal->f1),
-                         f2_normal_ad = face_normal_ad(var_positions, bnd_normal->f2);
-    double f1_side_patch = triangle_patch_area_on_sphere(f1_normal, tmp_normal, next_normal),
-           f2_side_patch = triangle_patch_area_on_sphere(f2_normal, tmp_normal, next_normal);
-    autodiff::var f1_side_patch_ad = triangle_patch_area_on_sphere_ad(f1_normal_ad, bnd_normal->normal_ad, next_bnd_normal->normal_ad),
-                  f2_side_patch_ad = triangle_patch_area_on_sphere_ad(f2_normal_ad, bnd_normal->normal_ad, next_bnd_normal->normal_ad);
-    // printf("adding up patch areas\n");
-    face_region_area[bnd_normal->f1] += f1_sign_change * f1_side_patch;
-    face_region_area[bnd_normal->f2] += f2_sign_change * f2_side_patch;
-    
-    autodiff::VectorXvar poses_ad_vec = autodiff::VectorXvar{var_positions.reshaped()};
-    // f1
-    if (f1_side_patch != 0.){
-        Eigen::VectorXd df1dv = autodiff::gradient(f1_side_patch_ad, poses_ad_vec);
-        Eigen::MatrixXd df1dv_mat = df1dv.reshaped(var_positions.rows(), var_positions.cols());
-        df_dv_grads_ad[bnd_normal->f1] += df1dv_mat;
-        // df/dG
-        df_dG_grads[bnd_normal->f1] += autodiff::gradient(f1_side_patch_ad, var_G);
-    }
-    // f2
-    if (f2_side_patch != 0.){
-        Eigen::VectorXd df2dv = autodiff::gradient(f2_side_patch_ad, poses_ad_vec);
-        Eigen::MatrixXd df2dv_mat = df2dv.reshaped(var_positions.rows(), var_positions.cols());
-        df_dv_grads_ad[bnd_normal->f2] += df2dv_mat;
-        // df/dG
-        df_dG_grads[bnd_normal->f2] += autodiff::gradient(f2_side_patch_ad, var_G);    
-    }
-    
-    return true;
+    // bool verbose = true;
+    // bool verbose = abs(face_region_area[bnd_normal->f1] - face_region_area_ad[bnd_normal->f1]) > 1e-4;
+    // if (verbose){
+    //     printf("  Verboses!\n -00 NO AD %f, %f\n", face_region_area[bnd_normal->f1], face_region_area[bnd_normal->f2]);
+    //     std::cout << "  -00    AD " << face_region_area_ad[bnd_normal->f1] << ", " << face_region_area_ad[bnd_normal->f2] << "\n";
+    // }
 
-    // why is this so slow??
-
-    if (f1_side_patch != 0.) // avoiding conditions in ad version since idk how they work yet
-        face_region_area_ad[bnd_normal->f1] += f1_sign_change * f1_side_patch_ad;
-    if (f2_side_patch != 0.)
-        face_region_area_ad[bnd_normal->f2] += f2_sign_change * f2_side_patch_ad;
-    if (verbose){
-        printf("  - NO AD %f, %f\n", face_region_area[bnd_normal->f1], face_region_area[bnd_normal->f2]);
-        std::cout << "  -    AD " << face_region_area_ad[bnd_normal->f1] << ", " << face_region_area_ad[bnd_normal->f2] << "\n";
-        std::cout << "  - patches   " << f1_side_patch << ", " << f2_side_patch << "\n";
-        std::cout << "  - AD patchs " << f1_side_patch_ad << ", " << f2_side_patch_ad << "\n";
-        printf("--------------------------------------------\n");
-    }
-    // printf("area compute done!\n");
+    // evaluate_boundary_patch_area_and_grads_ad(bnd_normal, next_bnd_normal, f1_area_sign);
+    
+    printf(" -ret- \n");
     return true;
     // TODO: take care of when f1,f2 on the same side when starting from saddle 
 }
 
 
-// gradients
-void compute_df_dv_grads_autodiff(){
-    FaceData<autodiff::MatrixX3var> face_region_areas_gradient_ad;
-
+void BoundaryBuilder::evaluate_boundary_patch_area_and_grads_ad(BoundaryNormal* bnd_normal1, autodiff::Vector3var bnd_normal1_ad, 
+                                                                BoundaryNormal* bnd_normal2, autodiff::Vector3var bnd_normal2_ad, 
+                                                                double f1_area_sign
+                                                                // , std::set<Vertex> &effective_vertices
+                                                                ){
+    // printf("None-ad normals and patches..\n");
+    Vector3 tmp_normal  = bnd_normal1->normal;
+    Vector3 next_normal = bnd_normal2->normal;
+    Vector3 f1_normal = forward_solver->hullGeometry->faceNormal(bnd_normal1->f1), // f1,f2 are the same along the current path to maximum
+            f2_normal = forward_solver->hullGeometry->faceNormal(bnd_normal1->f2);
+    double curr_f1_alignment = dot(f1_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.; // checking alignment again since it could change along the way
+    double curr_f2_alignment = dot(f2_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.;
+    double f1_sign_change = f1_area_sign == curr_f1_alignment ? 1. : -1;
+    double f2_sign_change = (-f1_area_sign == curr_f2_alignment) ? 1.: -1;
+    double f1_side_patch = triangle_patch_area_on_sphere(f1_normal, tmp_normal, next_normal),
+           f2_side_patch = triangle_patch_area_on_sphere(f2_normal, tmp_normal, next_normal);
+    face_region_area[bnd_normal1->f1] += f1_sign_change * f1_side_patch;
+    face_region_area[bnd_normal1->f2] += f2_sign_change * f2_side_patch;
+    // printf("patches ..\n");
+    autodiff::var f1_side_patch_ad = triangle_patch_area_on_sphere_ad(face_normals_ad[bnd_normal1->f1], bnd_normal1_ad, bnd_normal2_ad),
+                  f2_side_patch_ad = triangle_patch_area_on_sphere_ad(face_normals_ad[bnd_normal1->f2], bnd_normal1_ad, bnd_normal2_ad);
+    // f1
+    // printf("grads ..\n");
+    if (f1_side_patch != 0.){
+        Eigen::VectorXd df1dv = autodiff::gradient(f1_side_patch_ad, var_positions_vec);
+        Eigen::MatrixXd df1dv_mat = df1dv.reshaped(var_positions.rows(), var_positions.cols());
+        df_dv_grads_ad[bnd_normal1->f1] += df1dv_mat;
+        // for (Vertex v: effective_vertices){
+        //     df_dv_grads_ad[bnd_normal1->f1][v] += autodiff::gradient(f1_side_patch_ad, var_positions.row(v.getIndex()));
+        // }
+        // df/dG
+        df_dG_grads[bnd_normal1->f1] += autodiff::gradient(f1_side_patch_ad, var_G);
+    }
+    // f2
+    if (f2_side_patch != 0.){
+        Eigen::VectorXd df2dv = autodiff::gradient(f2_side_patch_ad, var_positions_vec);
+        Eigen::MatrixXd df2dv_mat = df2dv.reshaped(var_positions.rows(), var_positions.cols());
+        df_dv_grads_ad[bnd_normal1->f2] += df2dv_mat;
+        // for (Vertex v: effective_vertices){
+        //     df_dv_grads_ad[bnd_normal1->f2][v] += autodiff::gradient(f2_side_patch_ad, var_positions.row(v.getIndex()));
+        // }
+        // df/dG
+        df_dG_grads[bnd_normal1->f2] += autodiff::gradient(f2_side_patch_ad, var_G);    
+    }
+    // why is this so slow??
+    // if (f1_side_patch != 0.) // avoiding conditions in ad version since idk how they work yet
+    //     face_region_area_ad[bnd_normal->f1] += f1_sign_change * f1_side_patch_ad;
+    // if (f2_side_patch != 0.)
+    //     face_region_area_ad[bnd_normal->f2] += f2_sign_change * f2_side_patch_ad;
+    // if (verbose){
+    //     printf("  - NO AD %f, %f\n", face_region_area[bnd_normal->f1], face_region_area[bnd_normal->f2]);
+    //     std::cout << "  -    AD " << face_region_area_ad[bnd_normal->f1] << ", " << face_region_area_ad[bnd_normal->f2] << "\n";
+    //     std::cout << "  - patches   " << f1_side_patch << ", " << f2_side_patch << "\n";
+    //     std::cout << "  - AD patchs " << f1_side_patch_ad << ", " << f2_side_patch_ad << "\n";
+    //     printf("--------------------------------------------\n");
+    // }
+    // printf("area compute done!\n");
 }
+
+autodiff::Vector3var BoundaryBuilder::point_to_segment_normal_ad(Edge e){
+    Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
+    autodiff::Vector3var PB = var_positions.row(v2.getIndex()) - var_G.transpose(),// var_G,
+                         AB = var_positions.row(v2.getIndex()) - var_positions.row(v1.getIndex());
+    return PB - AB * AB.dot(PB)/AB.dot(AB);
+}
+
+autodiff::Vector3var BoundaryBuilder::intersect_arcs_ad(Vertex v, autodiff::Vector3var &R2, autodiff::Vector3var &A, autodiff::Vector3var &B, bool sign_change){
+    autodiff::Vector3var p = ((var_positions.row(v.getIndex()) - var_G.transpose()).cross(R2)).cross(A.cross(B)); // var_G.transpose()
+    if (sign_change)
+        return -p;
+    return p;
+}
+        
+// gradients
+// void compute_df_dv_grads_autodiff(){
+//     FaceData<autodiff::MatrixX3var> face_region_areas_gradient_ad;
+// 
+// }
+
+
+// ------ replaced with above
+// printf("None-ad normals and patches..\n");
+// Vector3 tmp_normal = bnd_normal->normal;
+// Vector3 next_normal = next_bnd_normal->normal;
+// Vector3 f1_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f1), // f1,f2 are the same along the current path to maximum
+//         f2_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f2);
+// double curr_f1_alignment = dot(f1_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.; // checking alignment again since it could change along the way
+// double curr_f2_alignment = dot(f2_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.;
+// double f1_sign_change = f1_area_sign == curr_f1_alignment ? 1. : -1;
+// double f2_sign_change = (-f1_area_sign == curr_f2_alignment) ? 1.: -1;
+// double f1_side_patch = triangle_patch_area_on_sphere(f1_normal, tmp_normal, next_normal),
+//        f2_side_patch = triangle_patch_area_on_sphere(f2_normal, tmp_normal, next_normal);
+// face_region_area[bnd_normal->f1] += f1_sign_change * f1_side_patch;
+// face_region_area[bnd_normal->f2] += f2_sign_change * f2_side_patch;
+// printf("ad normals..\n");
+// autodiff::Vector3var f1_normal_ad = face_normals_ad[bnd_normal->f1], // face_normal_ad(var_positions, bnd_normal->f1),
+//                      f2_normal_ad = face_normals_ad[bnd_normal->f2]; // face_normal_ad(var_positions, bnd_normal->f2);
+// // printf("ad patches..\n");
+// autodiff::var f1_side_patch_ad = triangle_patch_area_on_sphere_ad(f1_normal_ad, bnd_normal->normal_ad, next_bnd_normal->normal_ad),
+//               f2_side_patch_ad = triangle_patch_area_on_sphere_ad(f2_normal_ad, bnd_normal->normal_ad, next_bnd_normal->normal_ad);
+// // printf("adding up patch areas\n");
+// // printf("flattening ..\n");
+// // f1
+// if (f1_side_patch != 0.){
+//     printf("f1 grads..\n");
+//     Eigen::VectorXd df1dv = autodiff::gradient(f1_side_patch_ad, var_positions_vec);
+//     Eigen::MatrixXd df1dv_mat = df1dv.reshaped(var_positions.rows(), var_positions.cols());
+//     df_dv_grads_ad[bnd_normal->f1] += df1dv_mat;
+//     // printf("gtad update norm: %f // %f\n", df1dv_mat.norm(), df_dv_grads_ad[bnd_normal->f1].norm());
+//     // df/dG
+//     printf("f1 G grad..\n");
+//     df_dG_grads[bnd_normal->f1] += autodiff::gradient(f1_side_patch_ad, var_G);
+// }
+// // f2
+// if (f2_side_patch != 0.){
+//     printf("f2 grads..\n");
+//     Eigen::VectorXd df2dv = autodiff::gradient(f2_side_patch_ad, var_positions_vec);
+//     Eigen::MatrixXd df2dv_mat = df2dv.reshaped(var_positions.rows(), var_positions.cols());
+//     df_dv_grads_ad[bnd_normal->f2] += df2dv_mat;
+//     // df/dG
+//     printf("f2 G grad..\n");
+//     df_dG_grads[bnd_normal->f2] += autodiff::gradient(f2_side_patch_ad, var_G);    
+// }

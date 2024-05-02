@@ -191,7 +191,6 @@ Vector3 InverseSolver::find_total_g_grad() {
     return total_grad;
 }
 
-
 // vertex grads
 void InverseSolver::find_d_pf_dvs(bool use_autodiff, bool check_FD) {
     if (!forwardSolver->updated)
@@ -201,10 +200,12 @@ void InverseSolver::find_d_pf_dvs(bool use_autodiff, bool check_FD) {
     d_pf_dv = FaceData<VertexData<Vector3>>(*forwardSolver->hullMesh);
     for (Face f: forwardSolver->hullMesh->faces()){
         d_pf_dv[f] = VertexData<Vector3>(*forwardSolver->hullMesh, zvec);
-        if (use_autodiff)
+        if (use_autodiff){
             if(forwardSolver->face_last_face[f] == f)
                 for (Vertex v: forwardSolver->hullMesh->vertices())
+                    // d_pf_dv[f][v] = vec3d_to_vec3(boundaryBuilder->df_dv_grads_ad[f][v]);
                     d_pf_dv[f][v] = vec3d_to_vec3(boundaryBuilder->df_dv_grads_ad[f].row(v.getIndex()));
+        }
         else {
             for (Halfedge he: f.adjacentHalfedges()){
                 Vertex v0 = he.tailVertex(),
@@ -307,7 +308,6 @@ void InverseSolver::find_dG_dvs(){
 
 // Vertex grads; Uni mass
 void InverseSolver::find_uni_mass_d_pf_dv(bool use_autodiff, bool frozen_G, bool check_FD){
-    
     uni_mass_d_pf_dv = FaceData<VertexData<Vector3>>(*forwardSolver->hullMesh);
     //  assuming that we only move convex hull vertices
     if (!frozen_G){

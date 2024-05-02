@@ -62,9 +62,9 @@ Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B);
 
 
 // autodiff stuff; should use templates at some point
-autodiff::Vector3var point_to_segment_normal_ad(autodiff::MatrixX3var &poses, autodiff::Vector3var &G, Edge e);
-autodiff::Vector3var face_normal_ad(autodiff::MatrixX3var &poses, Face f);
-autodiff::Vector3var intersect_arc_ray_with_arc_ad(autodiff::MatrixX3var &poses, autodiff::Vector3var &G, Vertex v,
-                                                   autodiff::Vector3var &R2, autodiff::Vector3var &A, autodiff::Vector3var &B,
-                                                   bool sign_change);
+// autodiff::Vector3var point_to_segment_normal_ad(autodiff::MatrixX3var &poses, autodiff::Vector3var &G, Edge e);
+// autodiff::Vector3var face_normal_ad(autodiff::MatrixX3var &poses, Face f);
+// autodiff::Vector3var intersect_arc_ray_with_arc_ad(autodiff::MatrixX3var &poses, autodiff::Vector3var &G, Vertex v,
+//                                                    autodiff::Vector3var &R2, autodiff::Vector3var &A, autodiff::Vector3var &B,
+//                                                    bool sign_change);
 autodiff::var triangle_patch_area_on_sphere_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C);
