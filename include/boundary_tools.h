@@ -42,7 +42,7 @@ class BoundaryNormal {
         Vector3 normal;
         // autodiff::Vector3var normal_ad;
 
-        // std::vector<BoundaryNormal*> neighbors;
+        std::vector<BoundaryNormal*> neighbors;
 
         Vertex host_v;
         Edge host_e;
@@ -54,7 +54,7 @@ class BoundaryNormal {
         BoundaryNormal(Vector3 _normal);
 
         // 
-        // void add_neighbor(BoundaryNormal* _neigh);
+        void add_neighbor(BoundaryNormal* _neigh);
 };
 
 
@@ -71,8 +71,8 @@ class BoundaryBuilder {
 
         // containers
         VertexData<BoundaryNormal*> vertex_boundary_normal;
-        // EdgeData<std::vector<BoundaryNormal*>> edge_boundary_normals; // could have multiple on a non-singular edge
-        EdgeData<std::vector<Vector3>> edge_boundary_normals;
+        EdgeData<std::vector<BoundaryNormal*>> edge_boundary_normals; // could have multiple on a non-singular edge
+        // EdgeData<std::vector<Vector3>> edge_boundary_normals;
         // FaceData<std::vector<BoundaryNormal*>> face_attraction_boundary; // for future passes over face region boundaries  
         FaceData<std::vector<std::tuple<BoundaryNormal*, BoundaryNormal*, double>>> face_chain_area;
         FaceData<double> face_region_area;

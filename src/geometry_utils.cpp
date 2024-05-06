@@ -22,6 +22,42 @@
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
 
+
+// tiny geometry stuff; move elsewhere
+// Gradients
+// formula source in header file
+Vector3 dihedral_angle_grad_G(Vector3 G, Vector3 A, Vector3 B, Vector3 C){
+    // A is in the middle (on the unit sphere)
+    Vector3 GA = A - G,
+            GB = B - G,
+            GC = C - G;
+    // un-normalized normals
+    // order: B A C
+    Vector3 nB_un = cross(GA, B - A),
+            nC_un = cross(GA, A - C);
+    Vector3 grad1 = nB_un * dot(-GA, B - A)/nB_un.norm2(),
+            grad2 = nC_un * dot(GA, A - C)/nC_un.norm2();
+    return -(grad1 + grad2)/GA.norm();
+}
+// same as G, replacing G and A
+Vector3 dihedral_angle_grad_A(Vector3 G, Vector3 A, Vector3 B, Vector3 C){
+    return -dihedral_angle_grad_G(A, G, B, C);
+}
+// wing side vertex B; kinda simple
+Vector3 dihedral_angle_grad_B(Vector3 G, Vector3 A, Vector3 B, Vector3 C){
+    Vector3 nB_un = cross(A - G, B - A);
+    return  nB_un * (G-A).norm()/nB_un.norm2();
+}
+// wing side vertex C; kinda simple
+Vector3 dihedral_angle_grad_C(Vector3 G, Vector3 A, Vector3 B, Vector3 C){
+    Vector3 nC_un = cross(A - G, A - C);
+    return nC_un * (G-A).norm()/nC_un.norm2();
+}
+
+
+// big geometry stuff
+
+
 double signed_volume(Vector3 a, Vector3 b, Vector3 c, Vector3 d){
     return (1.0/6.0)*dot(cross(b-a,c-a),d-a);
 }

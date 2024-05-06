@@ -192,6 +192,19 @@ set(paper_figs
   src/utils.cpp
 )
 
+set(ad_debug 
+  src/main_ad_debug.cpp
+  src/arc_algebra.cpp
+  src/forward3D.cpp
+  src/mesh_factory.cpp
+  src/geometry_utils.cpp
+  src/coloring.cpp
+  src/visual_utils.cpp
+  src/boundary_tools.cpp
+  src/inv_design.cpp
+  src/convex_hull.cpp
+  src/utils.cpp
+)
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 
 # add_executable(polygons "${polygons_SRCS}")
@@ -289,3 +302,15 @@ target_link_libraries(paper_figs PUBLIC geometry-central polyscope autodiff qhul
 
 # target_link_libraries(bullet_sim PUBLIC BulletDynamics BulletCollision LinearMath geometry-central polyscope qhullcpp qhullstatic_r)
 # target_link_libraries(bullet_sim )
+
+
+add_executable(adDebug "${ad_debug}")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
+
+# target_include_directories(adDebug PUBLIC "${GUROBI_INCLUDE_DIRS}")
+
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
+target_link_libraries(adDebug PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib

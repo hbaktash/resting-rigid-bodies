@@ -25,6 +25,18 @@ using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 
+// tiny geometry stuff; move elsewhere
+// Gradient stuff
+// from: https://www.sciencedirect.com/science/article/pii/S0167839607000891 
+// Diherdral angle derivative; the angle <BAC on unit sphere
+Vector3 dihedral_angle_grad_G(Vector3 G, Vector3 A, Vector3 B, Vector3 C);
+Vector3 dihedral_angle_grad_A(Vector3 G, Vector3 A, Vector3 B, Vector3 C);
+Vector3 dihedral_angle_grad_B(Vector3 G, Vector3 A, Vector3 B, Vector3 C);
+Vector3 dihedral_angle_grad_C(Vector3 G, Vector3 A, Vector3 B, Vector3 C);
+
+
+// big geometry stuff
+
 double signed_volume(Vector3 A, Vector3 B, Vector3 C, Vector3 D);
 
 double ray_intersect_triangle(Vector3 O, Vector3 r, Vector3 A, Vector3 B, Vector3 C);

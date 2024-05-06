@@ -1,0 +1,1 @@
+Extensive dice collection (d4, d6, d8, d10, d12, d14, d16, d18, d20, d24, d28, d30, d48, d60, d120) by agournay on Thingiverse: https://www.thingiverse.com/thing:4145859

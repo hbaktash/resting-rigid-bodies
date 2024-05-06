@@ -25,7 +25,6 @@
 // #include "geometrycentral/utilities/eigen_interop_helpers.h"
 #include "boundary_tools.h"
 #include "geometrycentral/numerical/linear_solvers.h"
-#include "deformation.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;

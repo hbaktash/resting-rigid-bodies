@@ -35,7 +35,7 @@
 #include "markov_model.h"
 #include "inv_design.h"
 // #include "igl/arap.h"
-// #include "optimization.h"
+#include "deformation.h"
 #include "implot.h"
 
 using namespace geometrycentral;
@@ -497,7 +497,7 @@ void version2_dice_pipeline(size_t step_count = 1){
       // autodiff::MatrixX3var poses_ad = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
       // autodiff::Vector3var G_ad = vec32vec(tmp_solver->get_G());
       printf("building normals bounds with AD\n");
-      tmp_bnd_builder->build_boundary_normals_for_autodiff(true); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true
+      tmp_bnd_builder->build_boundary_normals_for_autodiff(true); // (poses_ad, G_ad, ) autodiff; generate_gradients = true
     }
     update_visuals_with_G(tmp_solver, tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << " fair dice energy iter "<< iter<< "  f: " << tmp_bnd_builder->get_fair_dice_energy(fair_sides_count) << ANSI_RESET << "\n";
@@ -748,7 +748,7 @@ void myCallback() {
   }
 
   // Test stuff
-  if (ImGui::InputFloat3("row0", row0)
+  if ( ImGui::InputFloat3("row0", row0)
     || ImGui::InputFloat3("row1", row1)
     || ImGui::InputFloat3("row2", row2));
   if (ImGui::Button("simple test")){

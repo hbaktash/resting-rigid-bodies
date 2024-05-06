@@ -202,9 +202,12 @@ void InverseSolver::find_d_pf_dvs(bool use_autodiff, bool check_FD) {
         d_pf_dv[f] = VertexData<Vector3>(*forwardSolver->hullMesh, zvec);
         if (use_autodiff){
             if(forwardSolver->face_last_face[f] == f)
-                for (Vertex v: forwardSolver->hullMesh->vertices())
+                for (Vertex v: forwardSolver->hullMesh->vertices()){
                     // d_pf_dv[f][v] = vec3d_to_vec3(boundaryBuilder->df_dv_grads_ad[f][v]);
                     d_pf_dv[f][v] = vec3d_to_vec3(boundaryBuilder->df_dv_grads_ad[f].row(v.getIndex()));
+                    // printf(" - at f,v  %d,%d\n", f.getIndex(), v.getIndex());
+                    // std::cout << "   - grad: " << d_pf_dv[f][v] << "\n";
+                }
         }
         else {
             for (Halfedge he: f.adjacentHalfedges()){
@@ -392,6 +395,8 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(size_t goal_
                         (goal_prob[flow_structure[f]]* 4.*PI - boundaryBuilder->face_region_area[flow_structure[f]]):
                         (goal_prob[f]* 4.*PI - boundaryBuilder->face_region_area[f]);
         for (Vertex v: forwardSolver->hullMesh->vertices()){
+            // printf("at face %d , vertex %d\n", f.getIndex(), v.getIndex());
+            // std::cout << " df_dv: " << uni_mass_d_pf_dv[f][v] << "\n";
             total_vertex_grads[v] += uni_mass_d_pf_dv[f][v] * 
                                             goal_multiplier;
         }
