@@ -179,10 +179,15 @@ autodiff::var triangle_patch_area_on_sphere_ad(autodiff::Vector3var &A, autodiff
     // if (n_AB.norm() <= EPS || n_BC.norm() <= EPS || n_CA.norm() <= EPS)
     //     return 0.;
     // TODO: use the  det forumla
-
-    autodiff::var angle_A = acos(n_AB.dot(-n_CA)/(n_AB.norm()*n_CA.norm())),
-                  angle_B = acos(n_BC.dot(-n_AB)/(n_BC.norm()*n_AB.norm())),
-                  angle_C = acos(n_CA.dot(-n_BC)/(n_CA.norm()*n_BC.norm()));
+    // double angle_A = angle(n_AB, -n_CA),
+    //        angle_B = angle(n_BC, -n_AB),
+    //        angle_C = angle(n_CA, -n_BC);
+    // autodiff::var angle_A = acos(n_AB.dot(-n_CA)/(n_AB.norm()*n_CA.norm())),
+    //               angle_B = acos(n_BC.dot(-n_AB)/(n_BC.norm()*n_AB.norm())),
+    //               angle_C = acos(n_CA.dot(-n_BC)/(n_CA.norm()*n_BC.norm()));
+    autodiff::var angle_A = atan2(n_AB.cross(-n_CA).norm(), n_AB.dot(-n_CA)),
+                  angle_B = atan2(n_BC.cross(-n_AB).norm(), n_BC.dot(-n_AB)),
+                  angle_C = atan2(n_CA.cross(-n_BC).norm(), n_CA.dot(-n_BC));
     return angle_A + angle_B + angle_C - PI;
 }
 

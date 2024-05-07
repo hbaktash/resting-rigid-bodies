@@ -308,7 +308,7 @@ add_executable(adDebug "${ad_debug}")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
+# target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
 
 # target_include_directories(adDebug PUBLIC "${GUROBI_INCLUDE_DIRS}")
 

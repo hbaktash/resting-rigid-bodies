@@ -408,9 +408,9 @@ void test_approx_vs_ad_grads(){
 
     // fetching approx grad vs real grads
     printf("here\n");
-    tmp_inv_solver->find_uni_mass_d_pf_dv(false, frozen_G);
-    VertexData<Vector3> approx_dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
-                                                                                               structured_opt, stable_normal_update_thresh);
+    // tmp_inv_solver->find_uni_mass_d_pf_dv(false, frozen_G);
+    // VertexData<Vector3> approx_dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
+                                                                                            //    structured_opt, stable_normal_update_thresh);
     printf("here2\n");
     tmp_inv_solver->find_uni_mass_d_pf_dv(true, frozen_G);
     VertexData<Vector3> dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
@@ -422,7 +422,7 @@ void test_approx_vs_ad_grads(){
     //   std::cout << "approx grad: " << approx_dice_energy_grads[v] << "  \nreal grad: " << dice_energy_grads[v] << "\n";
     
     pip2psmesh->addVertexVectorQuantity("ad total grads", dice_energy_grads)->setEnabled(true);
-    pip2psmesh->addVertexVectorQuantity("approx total grads", approx_dice_energy_grads)->setEnabled(true);
+    // pip2psmesh->addVertexVectorQuantity("approx total grads", approx_dice_energy_grads)->setEnabled(true);
     printf("registered\n");
     // polyscope::frameTick();
 }

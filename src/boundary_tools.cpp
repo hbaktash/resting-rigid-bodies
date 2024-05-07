@@ -304,8 +304,8 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff( // autodiff::MatrixX3
     var_positions = vertex_data_to_matrix(forward_solver->hullGeometry->inputVertexPositions);
     var_positions_vec = autodiff::VectorXvar{var_positions.reshaped()};
     // var_positions = VertexData<autodiff::Vector3var>(*forward_solver->hullMesh);
-    for (Vertex v: forward_solver->hullMesh->vertices())
-        var_positions.row(v.getIndex()) = vec32vec(forward_solver->hullGeometry->inputVertexPositions[v]);
+    // for (Vertex v: forward_solver->hullMesh->vertices())
+    //     var_positions.row(v.getIndex()) = vec32vec(forward_solver->hullGeometry->inputVertexPositions[v]);
     var_G = autodiff::Vector3var{forward_solver->get_G().x, forward_solver->get_G().y, forward_solver->get_G().z};//vec32vec(forward_solver->get_G());
 
     //
@@ -316,7 +316,7 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff( // autodiff::MatrixX3
                v2 = he.next().vertex(),
                v3 = he.next().next().vertex();
         // face_normals_ad[f] = (var_positions.row(v2.getIndex()) - var_positions.row(v1.getIndex())).cross(var_positions.row(v3.getIndex()) - var_positions.row(v1.getIndex())).normalized();
-        face_normals_ad[f] = (var_positions.row(v2.getIndex()) - var_positions.row(v1.getIndex())).cross(var_positions.row(v3.getIndex()) - var_positions.row(v1.getIndex())).normalized();
+        face_normals_ad[f] = (var_positions.row(v2.getIndex()) - var_positions.row(v1.getIndex())).cross(var_positions.row(v3.getIndex()) - var_positions.row(v1.getIndex()));//.normalized();
     }
 
     //
@@ -463,12 +463,12 @@ bool BoundaryBuilder::flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bn
             Vector3 stable_vertex_normal = forward_solver->vertex_stable_normal[v];
             next_bnd_normal = new BoundaryNormal(stable_vertex_normal);
             // ad stuff
-            next_bnd_normal_ad = var_positions.row(v.getIndex()) - var_G.transpose(); // var_G
             // next_bnd_normal->normal_ad = var_positions.row(v.getIndex()) - var_G.transpose(); // not normalizing; for more stability of gradients?
             
             vertex_boundary_normal[v] = next_bnd_normal;
             next_bnd_normal->host_v = v;
         }
+        next_bnd_normal_ad = (var_positions.row(v.getIndex()) - var_G.transpose());//.normalized(); // var_G
         next_bnd_normal->add_neighbor(bnd_normal);
         bnd_normal->add_neighbor(next_bnd_normal);
         // effective_vertices.insert(v);
@@ -591,19 +591,20 @@ void BoundaryBuilder::evaluate_boundary_patch_area_and_grads_ad(BoundaryNormal* 
                                                                 // , std::set<Vertex> &effective_vertices
                                                                 ){
     // printf("None-ad normals and patches..\n");
-    Vector3 tmp_normal  = bnd_normal1->normal;
-    Vector3 next_normal = bnd_normal2->normal;
+    // Vector3 tmp_normal  = bnd_normal1->normal;
+    // Vector3 next_normal = bnd_normal2->normal;
     Vector3 f1_normal = forward_solver->hullGeometry->faceNormal(bnd_normal1->f1), // f1,f2 are the same along the current path to maximum
             f2_normal = forward_solver->hullGeometry->faceNormal(bnd_normal1->f2);
-    double curr_f1_alignment = dot(f1_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.; // checking alignment again since it could change along the way
-    double curr_f2_alignment = dot(f2_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.;
+    double curr_f1_alignment = dot(f1_normal, cross(bnd_normal2->normal, bnd_normal1->normal)) >= 0 ? 1. : -1.; // checking alignment again since it could change along the way
+    double curr_f2_alignment = dot(f2_normal, cross(bnd_normal2->normal, bnd_normal1->normal)) >= 0 ? 1. : -1.;
     double f1_sign_change = f1_area_sign == curr_f1_alignment ? 1. : -1;
     double f2_sign_change = (-f1_area_sign == curr_f2_alignment) ? 1.: -1;
-    double f1_side_patch = triangle_patch_area_on_sphere(f1_normal, tmp_normal, next_normal),
-           f2_side_patch = triangle_patch_area_on_sphere(f2_normal, tmp_normal, next_normal);
+    double f1_side_patch = triangle_patch_area_on_sphere(f1_normal, bnd_normal1->normal, bnd_normal2->normal),
+           f2_side_patch = triangle_patch_area_on_sphere(f2_normal, bnd_normal1->normal, bnd_normal2->normal);
     face_region_area[bnd_normal1->f1] += f1_sign_change * f1_side_patch;
     face_region_area[bnd_normal1->f2] += f2_sign_change * f2_side_patch;
-    // printf("patches ..\n");
+    // printf(" getting AD patches ..\n");
+    
     autodiff::var f1_side_patch_ad = triangle_patch_area_on_sphere_ad(face_normals_ad[bnd_normal1->f1], bnd_normal1_ad, bnd_normal2_ad),
                   f2_side_patch_ad = triangle_patch_area_on_sphere_ad(face_normals_ad[bnd_normal1->f2], bnd_normal1_ad, bnd_normal2_ad);
     // f1
@@ -611,11 +612,6 @@ void BoundaryBuilder::evaluate_boundary_patch_area_and_grads_ad(BoundaryNormal* 
     if (f1_side_patch != 0.){
         Eigen::VectorXd df1dv = autodiff::gradient(f1_side_patch_ad, var_positions_vec);
         Eigen::MatrixXd df1dv_mat = df1dv.reshaped(var_positions.rows(), var_positions.cols());
-        std::cout << " f1 patch: " << f1_side_patch << "\n";
-        std::cout << " f1 ad patch: " << f1_side_patch_ad << "\n";
-        std::cout << " f1 normal: " << face_normals_ad[bnd_normal1->f1] << "\n";
-        std::cout << " f2 normal: " << face_normals_ad[bnd_normal1->f2] << "\n";
-        printf(",  df dv norm: %f\n", df1dv.norm());
         df_dv_grads_ad[bnd_normal1->f1] += df1dv_mat;
         // for (Vertex v: effective_vertices){
         //     df_dv_grads_ad[bnd_normal1->f1][v] += autodiff::gradient(f1_side_patch_ad, var_positions.row(v.getIndex()));
@@ -652,11 +648,11 @@ autodiff::Vector3var BoundaryBuilder::point_to_segment_normal_ad(Edge e){
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     autodiff::Vector3var PB = var_positions.row(v2.getIndex()) - var_G.transpose(),// var_G,
                          AB = var_positions.row(v2.getIndex()) - var_positions.row(v1.getIndex());
-    return PB - AB * AB.dot(PB)/AB.dot(AB);
+    return (PB - AB * AB.dot(PB)/AB.dot(AB));//.normalized();
 }
 
 autodiff::Vector3var BoundaryBuilder::intersect_arcs_ad(Vertex v, autodiff::Vector3var &R2, autodiff::Vector3var &A, autodiff::Vector3var &B, bool sign_change){
-    autodiff::Vector3var p = ((var_positions.row(v.getIndex()) - var_G.transpose()).cross(R2)).cross(A.cross(B)); // var_G.transpose()
+    autodiff::Vector3var p = (((var_positions.row(v.getIndex()) - var_G.transpose()).cross(R2)).cross(A.cross(B)));//.normalized(); // var_G.transpose()
     if (sign_change)
         return -p;
     return p;
