@@ -564,48 +564,48 @@ void myCallback() {
               init_visuals();
 
               // //
-              visualize_gauss_map();//
+              // visualize_gauss_map();//
               G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
               update_solver_and_boundaries();
               boundary_builder->print_area_of_boundary_loops();
-              update_visuals_with_G(forwardSolver, boundary_builder);
-              if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(false);
-              if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);
+              // update_visuals_with_G(forwardSolver, boundary_builder);
+              // if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(false);
+              // if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);
           }
           if (is_selected)
               ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
       }
       ImGui::EndCombo();
   }
-  if (ImGui::Button("uniform mass G")){
-    G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
-    update_solver_and_boundaries();
-    update_visuals_with_G();
-  }
-  if (ImGui::Checkbox("draw artificial R3 boundaries", &test_guess)) {
-    if (test_guess)
-      draw_stable_patches_on_gauss_map();
-    else{
-      polyscope::getPointCloud("test point cloud")->setEnabled(false);
-      polyscope::getCurveNetwork("stable regions on polyhedra")->setEnabled(false);
-    }
-  }
+  // if (ImGui::Button("uniform mass G")){
+  //   G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
+  //   update_solver_and_boundaries();
+  //   update_visuals_with_G();
+  // }
+  // if (ImGui::Checkbox("draw artificial R3 boundaries", &test_guess)) {
+  //   if (test_guess)
+  //     draw_stable_patches_on_gauss_map();
+  //   else{
+  //     polyscope::getPointCloud("test point cloud")->setEnabled(false);
+  //     polyscope::getCurveNetwork("stable regions on polyhedra")->setEnabled(false);
+  //   }
+  // }
 
   
-  if (ImGui::SliderFloat("starting step size", &step_size3, 0., 1.0));
-  if (ImGui::SliderInt("fair dice side count", &fair_sides_count, 1, 10));
-  if (ImGui::Checkbox("frozen G", &frozen_G));
+  // if (ImGui::SliderFloat("starting step size", &step_size3, 0., 1.0));
+  // if (ImGui::SliderInt("fair dice side count", &fair_sides_count, 1, 10));
+  // if (ImGui::Checkbox("frozen G", &frozen_G));
 
-  if (ImGui::SliderFloat("dice energy step decay", &dice_search_decay, 0., 1.));
-  if (ImGui::SliderInt("hull optimize step count", &hull_opt_steps, 1, 200));
-  if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
-  if (ImGui::Checkbox("Sobolev pre-condition", &do_sobolev_dice_grads));
-  if (do_sobolev_dice_grads){
-    if (ImGui::SliderFloat("Sobolev lambda", &sobolev_lambda, 0., 5.));
-    if (ImGui::SliderFloat("Sobolev lambda decay", &sobolev_lambda_decay, 0., 1));
-    if (ImGui::SliderInt("Sobolev power", &sobolev_p, 1, 5));
-  }
-  if (ImGui::Checkbox("autodiff dice grads", &use_autodiff_for_dice_grad));
+  // if (ImGui::SliderFloat("dice energy step decay", &dice_search_decay, 0., 1.));
+  // if (ImGui::SliderInt("hull optimize step count", &hull_opt_steps, 1, 200));
+  // if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
+  // if (ImGui::Checkbox("Sobolev pre-condition", &do_sobolev_dice_grads));
+  // if (do_sobolev_dice_grads){
+  //   if (ImGui::SliderFloat("Sobolev lambda", &sobolev_lambda, 0., 5.));
+  //   if (ImGui::SliderFloat("Sobolev lambda decay", &sobolev_lambda_decay, 0., 1));
+  //   if (ImGui::SliderInt("Sobolev power", &sobolev_p, 1, 5));
+  // }
+  // if (ImGui::Checkbox("autodiff dice grads", &use_autodiff_for_dice_grad));
   if (ImGui::Button("test ad grads vs approx grads")) {
     test_approx_vs_ad_grads();
   }
