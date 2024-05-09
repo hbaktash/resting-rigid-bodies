@@ -39,7 +39,11 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STR
   endif()
   
   SET(CMAKE_CXX_FLAGS "${BASE_CXX_FLAGS} ${DISABLED_WARNINGS}")
-  SET(CMAKE_CXX_FLAGS_RELEASE        "-O3 -march=native -DNDEBUG")
+  # add -march=native if release and gcc
+  if (CMAKE_BUILD_TYPE STREQUAL "Release" AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
+  endif()
+
 
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
   # using Visual Studio C++
@@ -246,42 +250,46 @@ set(ad_debug
 # # target_link_directories(invDesign PUBLIC ${MOSEK_LIBRARY_DIR})
 # target_link_libraries(invDesign PUBLIC geometry-central polyscope qhullcpp qhullstatic_r ) #qhull_r libqhull_r
 
-# To change the name of your executable, change "gc_project" in the lines below to whatever you want
-# SET(qhull_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/build")
-# Find_Package(qhull)
-add_executable(convexFill "${convex_fill}")
-# target_link_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
-# target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
-target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-# target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
-target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
+if(GUROBI_FOUND)
+  # To change the name of your executable, change "gc_project" in the lines below to whatever you want
+  # SET(qhull_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/build")
+  # Find_Package(qhull)
+  add_executable(convexFill "${convex_fill}")
+  # target_link_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
+  # target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
+  target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+  target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+  target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+  # target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+  target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
 
-target_include_directories(convexFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
-
-target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
-# target_link_libraries(convexFill PUBLIC ${GUROBI_CXX_LIBRARY} ${GUROBI_CXX_DEBUG_LIBRARY})
-# target_link_libraries(convexFill PUBLIC ${GUROBI_LIBRARIES})
-
-
-# target_include_directories(convexFill PUBLIC ${MOSEK_INCLUDE_DIRS})
-# target_link_directories   (convexFill PUBLIC ${MOSEK_LIBRARY_DIR})
-
-target_link_libraries(convexFill PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib
-
-# # paper figure stuff
-add_executable(paper_figs "${paper_figs}")
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-# add the args.hxx project which we use for command line args
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
-target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
-target_include_directories(paper_figs PUBLIC "${GUROBI_INCLUDE_DIRS}")
-
-target_link_libraries(paper_figs PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) #qhull_r libqhull_r
+  target_include_directories(convexFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
+  
+  target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
+  # target_link_libraries(convexFill PUBLIC ${GUROBI_CXX_LIBRARY} ${GUROBI_CXX_DEBUG_LIBRARY})
+  # target_link_libraries(convexFill PUBLIC ${GUROBI_LIBRARIES})
+  
+  
+  # target_include_directories(convexFill PUBLIC ${MOSEK_INCLUDE_DIRS})
+  # target_link_directories   (convexFill PUBLIC ${MOSEK_LIBRARY_DIR})
+  
+  target_link_libraries(convexFill PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib
+  
+  # # paper figure stuff
+  add_executable(paper_figs "${paper_figs}")
+  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+  # add the args.hxx project which we use for command line args
+  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
+  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
+  target_include_directories(paper_figs PUBLIC "${GUROBI_INCLUDE_DIRS}")
+  
+  target_link_libraries(paper_figs PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) #qhull_r libqhull_r
+else()
+  message(STATUS "!!!!!!!! Gurobi not found, skipping convexFill and paper_figs builds !!!!!!!!")
+endif()
 
 
 # Bullet stuff
@@ -308,6 +316,7 @@ add_executable(adDebug "${ad_debug}")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/geometric-central/include")
 # target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
 
 # target_include_directories(adDebug PUBLIC "${GUROBI_INCLUDE_DIRS}")

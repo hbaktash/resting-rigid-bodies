@@ -44,3 +44,6 @@ tags
 *.exe
 *.out
 *.app
+
+# vim temp files
+*~
