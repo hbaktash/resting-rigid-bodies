@@ -379,7 +379,7 @@ void test_approx_vs_ad_grads(){
     printf("finding vertex derivatives\n");
     printf("building normals bounds with AD\n");
     
-    update_visuals_with_G(tmp_solver, tmp_bnd_builder);
+    // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << " fair dice energy: " << tmp_bnd_builder->get_fair_dice_energy(fair_sides_count) << ANSI_RESET << "\n";
 
     auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
@@ -404,8 +404,6 @@ void test_approx_vs_ad_grads(){
     tmp_inv_solver->find_uni_mass_d_pf_dv(true, frozen_G);
     VertexData<Vector3> dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
                                                                                              structured_opt, stable_normal_update_thresh);
-    printf("registering 3\n");
-    
     // DEBUG
     // for (Vertex v: tmp_solver->hullMesh->vertices())
     //   std::cout << "approx grad: " << approx_dice_energy_grads[v] << "  \nreal grad: " << dice_energy_grads[v] << "\n";
