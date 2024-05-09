@@ -220,14 +220,8 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
     double curr_f2_alignment = dot(f2_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.;
     double f1_sign_change = f1_area_sign == curr_f1_alignment ? 1. : -1;
     double f2_sign_change = (-f1_area_sign == curr_f2_alignment) ? 1.: -1;
-    if (f1_sign_change == 1)
-        face_region_area[bnd_normal->f1] += triangle_patch_area_on_sphere(f1_normal, bnd_normal->normal, next_normal);
-    else
-        face_region_area[bnd_normal->f1] -= triangle_patch_area_on_sphere(f1_normal, bnd_normal->normal, next_normal);
-    if (f2_sign_change == 1)
-        face_region_area[bnd_normal->f2] += triangle_patch_area_on_sphere(f2_normal, bnd_normal->normal, next_normal);
-    else 
-        face_region_area[bnd_normal->f2] -= triangle_patch_area_on_sphere(f2_normal, bnd_normal->normal, next_normal);
+    face_region_area[bnd_normal->f1] += f1_sign_change * abs(triangle_patch_area_on_sphere(f1_normal, bnd_normal->normal, next_normal));
+    face_region_area[bnd_normal->f2] += f2_sign_change * abs(triangle_patch_area_on_sphere(f2_normal, bnd_normal->normal, next_normal));
     
     // printf(" -ret- ");
     return true;
@@ -355,6 +349,7 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff( // autodiff::MatrixX3
 
     // for quick assignment of face-boundary-loops
     face_region_area = FaceData<double>(*forward_solver->hullMesh, 0.);
+    face_region_area_complex_value_ad = FaceData<autodiff::Vector2var>(*forward_solver->hullMesh, autodiff::Vector2var(1., 0.));
     // face_region_area_ad = FaceData<autodiff::var>(*forward_solver->hullMesh, 0.);
     // back-flow from all terminal edges
     printf("  back-flowing terminal edges %d \n", terminal_edges.size());
@@ -377,13 +372,13 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff( // autodiff::MatrixX3
         for (Vertex v: {e.firstVertex(), e.secondVertex()}){
             
             // // TESTING dependency speed-ups
-            std::set<Vertex> effective_vertices;
-            effective_vertices.insert(e.firstVertex());
-            effective_vertices.insert(e.secondVertex());
-            for (Vertex tmp_v: bnd_normal->f1.adjacentVertices())
-                effective_vertices.insert(tmp_v);
-            for (Vertex tmp_v: bnd_normal->f2.adjacentVertices())
-                effective_vertices.insert(tmp_v);
+            // std::set<Vertex> effective_vertices;
+            // effective_vertices.insert(e.firstVertex());
+            // effective_vertices.insert(e.secondVertex());
+            // for (Vertex tmp_v: bnd_normal->f1.adjacentVertices())
+            //     effective_vertices.insert(tmp_v);
+            // for (Vertex tmp_v: bnd_normal->f2.adjacentVertices())
+            //     effective_vertices.insert(tmp_v);
             
             Vector3 tmp_normal = bnd_normal->normal,
                     f1_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f1),
@@ -392,6 +387,7 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff( // autodiff::MatrixX3
             // Vector3 imm_f1_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().face()), // immediate face neighbors
             //         imm_f2_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().twin().face());
             double f1_area_sign = dot(f1_normal, cross(v_normal, tmp_normal)) >= 0 ? 1. : -1.; // f1 on rhs of bndN->vN
+    
             if (forward_solver->vertex_is_stabilizable[v]){
                 // printf("-SV-\n");
                 flow_back_boundary_on_edge_for_autodiff(bnd_normal, bnd_normal_ad, Edge(), v, f1_area_sign //, var_positions, var_G
@@ -419,29 +415,27 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff( // autodiff::MatrixX3
     for (Face f: forward_solver->hullMesh->faces()){
         if (forward_solver->face_last_face[f] == f){
             total_area += face_region_area[f];
-            // total_area_ad += face_region_area_ad[f];
+            total_area_ad += 2 * atan2(face_region_area_complex_value_ad[f][1], face_region_area_complex_value_ad[f][0]);
             // std::cout << "face " << f.getIndex() << " area: " << face_region_area[f] << ",  " << face_region_area_ad[f] << std::endl;
         }
     }
-    std::cout << "total face areas: " << total_area << "---" << total_area_ad << std::endl;
+    std::cout << "total face areas: " << total_area << "--- from complex stuff: " << total_area_ad << std::endl;
     // -------- gradients --------
-    // if (generate_gradients){
-    //     // df/dv
-    //     for (Face f: forward_solver->hullMesh->faces()){
-    //         // autodiff::MatrixXvar dfdv_mat;
-    //         Eigen::MatrixXd dfdv_mat;
-    //         if (forward_solver->face_last_face[f] == f){
-    //             autodiff::VectorXvar poses_ad_vec = autodiff::VectorXvar{var_positions.reshaped()};
-    //             // autodiff::VectorXvar dfdv = autodiff::gradient(face_region_area_ad[f], poses_ad_vec);
-    //             Eigen::VectorXd dfdv = autodiff::gradient(face_region_area_ad[f], poses_ad_vec);
-    //             dfdv_mat = dfdv.reshaped(var_positions.rows(), var_positions.cols());
-    //             // df_dv_grads_ad[f] = dfdv_mat.cast<double>();
-    //             df_dv_grads_ad[f] = dfdv_mat;
-    //             // df/dG
-    //             df_dG_grads[f] = autodiff::gradient(face_region_area_ad[f], var_G).cast<double>();
-    //         }
-    //     }
-    // }
+    if (generate_gradients){
+        // df/dv
+        for (Face f: forward_solver->hullMesh->faces()){
+            if (forward_solver->face_last_face[f] == f){
+                autodiff::Vector2var polygon_complex_ad = face_region_area_complex_value_ad[f];
+                autodiff::var polygon_area = 2 * atan2(polygon_complex_ad[1], polygon_complex_ad[0]);
+                // autodiff::VectorXvar poses_ad_vec = autodiff::VectorXvar{var_positions.reshaped()};
+                Eigen::VectorXd dfdv = autodiff::gradient(polygon_area, var_positions_vec);
+                Eigen::MatrixXd dfdv_mat = dfdv.reshaped(var_positions.rows(), var_positions.cols());
+                df_dv_grads_ad[f] = dfdv_mat;
+                // df/dG
+                df_dG_grads[f] = autodiff::gradient(polygon_area, var_G).cast<double>();
+            }
+        }
+    }
 }
 
 
@@ -474,10 +468,8 @@ bool BoundaryBuilder::flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bn
         // effective_vertices.insert(v);
         evaluate_boundary_patch_area_and_grads_ad(bnd_normal, bnd_normal_ad, 
                                                   next_bnd_normal, next_bnd_normal_ad, 
-                                                  f1_area_sign
-                                                //   ,effective_vertices
+                                                  f1_area_sign  //   ,effective_vertices
                                                   );
-
         printf("  -> V done! \n");
     }
     else {
@@ -485,12 +477,6 @@ bool BoundaryBuilder::flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bn
         if (forward_solver->edge_next_vertex[src_e] == v){ // src_e is a source for this vertex
             Face f1 = src_e.halfedge().face(),
                  f2 = src_e.halfedge().twin().face();
-                
-            // ** actually the following condition does not necessarily have to hold
-            //    commented:
-            // if (forward_solver->face_last_face[f1] == forward_solver->face_last_face[f2])
-            //     return; // this source edge is not a source for this boundary normal 
-
             Vector3 vertex_stable_normal = forward_solver->vertex_stable_normal[v];
             bool sign_change = false;
             Vector3 e_bnd_normal = intersect_arc_ray_with_arc(vertex_stable_normal, bnd_normal->normal, 
@@ -556,29 +542,11 @@ bool BoundaryBuilder::flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bn
                 }
             }
         }
-        else {
-            ;
-            // printf("here?\n");
-            // std::cout << " not src! " << std::endl;
-        }
     }
-    // printf("area computes!\n");
-    // printf(" computing face areas: %d, %d\n", bnd_normal->f1.getIndex(), bnd_normal->f2.getIndex());
-
-    if (bnd_normal->normal.norm() == 0. || next_bnd_normal == nullptr) { // not src probably
+    if (bnd_normal->normal.norm() == 0. || next_bnd_normal == nullptr) { // not src
         // std::cout << "ret \n" << std::endl;
         return false;
     }
-    // printf("fetching normals and signs %d, %d\n", bnd_normal == nullptr, next_bnd_normal==nullptr);
-    // bool verbose = true;
-    // bool verbose = abs(face_region_area[bnd_normal->f1] - face_region_area_ad[bnd_normal->f1]) > 1e-4;
-    // if (verbose){
-    //     printf("  Verboses!\n -00 NO AD %f, %f\n", face_region_area[bnd_normal->f1], face_region_area[bnd_normal->f2]);
-    //     std::cout << "  -00    AD " << face_region_area_ad[bnd_normal->f1] << ", " << face_region_area_ad[bnd_normal->f2] << "\n";
-    // }
-
-    // evaluate_boundary_patch_area_and_grads_ad(bnd_normal, next_bnd_normal, f1_area_sign);
-    
     printf(" -ret- \n");
     return true;
     // TODO: take care of when f1,f2 on the same side when starting from saddle 
@@ -587,7 +555,8 @@ bool BoundaryBuilder::flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bn
 
 void BoundaryBuilder::evaluate_boundary_patch_area_and_grads_ad(BoundaryNormal* bnd_normal1, autodiff::Vector3var bnd_normal1_ad, 
                                                                 BoundaryNormal* bnd_normal2, autodiff::Vector3var bnd_normal2_ad, 
-                                                                double f1_area_sign
+                                                                double f1_area_sign,
+                                                                bool complex_accum
                                                                 // , std::set<Vertex> &effective_vertices
                                                                 ){
     // printf("None-ad normals and patches..\n");
@@ -601,35 +570,58 @@ void BoundaryBuilder::evaluate_boundary_patch_area_and_grads_ad(BoundaryNormal* 
     double f2_sign_change = (-f1_area_sign == curr_f2_alignment) ? 1.: -1;
     double f1_side_patch = triangle_patch_area_on_sphere(f1_normal, bnd_normal1->normal, bnd_normal2->normal),
            f2_side_patch = triangle_patch_area_on_sphere(f2_normal, bnd_normal1->normal, bnd_normal2->normal);
-    face_region_area[bnd_normal1->f1] += f1_sign_change * f1_side_patch;
-    face_region_area[bnd_normal1->f2] += f2_sign_change * f2_side_patch;
+    bool flip_f1 = f1_side_patch < 0.,
+         flip_f2 = f2_side_patch < 0.;
+    face_region_area[bnd_normal1->f1] += f1_sign_change * abs(f1_side_patch);
+    face_region_area[bnd_normal1->f2] += f2_sign_change * abs(f2_side_patch);
     // printf(" getting AD patches ..\n");
     
-    autodiff::var f1_side_patch_ad = triangle_patch_area_on_sphere_ad(face_normals_ad[bnd_normal1->f1], bnd_normal1_ad, bnd_normal2_ad),
-                  f2_side_patch_ad = triangle_patch_area_on_sphere_ad(face_normals_ad[bnd_normal1->f2], bnd_normal1_ad, bnd_normal2_ad);
-    // f1
-    // printf("grads ..\n");
-    if (f1_side_patch != 0.){
-        Eigen::VectorXd df1dv = autodiff::gradient(f1_side_patch_ad, var_positions_vec);
-        Eigen::MatrixXd df1dv_mat = df1dv.reshaped(var_positions.rows(), var_positions.cols());
-        df_dv_grads_ad[bnd_normal1->f1] += df1dv_mat;
-        // for (Vertex v: effective_vertices){
-        //     df_dv_grads_ad[bnd_normal1->f1][v] += autodiff::gradient(f1_side_patch_ad, var_positions.row(v.getIndex()));
-        // }
-        // df/dG
-        df_dG_grads[bnd_normal1->f1] += autodiff::gradient(f1_side_patch_ad, var_G);
+    // TESTING speed up
+    // if (complex_accum){
+    autodiff::Vector2var f1_side_patch_ad_complex = solid_angle_complex_ad(face_normals_ad[bnd_normal1->f1], bnd_normal1_ad, bnd_normal2_ad),
+                         f2_side_patch_ad_complex = solid_angle_complex_ad(face_normals_ad[bnd_normal1->f2], bnd_normal1_ad, bnd_normal2_ad);
+    if (flip_f1)
+        f1_side_patch_ad_complex[1] = -1. * f1_side_patch_ad_complex[1];
+    if (f1_sign_change == -1)
+        f1_side_patch_ad_complex[1] = -1. * f1_side_patch_ad_complex[1];
+    if (flip_f2)
+        f2_side_patch_ad_complex[1] = -1. * f2_side_patch_ad_complex[1];
+    if (f2_sign_change == -1)
+        f2_side_patch_ad_complex[1] = -1. * f2_side_patch_ad_complex[1];
+    face_region_area_complex_value_ad[bnd_normal1->f1] = complex_mult(face_region_area_complex_value_ad[bnd_normal1->f1],
+                                                                      f1_side_patch_ad_complex);
+    face_region_area_complex_value_ad[bnd_normal1->f2] = complex_mult(face_region_area_complex_value_ad[bnd_normal1->f2],
+                                                                      f2_side_patch_ad_complex);
+    // }
+    // else{
+    if (!complex_accum){
+        autodiff::var f1_side_patch_ad = triangle_patch_area_on_sphere_ad(face_normals_ad[bnd_normal1->f1], bnd_normal1_ad, bnd_normal2_ad),
+                      f2_side_patch_ad = triangle_patch_area_on_sphere_ad(face_normals_ad[bnd_normal1->f2], bnd_normal1_ad, bnd_normal2_ad);
+        // f1
+        // printf("grads ..\n");
+        if (f1_side_patch != 0.){
+            Eigen::VectorXd df1dv = autodiff::gradient(f1_side_patch_ad, var_positions_vec);
+            Eigen::MatrixXd df1dv_mat = df1dv.reshaped(var_positions.rows(), var_positions.cols());
+            df_dv_grads_ad[bnd_normal1->f1] += df1dv_mat;
+            // for (Vertex v: effective_vertices){
+            //     df_dv_grads_ad[bnd_normal1->f1][v] += autodiff::gradient(f1_side_patch_ad, var_positions.row(v.getIndex()));
+            // }
+            // df/dG
+            df_dG_grads[bnd_normal1->f1] += autodiff::gradient(f1_side_patch_ad, var_G);
+        }
+        // f2
+        if (f2_side_patch != 0.){
+            Eigen::VectorXd df2dv = autodiff::gradient(f2_side_patch_ad, var_positions_vec);
+            Eigen::MatrixXd df2dv_mat = df2dv.reshaped(var_positions.rows(), var_positions.cols());
+            df_dv_grads_ad[bnd_normal1->f2] += df2dv_mat;
+            // for (Vertex v: effective_vertices){
+            //     df_dv_grads_ad[bnd_normal1->f2][v] += autodiff::gradient(f2_side_patch_ad, var_positions.row(v.getIndex()));
+            // }
+            // df/dG
+            df_dG_grads[bnd_normal1->f2] += autodiff::gradient(f2_side_patch_ad, var_G);    
+        }
     }
-    // f2
-    if (f2_side_patch != 0.){
-        Eigen::VectorXd df2dv = autodiff::gradient(f2_side_patch_ad, var_positions_vec);
-        Eigen::MatrixXd df2dv_mat = df2dv.reshaped(var_positions.rows(), var_positions.cols());
-        df_dv_grads_ad[bnd_normal1->f2] += df2dv_mat;
-        // for (Vertex v: effective_vertices){
-        //     df_dv_grads_ad[bnd_normal1->f2][v] += autodiff::gradient(f2_side_patch_ad, var_positions.row(v.getIndex()));
-        // }
-        // df/dG
-        df_dG_grads[bnd_normal1->f2] += autodiff::gradient(f2_side_patch_ad, var_G);    
-    }
+    // }
     // if (f1_side_patch != 0.) // avoiding conditions in ad version since idk how they work yet
     //     face_region_area_ad[bnd_normal->f1] += f1_sign_change * f1_side_patch_ad;
     // if (f2_side_patch != 0.)
@@ -648,7 +640,7 @@ autodiff::Vector3var BoundaryBuilder::point_to_segment_normal_ad(Edge e){
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     autodiff::Vector3var PB = var_positions.row(v2.getIndex()) - var_G.transpose(),// var_G,
                          AB = var_positions.row(v2.getIndex()) - var_positions.row(v1.getIndex());
-    return (PB - AB * AB.dot(PB)/AB.dot(AB));//.normalized();
+    return (PB * AB.dot(AB) - AB * AB.dot(PB));//.normalized();
 }
 
 autodiff::Vector3var BoundaryBuilder::intersect_arcs_ad(Vertex v, autodiff::Vector3var &R2, autodiff::Vector3var &A, autodiff::Vector3var &B, bool sign_change){
@@ -658,6 +650,29 @@ autodiff::Vector3var BoundaryBuilder::intersect_arcs_ad(Vertex v, autodiff::Vect
     return p;
 }
         
+autodiff::var BoundaryBuilder::triangle_patch_area_on_sphere_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C){
+    // autodiff::Vector3var n_AB = A.cross(B),
+    //                      n_BC = B.cross(C),
+    //                      n_CA = C.cross(A);
+    // autodiff::var angle_A = atan2(n_AB.cross(-n_CA).norm(), n_AB.dot(-n_CA)),
+                //   angle_B = atan2(n_BC.cross(-n_AB).norm(), n_BC.dot(-n_AB)),
+    //               angle_C = atan2(n_CA.cross(-n_BC).norm(), n_CA.dot(-n_BC));
+    // return angle_A + angle_B + angle_C - PI;
+    autodiff::var Adotbc = A.dot(B.cross(C));
+    autodiff::var denom = A.norm()*B.norm()*C.norm() + A.dot(B)*C.norm() + B.dot(C)*A.norm() + C.dot(A)*B.norm();
+    return 2. * atan2(Adotbc, denom);
+}
+
+
+autodiff::Vector2var BoundaryBuilder::solid_angle_complex_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C){
+    autodiff::var Adotbc = A.dot(B.cross(C));
+    autodiff::var denom = A.norm()*B.norm()*C.norm() + A.dot(B)*C.norm() + B.dot(C)*A.norm() + C.dot(A)*B.norm();
+    return autodiff::Vector2var{denom, Adotbc};
+}
+
+autodiff::Vector2var BoundaryBuilder::complex_mult(autodiff::Vector2var &A, autodiff::Vector2var &B){
+    return autodiff::Vector2var{A[0]*B[0] - A[1]*B[1], A[0]*B[1] + A[1]*B[0]};
+}
 // gradients
 // void compute_df_dv_grads_autodiff(){
 //     FaceData<autodiff::MatrixX3var> face_region_areas_gradient_ad;

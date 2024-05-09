@@ -108,20 +108,20 @@ endif ()
 # 	# add any other source files here
 # )
 
-# set(polyhedra_SRCS 
-#   src/main3D.cpp
-#   src/arc_algebra.cpp
-#   src/forward3D.cpp
-#   src/mesh_factory.cpp
-#   src/geometry_utils.cpp
-#   src/coloring.cpp
-#   src/visual_utils.cpp
-#   src/markov_model.cpp
-#   src/boundary_tools.cpp
-#   src/convex_hull.cpp
-#   src/utils.cpp
-# 	# add any other source files here
-# )
+set(polyhedra_SRCS 
+  src/main3D.cpp
+  src/arc_algebra.cpp
+  src/forward3D.cpp
+  src/mesh_factory.cpp
+  src/geometry_utils.cpp
+  src/coloring.cpp
+  src/visual_utils.cpp
+  src/boundary_tools.cpp
+  src/convex_hull.cpp
+  src/utils.cpp
+  # src/markov_model.cpp
+	# add any other source files here
+)
 
 # set(bullet_SRCS 
 #   src/main_bullet.cpp
@@ -218,17 +218,17 @@ set(ad_debug
 # target_link_libraries(polygons geometry-central polyscope)
 
 
-# To change the name of your executable, change "gc_project" in the lines below to whatever you want
+# Exec for 3D polyhedra
+add_executable(polyhedra "${polyhedra_SRCS}")
+target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# add the args.hxx project which we use for command line args
+target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
+target_link_libraries(polyhedra PUBLIC geometry-central polyscope qhullcpp qhullstatic_r)
 
-# add_executable(polyhedra "${polyhedra_SRCS}")
-# target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-# target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-# # add the args.hxx project which we use for command line args
-# target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-# target_link_libraries(polyhedra PUBLIC geometry-central polyscope qhullcpp qhullstatic_r)
 
-
-# To change the name of your executable, change "gc_project" in the lines below to whatever you want
+# Exec for inverse design
 # SET(qhull_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/build")
 # Find_Package(qhull)
 

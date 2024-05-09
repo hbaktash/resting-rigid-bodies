@@ -111,15 +111,18 @@ double angle_on_sphere(Vector3 P1, Vector3 A, Vector3 P2){
 
 // area of a triangular patch on sphere
 double triangle_patch_area_on_sphere(Vector3 A, Vector3 B, Vector3 C){
-    Vector3 n_AB = cross(A, B),
-            n_BC = cross(B, C),
-            n_CA = cross(C, A);
-    if (n_AB.norm() <= EPS || n_BC.norm() <= EPS || n_CA.norm() <= EPS)
-        return 0.;
-    double angle_A = angle(n_AB, -n_CA),
-           angle_B = angle(n_BC, -n_AB),
-           angle_C = angle(n_CA, -n_BC);
-    return angle_A + angle_B + angle_C - PI;
+    // Vector3 n_AB = cross(A, B),
+    //         n_BC = cross(B, C),
+    //         n_CA = cross(C, A);
+    // if (n_AB.norm() <= EPS || n_BC.norm() <= EPS || n_CA.norm() <= EPS)
+    //     return 0.;
+    // double angle_A = angle(n_AB, -n_CA),
+    //        angle_B = angle(n_BC, -n_AB),
+    //        angle_C = angle(n_CA, -n_BC);
+    // return angle_A + angle_B + angle_C - PI;
+    double Adotbc = dot(A, cross(B,C));
+    double denom = A.norm()*B.norm()*C.norm() + dot(A, B)*C.norm() + dot(B, C)*A.norm() + dot(C, A)*B.norm();
+    return 2. *atan2(Adotbc, denom);
 }
 
 
@@ -171,25 +174,6 @@ Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B){
 //     return ((poses.row(v2.getIndex()) - poses.row(v1.getIndex())).cross(poses.row(v3.getIndex()) - poses.row(v1.getIndex())));//.normalized();
 // }
 
-
-autodiff::var triangle_patch_area_on_sphere_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C){
-    autodiff::Vector3var n_AB = A.cross(B),
-                         n_BC = B.cross(C),
-                         n_CA = C.cross(A);
-    // if (n_AB.norm() <= EPS || n_BC.norm() <= EPS || n_CA.norm() <= EPS)
-    //     return 0.;
-    // TODO: use the  det forumla
-    // double angle_A = angle(n_AB, -n_CA),
-    //        angle_B = angle(n_BC, -n_AB),
-    //        angle_C = angle(n_CA, -n_BC);
-    // autodiff::var angle_A = acos(n_AB.dot(-n_CA)/(n_AB.norm()*n_CA.norm())),
-    //               angle_B = acos(n_BC.dot(-n_AB)/(n_BC.norm()*n_AB.norm())),
-    //               angle_C = acos(n_CA.dot(-n_BC)/(n_CA.norm()*n_BC.norm()));
-    autodiff::var angle_A = atan2(n_AB.cross(-n_CA).norm(), n_AB.dot(-n_CA)),
-                  angle_B = atan2(n_BC.cross(-n_AB).norm(), n_BC.dot(-n_AB)),
-                  angle_C = atan2(n_CA.cross(-n_BC).norm(), n_CA.dot(-n_BC));
-    return angle_A + angle_B + angle_C - PI;
-}
 
 
 // template <typename DerivedV>

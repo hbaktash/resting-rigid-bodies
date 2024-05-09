@@ -76,7 +76,8 @@ class BoundaryBuilder {
         // FaceData<std::vector<BoundaryNormal*>> face_attraction_boundary; // for future passes over face region boundaries  
         FaceData<std::vector<std::tuple<BoundaryNormal*, BoundaryNormal*, double>>> face_chain_area;
         FaceData<double> face_region_area;
-        // for autodiff
+        //TESTING speed up
+        FaceData<autodiff::Vector2var> face_region_area_complex_value_ad;
         // FaceData<autodiff::var> face_region_area_ad;
         
         autodiff::MatrixX3var var_positions;     // = vertex_data_to_matrix(forward_solver->hullGeometry->inputVertexPositions);
@@ -94,9 +95,14 @@ class BoundaryBuilder {
         autodiff::Vector3var point_to_segment_normal_ad(Edge e);
         autodiff::Vector3var intersect_arcs_ad(Vertex v, autodiff::Vector3var &R2, autodiff::Vector3var &A, autodiff::Vector3var &B,
                                                bool sign_change);
+        autodiff::var triangle_patch_area_on_sphere_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C);
+        // TESTING speed up
+        autodiff::Vector2var solid_angle_complex_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C);
+        autodiff::Vector2var complex_mult(autodiff::Vector2var &A, autodiff::Vector2var &B);
         void evaluate_boundary_patch_area_and_grads_ad(BoundaryNormal* bnd_normal1, autodiff::Vector3var bnd_normal1_ad, 
                                                        BoundaryNormal* bnd_normal2, autodiff::Vector3var bnd_normal2_ad, 
-                                                       double f1_area_sign
+                                                       double f1_area_sign,
+                                                       bool complex_accum = false
                                                     //    , std::set<Vertex> &effective_vertices
                                                        );
 

@@ -98,7 +98,7 @@ glm::vec3 vecF_color({0.1, 0.1, 0.1});
 BoundaryBuilder *boundary_builder;
 polyscope::PointCloud *boundary_normals_pc;
 polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
-bool draw_boundary_patches = false; // TODO
+bool draw_boundary_patches = true; // TODO
 bool test_guess = false;
 bool compute_global_G_effect = true,
      deform_after = true,
@@ -250,17 +250,6 @@ void update_solver_and_boundaries(){
   // boundary_builder->build_boundary_normals();
   printf("  \n ************************************************ no AD \n");
   boundary_builder->build_boundary_normals();
-  printf("  \n ************************************************  AD  \n");
-  // autodiff::MatrixX3var poses_ad = vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions);
-  // autodiff::Vector3var G_ad = vec32vec(forwardSolver->get_G());
-  boundary_builder = new BoundaryBuilder(forwardSolver);
-  boundary_builder->build_boundary_normals_for_autodiff(true); // ( poses_ad, G_ad, ) autodiff; generate_gradients = true
-  // for (Face f: forwardSolver->hullMesh->faces()){
-  //   if (forwardSolver->face_last_face[f] == f){
-  //     polyscope::getSurfaceMesh("init hull mesh")->addVertexVectorQuantity("ad grads", boundary_builder->df_dv_grads_ad[f])->setEnabled(true);
-  //     break;
-  //   }
-  // }
 }
 
 
@@ -408,13 +397,13 @@ void test_approx_vs_ad_grads(){
 
     // fetching approx grad vs real grads
     printf("here\n");
-    // tmp_inv_solver->find_uni_mass_d_pf_dv(false, frozen_G);
-    // VertexData<Vector3> approx_dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
-                                                                                            //    structured_opt, stable_normal_update_thresh);
+    tmp_inv_solver->find_uni_mass_d_pf_dv(false, frozen_G);
+    VertexData<Vector3> approx_dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
+                                                                                                    structured_opt, stable_normal_update_thresh);
     printf("here2\n");
     tmp_inv_solver->find_uni_mass_d_pf_dv(true, frozen_G);
     VertexData<Vector3> dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
-                                                                                        structured_opt, stable_normal_update_thresh);
+                                                                                             structured_opt, stable_normal_update_thresh);
     printf("registering 3\n");
     
     // DEBUG
@@ -422,7 +411,7 @@ void test_approx_vs_ad_grads(){
     //   std::cout << "approx grad: " << approx_dice_energy_grads[v] << "  \nreal grad: " << dice_energy_grads[v] << "\n";
     
     pip2psmesh->addVertexVectorQuantity("ad total grads", dice_energy_grads)->setEnabled(true);
-    // pip2psmesh->addVertexVectorQuantity("approx total grads", approx_dice_energy_grads)->setEnabled(true);
+    pip2psmesh->addVertexVectorQuantity("approx total grads", approx_dice_energy_grads)->setEnabled(true);
     printf("registered\n");
     // polyscope::frameTick();
 }

@@ -33,7 +33,7 @@
 #include "forward3D.h"
 #include "mesh_factory.h"
 #include "visual_utils.h"
-#include "markov_model.h"
+// #include "markov_model.h"
 #include "boundary_tools.h"
 
 // #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
@@ -105,8 +105,8 @@ Vector3 old_g_vec, new_g_vec;
 int snail_trail_dummy_counter = 0;
 
 // Markov Chain stuff
-RollingMarkovModel *markov_model;
-polyscope::PointCloud *sudo_faces_pc;
+// RollingMarkovModel *markov_model;
+// polyscope::PointCloud *sudo_faces_pc;
 
 // boundary stuff
 BoundaryBuilder *boundary_builder;
@@ -210,33 +210,33 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
 
 
 // initialize Markov chain and do the pre-computes
-void initiate_markov_model(){
-  markov_model = new RollingMarkovModel(forwardSolver);
-  markov_model->initialize_pre_computes();
-  markov_model->split_chain_edges_and_build_probability_pairs();
-  markov_model->print_prob_pairs();
-}
+// void initiate_markov_model(){
+//   markov_model = new RollingMarkovModel(forwardSolver);
+//   markov_model->initialize_pre_computes();
+//   markov_model->split_chain_edges_and_build_probability_pairs();
+//   markov_model->print_prob_pairs();
+// }
 
 
 // visualize 
-void visualize_sudo_faces(){
-  std::vector<Vector3> sf_positions;
-  size_t sf_count = 0;
-  for (Halfedge he: markov_model->mesh->halfedges()){
-    SudoFace *curr_sf = markov_model->root_sudo_face[he];
-    if (curr_sf != nullptr){
-      while (curr_sf->next_sudo_face != curr_sf){
-        sf_positions.push_back(curr_sf->normal + vis_utils.center);
-        sf_count++;
-        curr_sf = curr_sf->next_sudo_face;
-      }
-    }
-  }
-  polyscope::PointCloud* sudo_faces_pc = polyscope::registerPointCloud("sudo faces", sf_positions);
-  sudo_faces_pc->setEnabled(true);
-  sudo_faces_pc->setPointRadius(vis_utils.gm_pt_radi * 1.0, false);
-  sudo_faces_pc->setPointColor({0.,1.,1.});
-}
+// void visualize_sudo_faces(){
+//   std::vector<Vector3> sf_positions;
+//   size_t sf_count = 0;
+//   for (Halfedge he: markov_model->mesh->halfedges()){
+//     SudoFace *curr_sf = markov_model->root_sudo_face[he];
+//     if (curr_sf != nullptr){
+//       while (curr_sf->next_sudo_face != curr_sf){
+//         sf_positions.push_back(curr_sf->normal + vis_utils.center);
+//         sf_count++;
+//         curr_sf = curr_sf->next_sudo_face;
+//       }
+//     }
+//   }
+//   polyscope::PointCloud* sudo_faces_pc = polyscope::registerPointCloud("sudo faces", sf_positions);
+//   sudo_faces_pc->setEnabled(true);
+//   sudo_faces_pc->setPointRadius(vis_utils.gm_pt_radi * 1.0, false);
+//   sudo_faces_pc->setPointColor({0.,1.,1.});
+// }
 
 
 // color input polyhedra with default
@@ -255,6 +255,30 @@ void visualize_g_vec(){
   psG_vec->setVectorRadius(curve_radi_scale * 5., false);
   psG_vec->setVectorLengthScale(1., false);
   psG_vec->setVectorColor({0.8,0.1,0.1});
+}
+
+void visualize_current_orientation(){
+  double floor_z = -1.;
+         Vector3 floor_vec = Vector3({0,0,floor_z});
+  Vector3 rot_axis = cross(forwardSolver->curr_g_vec, floor_vec);
+  double rot_angle = angle(forwardSolver->curr_g_vec, floor_vec);
+  Vertex current_v;
+  if (forwardSolver->curr_v.getIndex() != INVALID_IND) current_v = forwardSolver->curr_v;
+  else if (forwardSolver->curr_e.getIndex() != INVALID_IND) current_v = forwardSolver->curr_e.firstVertex();
+  else if (forwardSolver->curr_f.getIndex() != INVALID_IND) current_v = forwardSolver->curr_f.halfedge().vertex();
+  else {
+    polyscope::warning("all elements are Invalid??\n");
+    return;
+  }
+  Vector3 offset = floor_vec - forwardSolver->hullGeometry->inputVertexPositions[current_v].rotateAround(rot_axis, rot_angle);
+  VertexData<Vector3> rotated_poses(*forwardSolver->inputMesh);
+  for (Vertex v: forwardSolver->inputMesh->vertices()){
+    rotated_poses[v] = forwardSolver->inputGeometry->inputVertexPositions[v].rotateAround(rot_axis, rot_angle) + offset;
+  }
+  double y_shift = 0.;
+  Vector3 vis_shift({y_shift * 2., -2., 0.});
+  auto tmp_ori_mesh = polyscope::registerSurfaceMesh("tmp orientation", -1. * rotated_poses + vis_shift, forwardSolver->inputMesh->getFaceVertexList());
+  tmp_ori_mesh->setSurfaceColor({0.1, 0.4, 0.02});
 }
 
 
@@ -313,6 +337,7 @@ void initialize_state_vis(){
   vis_utils.draw_G();
   visualize_contact();
   visualize_g_vec();
+  visualize_current_orientation();
   color_faces_with_default();
 }
 
@@ -517,6 +542,7 @@ void myCallback() {
     new_g_vec = forwardSolver->curr_g_vec;
     visualize_g_vec();
     visualize_contact();
+    visualize_current_orientation();
     if(show_snail_trail && norm(old_g_vec-new_g_vec) != 0.){ // proly dont have to use tol
       draw_arc_on_sphere(old_g_vec, new_g_vec, vis_utils.center,
                          vis_utils.gm_radi, vis_utils.arcs_seg_count, 200 + snail_trail_dummy_counter, 
@@ -547,14 +573,14 @@ void myCallback() {
   }
   if (ImGui::Checkbox("draw boundary patches", &draw_boundary_patches)) draw_stable_patches_on_gauss_map();
   if (ImGui::Checkbox("test guess", &test_guess)) draw_stable_patches_on_gauss_map();
-  if (ImGui::Button("show sudo faces")){
-    initiate_markov_model();
-    visualize_sudo_faces();
-  }
-  if (ImGui::Button("matrix debugg")){
-    markov_model->build_transition_matrix();
-    markov_model->check_transition_matrix();
-  }
+  // if (ImGui::Button("show sudo faces")){
+  //   initiate_markov_model();
+  //   visualize_sudo_faces();
+  // }
+  // if (ImGui::Button("matrix debugg")){
+  //   markov_model->build_transition_matrix();
+  //   markov_model->check_transition_matrix();
+  // }
 }
 
 

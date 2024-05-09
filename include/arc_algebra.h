@@ -21,8 +21,8 @@
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
 
-#include <autodiff/reverse/var/eigen.hpp>
-#include <autodiff/reverse/var.hpp>
+// #include <autodiff/reverse/var/eigen.hpp>
+// #include <autodiff/reverse/var.hpp>
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -67,4 +67,4 @@ Vector3 point_to_segment_normal(Vector3 P, Vector3 A, Vector3 B);
 // autodiff::Vector3var intersect_arc_ray_with_arc_ad(autodiff::MatrixX3var &poses, autodiff::Vector3var &G, Vertex v,
 //                                                    autodiff::Vector3var &R2, autodiff::Vector3var &A, autodiff::Vector3var &B,
 //                                                    bool sign_change);
-autodiff::var triangle_patch_area_on_sphere_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C);
+// autodiff::var triangle_patch_area_on_sphere_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C);

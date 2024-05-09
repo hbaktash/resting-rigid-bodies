@@ -10,3 +10,6 @@
 [submodule "deps/qhull"]
 	path = deps/qhull
 	url = https://github.com/qhull/qhull.git
+[submodule "deps/cmdstan"]
+	path = deps/cmdstan
+	url = https://github.com/stan-dev/cmdstan.git

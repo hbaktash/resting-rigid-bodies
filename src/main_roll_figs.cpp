@@ -111,7 +111,6 @@ float stable_normal_update_thresh = -1;
 int ARAP_max_iters = 10;
 
 // deformation
-DeformationSolver *deformationSolver;
 bool animate = false,
      v2_dice_animate = false;
 float scale_for_feasi = 2.;
