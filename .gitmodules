@@ -10,3 +10,6 @@
 [submodule "deps/qhull"]
 	path = deps/qhull
 	url = https://github.com/qhull/qhull.git
+[submodule "deps/autodiff"]
+	path = deps/autodiff
+	url = https://github.com/autodiff/autodiff.git
