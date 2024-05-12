@@ -127,20 +127,20 @@ endif ()
 # 	# add any other source files here
 # )
 
-# set(bullet_SRCS 
-#   src/main_bullet.cpp
-#   src/forward3D.cpp
-#   src/mesh_factory.cpp
-#   src/geometry_utils.cpp
-#   src/bullet_sim.cpp
-#   src/coloring.cpp
-#   src/visual_utils.cpp
-#   src/arc_algebra.cpp
-#   src/boundary_tools.cpp
-#   src/convex_hull.cpp
-#   src/utils.cpp
-#   # add any other source files here
-# )
+set(bullet_SRCS 
+  src/main_bullet.cpp
+  src/forward3D.cpp
+  src/mesh_factory.cpp
+  src/geometry_utils.cpp
+  src/bullet_sim.cpp
+  src/coloring.cpp
+  src/visual_utils.cpp
+  src/arc_algebra.cpp
+  src/boundary_tools.cpp
+  src/convex_hull.cpp
+  src/utils.cpp
+  # add any other source files here
+)
 
 # set(inverse_SRCS 
 #   src/main_inverse.cpp
@@ -294,23 +294,26 @@ endif()
 
 # Bullet stuff
 
-# SET(Bullet_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/bullet3/build_cmake")
-# Find_Package(Bullet CONFIG)
-# SET(BULLET_INCLUDE_DIR ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_INCLUDE_DIR})
-# SET(BLA ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
-# add_executable(bullet_sim "${bullet_SRCS}")
+SET(Bullet_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/bullet3/build_cmake")
+Find_Package(Bullet CONFIG)
+SET(BULLET_INCLUDE_DIR ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_INCLUDE_DIR})
+SET(BLA ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+add_executable(bullet_sim "${bullet_SRCS}")
 
-# target_include_directories(bullet_sim PUBLIC ${BULLET_INCLUDE_DIR})
-# target_compile_definitions(bullet_sim PUBLIC ${BULLET_DEFINITIONS})
-# target_link_directories(bullet_sim PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
-# target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-# target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-# # add the args.hxx project which we use for command line args
-# target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+target_include_directories(bullet_sim PUBLIC ${BULLET_INCLUDE_DIR})
+target_compile_definitions(bullet_sim PUBLIC ${BULLET_DEFINITIONS})
+target_link_directories(bullet_sim PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+# add the args.hxx project which we use for command line args
+target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 
-# target_link_libraries(bullet_sim PUBLIC BulletDynamics BulletCollision LinearMath geometry-central polyscope qhullcpp qhullstatic_r)
+target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
+target_link_libraries(bullet_sim PUBLIC BulletDynamics BulletCollision LinearMath geometry-central polyscope qhullcpp qhullstatic_r autodiff)
 # target_link_libraries(bullet_sim )
 
+
+# Debugging AutoDiff stuff
 
 add_executable(adDebug "${ad_debug}")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")

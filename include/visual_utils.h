@@ -109,7 +109,7 @@ class VisualUtils{
 
 // arc stuff
 // draw an arc connecting two points on the sphere; for Gauss map purposes
-void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind, polyscope::SurfaceMesh* hosting_psMesh, 
+void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, size_t seg_count, size_t edge_ind,
                         double radi_scale = 1., glm::vec3 color = glm::vec3({-1., 0, 0}), 
                         float arc_curve_radi = 0.003);
 
@@ -117,7 +117,6 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, s
 void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds_,
                                 std::vector<Vector3> positions_,
                                 Vector3 center, double radius, size_t seg_count, std::string title, 
-                                polyscope::SurfaceMesh* hosting_psMesh, 
                                 double radi_scale = 1., glm::vec3 color = glm::vec3({-1., 0, 0}), 
                                 float arc_curve_radi = 0.003);
 
@@ -125,7 +124,6 @@ void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> ed
                                        std::vector<Vector3> positions_,
                                        Forward3DSolver &forward_solver,
                                        Vector3 center, double radius, size_t seg_count, std::string title, 
-                                       polyscope::SurfaceMesh* hosting_psMesh, 
                                        glm::vec3 color = glm::vec3({-1., 0, 0}), 
                                        float arc_curve_radi = 0.003);
 

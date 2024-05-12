@@ -400,6 +400,7 @@ void myCallback() {
       double prob = p.second;
       all_stable_face_items.push_back("f " + std::to_string(f.getIndex()) + " prob: " + std::to_string(prob));
     }
+    writeSurfaceMesh(*forwardSolver->hullMesh, *forwardSolver->hullGeometry, "../meshes/hulls/" + all_polygons_current_item + "_hull.obj");
   }
   if (ImGui::BeginCombo("##combo2", all_stable_face_current_item.c_str())){
       for (std::string tmp_str: all_stable_face_items){ 

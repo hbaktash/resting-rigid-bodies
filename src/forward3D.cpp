@@ -316,7 +316,7 @@ bool Forward3DSolver::face_is_stable(Face f){
         return false;
     if (updated)
         return face_next_face[f] == f;
-    // need to check all the dihedral angles made on each edge
+    // need to check all the wideness of dihedral angles made on each edge
     // iterate over all edges of the face and check the dihedral angle
     Halfedge curr_he = f.halfedge(),
              first_he = f.halfedge();

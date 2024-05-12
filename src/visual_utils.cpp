@@ -23,7 +23,7 @@
 
 // arc stuff
 void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius, 
-                        size_t seg_count, size_t edge_ind, polyscope::SurfaceMesh* hosting_psMesh, 
+                        size_t seg_count, size_t edge_ind, 
                         double radi_scale, glm::vec3 color, 
                         float arc_curve_radi){
 // p1, p2 just represent normal vectors
@@ -65,7 +65,6 @@ void draw_arc_on_sphere(Vector3 p1, Vector3 p2, Vector3 center, double radius,
 void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds_,
                                 std::vector<Vector3> positions_,
                                 Vector3 center, double radius, size_t seg_count, std::string title, 
-                                polyscope::SurfaceMesh* hosting_psMesh, 
                                 double radi_scale, glm::vec3 color, 
                                 float arc_curve_radi){
 
@@ -116,7 +115,6 @@ void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> ed
                                 std::vector<Vector3> positions_,
                                 Forward3DSolver &forward_solver,
                                 Vector3 center, double radius, size_t seg_count, std::string title, 
-                                polyscope::SurfaceMesh* hosting_psMesh, 
                                 glm::vec3 color, 
                                 float arc_curve_radi){
   std::vector<std::array<size_t, 2>> edgeInds;
@@ -200,12 +198,12 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
   // printf("  drawing the arc network on GM\n ");
   draw_arc_network_on_sphere(ind_pairs_vector, boundary_normals, 
                             center, radius, seg_count, 
-                            "region boundaries", nullptr, 1., arc_color);
+                            "region boundaries", 1., arc_color);
   if (on_height_surface){
     // printf("  drawing the arc network on height surface\n ");
     draw_arc_network_on_lifted_suface(ind_pairs_vector, boundary_normals, *boundary_builder->forward_solver, 
                                       center, 0., seg_count, 
-                                      "region boundaries ", nullptr, arc_color);
+                                      "region boundaries ", arc_color);
   }
   return {ind_pairs_vector, boundary_normals};
 }
@@ -248,15 +246,15 @@ void VisualUtils::draw_edge_arcs_on_gauss_map(){
   }
   if (color_arcs){
     draw_arc_network_on_sphere(both_edge_inds, positions, center, gm_radi, arcs_seg_count,
-                              "saddle edge arcs", nullptr, 1., both_edge_color);
+                              "saddle edge arcs", 1., both_edge_color);
     draw_arc_network_on_sphere(stable_only_edge_inds, positions, center, gm_radi, arcs_seg_count,
-                              "singular edge arcs", nullptr, 1., stable_edge_color);
+                              "singular edge arcs", 1., stable_edge_color);
     draw_arc_network_on_sphere(all_edge_inds, positions, center, gm_radi, arcs_seg_count,
-                              "non-singular edge arcs", nullptr, 1., stabilizable_edge_color);
+                              "non-singular edge arcs", 1., stabilizable_edge_color);
   }
   else {
     draw_arc_network_on_sphere(all_edge_inds, positions, center, gm_radi, arcs_seg_count,
-                              "all edge arcs", nullptr, 1., stabilizable_edge_color);
+                              "all edge arcs", 1., stabilizable_edge_color);
   }
 }
 

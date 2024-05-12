@@ -53,8 +53,8 @@ class PhysicsEnv {
     //make sure to re-use collision shapes among rigid bodies whenever possible!
     btAlignedObjectArray<btCollisionShape*> collisionShapes;
 
-    int MAX_ITERS = 1000;
-    double tol = 1e-8,
+    int MAX_ITERS = 10000, MIN_ITERS = 100;
+    double tol = 1e-9,
            default_step_size = 0.017; // 1/60
 
 
@@ -83,7 +83,7 @@ class PhysicsEnv {
     // find the bottom face
     Face get_touching_face(VertexData<Vector3> new_positions);
     // simulate until reaching the stable orientation
-    Face final_stable_face(Vector3 g_vec);
+    Face final_stable_face();
 
 
     //restart with the same polyhedra
@@ -93,5 +93,6 @@ class PhysicsEnv {
 
     // 
     // get btTransform object as GC matrix
-    VertexData<Vector3> get_new_positions();
+    geometrycentral::DenseMatrix<double> btTrans_to_GC_Mat(btTransform current_btTrans);
+    Vector<Vector3> get_new_positions(Vector<Vector3> old_poses);
 };

@@ -125,5 +125,12 @@ class BoundaryBuilder {
 
         void print_area_of_boundary_loops();
         double get_fair_dice_energy(size_t side_count);
-        
+
+
+
+        // TODO template
+        // static double dice_energy(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G, ManifoldSurfaceMesh hull_mesh,  
+        //                           std::vector<Edge> terminal_edges, // one-time computes to avoid templating everything 
+        //                           size_t side_count);
+        // static Eigen::Vector3d BoundaryBuilder::point_to_segment_normal(Eigen::Vector3d P, Eigen::Vector3d A, Eigen::Vector3d B);
 };

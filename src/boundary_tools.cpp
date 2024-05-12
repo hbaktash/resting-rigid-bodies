@@ -257,18 +257,17 @@ double BoundaryBuilder::get_fair_dice_energy(size_t side_count){
 
 void BoundaryBuilder::print_area_of_boundary_loops(){
     printf(" Face probs:\n");
-    std::vector<double> probs;
+    std::vector<std::pair<Face, double>> probs;
     for (Face f: forward_solver->hullMesh->faces()){
         if (face_region_area[f] > 0){
             // face_region_area[f] /= (4.*PI);
-            probs.push_back(face_region_area[f]/(4.*PI));
-            // printf(" f %d: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
+            probs.push_back({f, face_region_area[f]/(4.*PI)});
         }
     }
-    std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a > b; });
+    std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
     printf("sorted probs: \n");
-    for (double prob: probs)
-        printf("  -%f\n", prob);
+    for (auto pair: probs)
+        printf("  -f %d: %f\n", pair.first.getIndex(), pair.second);
 }
 
 
@@ -670,53 +669,106 @@ autodiff::Vector2var BoundaryBuilder::solid_angle_complex_ad(autodiff::Vector3va
 autodiff::Vector2var BoundaryBuilder::complex_mult(autodiff::Vector2var &A, autodiff::Vector2var &B){
     return autodiff::Vector2var{A[0]*B[0] - A[1]*B[1], A[0]*B[1] + A[1]*B[0]};
 }
-// gradients
-// void compute_df_dv_grads_autodiff(){
-//     FaceData<autodiff::MatrixX3var> face_region_areas_gradient_ad;
-// 
+
+
+
+
+
+
+
+// ========================================================================================== STATIC FUNCTIONS
+
+
+
+
+// double BoundaryBuilder::dice_energy(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G,  // TODO: template
+//                                     ManifoldSurfaceMesh hull_mesh, 
+//                                     std::vector<Edge> terminal_edges, // one-time computes to avoid templating everything
+//                                     size_t side_count){
+//     // pre compute face nomrals; GC normals not templated
+//     FaceData<Eigen::Vector3d> face_normals(hull_mesh); // TODO: template
+//     for (Face f: hull_mesh.faces()){
+//         Halfedge he = f.halfedge();
+//         Vertex v1 = he.vertex(),
+//                v2 = he.next().vertex(),
+//                v3 = he.next().next().vertex();
+//         face_normals[f] = (hull_positions.row(v2.getIndex()) - hull_positions.row(v1.getIndex())).cross(hull_positions.row(v3.getIndex()) - hull_positions.row(v1.getIndex()));//.normalized();
+//     }
+
+//     // morse complex areas; only non-zero for stable faces
+//     FaceData<double> face_region_area(hull_mesh, 0.); // TODO: template
+//     printf("  back-flowing terminal edges %d \n", terminal_edges.size());
+//     int i = 1;
+//     for (Edge e: terminal_edges){
+//         printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
+//         // bnd_normal->normal_ad = point_to_segment_normal_ad(e);
+//         autodiff::Vector3var bnd_normal_ad = point_to_segment_normal(G, hull_positions.row(e.firstVertex().getIndex()), hull_positions.row(e.secondVertex().getIndex()));
+       
+//         Face f1 = e.halfedge().face(),
+//              f2 = e.halfedge().twin().face();
+//         bnd_normal->f1 = forward_solver->face_last_face[f1];
+//         bnd_normal->f2 = forward_solver->face_last_face[f2];
+//         bnd_normal->host_e = e;
+//         // for visuals
+//         edge_boundary_normals[e].push_back(bnd_normal);
+//         for (Vertex v: {e.firstVertex(), e.secondVertex()}){
+            
+//             // // TESTING dependency speed-ups
+//             // std::set<Vertex> effective_vertices;
+//             // effective_vertices.insert(e.firstVertex());
+//             // effective_vertices.insert(e.secondVertex());
+//             // for (Vertex tmp_v: bnd_normal->f1.adjacentVertices())
+//             //     effective_vertices.insert(tmp_v);
+//             // for (Vertex tmp_v: bnd_normal->f2.adjacentVertices())
+//             //     effective_vertices.insert(tmp_v);
+            
+//             Vector3 tmp_normal = bnd_normal->normal,
+//                     f1_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f1),
+//                     f2_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f2),
+//                     v_normal   = forward_solver->vertex_stable_normal[v];
+//             // Vector3 imm_f1_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().face()), // immediate face neighbors
+//             //         imm_f2_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().twin().face());
+//             double f1_area_sign = dot(f1_normal, cross(v_normal, tmp_normal)) >= 0 ? 1. : -1.; // f1 on rhs of bndN->vN
+    
+//             if (forward_solver->vertex_is_stabilizable[v]){
+//                 // printf("-SV-\n");
+//                 flow_back_boundary_on_edge_for_autodiff(bnd_normal, bnd_normal_ad, Edge(), v, f1_area_sign //, var_positions, var_G
+//                                                         // ,effective_vertices
+//                                                         );
+//             }
+//             else {
+//                 for (Edge neigh_e: v.adjacentEdges()){
+//                     if (neigh_e != e &&
+//                         forward_solver->edge_next_vertex[neigh_e] == v){ // neigh_e is a source for this vertex
+//                         // face_attraction_boundary[bnd_normal->f1].push_back(bnd_normal);
+//                         // face_attraction_boundary[bnd_normal->f2].push_back(bnd_normal);
+//                         // printf(" -Se %d-", neigh_e.getIndex());
+//                         bool res = flow_back_boundary_on_edge_for_autodiff(bnd_normal, bnd_normal_ad, neigh_e, v, f1_area_sign //, effective_vertices //, var_positions, var_G
+//                         );
+//                         if (res) break; // kinda redundant; since source-ness is checked before going in
+//                     }
+//                 }
+//             }
+//             printf(" \n One side done! \n");
+//         }
+//     }
+//     double total_area = 0.;
+//     autodiff::var total_area_ad = 0.;
+//     for (Face f: forward_solver->hullMesh->faces()){
+//         if (forward_solver->face_last_face[f] == f){
+//             total_area += face_region_area[f];
+//             total_area_ad += 2 * atan2(face_region_area_complex_value_ad[f][1], face_region_area_complex_value_ad[f][0]);
+//             // std::cout << "face " << f.getIndex() << " area: " << face_region_area[f] << ",  " << face_region_area_ad[f] << std::endl;
+//         }
+//     }
+//     std::cout << "total face areas: " << total_area << "--- from complex stuff: " << total_area_ad << std::endl;
+    
+//     return 0.;
 // }
 
 
-// ------ replaced with above
-// printf("None-ad normals and patches..\n");
-// Vector3 tmp_normal = bnd_normal->normal;
-// Vector3 next_normal = next_bnd_normal->normal;
-// Vector3 f1_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f1), // f1,f2 are the same along the current path to maximum
-//         f2_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f2);
-// double curr_f1_alignment = dot(f1_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.; // checking alignment again since it could change along the way
-// double curr_f2_alignment = dot(f2_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.;
-// double f1_sign_change = f1_area_sign == curr_f1_alignment ? 1. : -1;
-// double f2_sign_change = (-f1_area_sign == curr_f2_alignment) ? 1.: -1;
-// double f1_side_patch = triangle_patch_area_on_sphere(f1_normal, tmp_normal, next_normal),
-//        f2_side_patch = triangle_patch_area_on_sphere(f2_normal, tmp_normal, next_normal);
-// face_region_area[bnd_normal->f1] += f1_sign_change * f1_side_patch;
-// face_region_area[bnd_normal->f2] += f2_sign_change * f2_side_patch;
-// printf("ad normals..\n");
-// autodiff::Vector3var f1_normal_ad = face_normals_ad[bnd_normal->f1], // face_normal_ad(var_positions, bnd_normal->f1),
-//                      f2_normal_ad = face_normals_ad[bnd_normal->f2]; // face_normal_ad(var_positions, bnd_normal->f2);
-// // printf("ad patches..\n");
-// autodiff::var f1_side_patch_ad = triangle_patch_area_on_sphere_ad(f1_normal_ad, bnd_normal->normal_ad, next_bnd_normal->normal_ad),
-//               f2_side_patch_ad = triangle_patch_area_on_sphere_ad(f2_normal_ad, bnd_normal->normal_ad, next_bnd_normal->normal_ad);
-// // printf("adding up patch areas\n");
-// // printf("flattening ..\n");
-// // f1
-// if (f1_side_patch != 0.){
-//     printf("f1 grads..\n");
-//     Eigen::VectorXd df1dv = autodiff::gradient(f1_side_patch_ad, var_positions_vec);
-//     Eigen::MatrixXd df1dv_mat = df1dv.reshaped(var_positions.rows(), var_positions.cols());
-//     df_dv_grads_ad[bnd_normal->f1] += df1dv_mat;
-//     // printf("gtad update norm: %f // %f\n", df1dv_mat.norm(), df_dv_grads_ad[bnd_normal->f1].norm());
-//     // df/dG
-//     printf("f1 G grad..\n");
-//     df_dG_grads[bnd_normal->f1] += autodiff::gradient(f1_side_patch_ad, var_G);
-// }
-// // f2
-// if (f2_side_patch != 0.){
-//     printf("f2 grads..\n");
-//     Eigen::VectorXd df2dv = autodiff::gradient(f2_side_patch_ad, var_positions_vec);
-//     Eigen::MatrixXd df2dv_mat = df2dv.reshaped(var_positions.rows(), var_positions.cols());
-//     df_dv_grads_ad[bnd_normal->f2] += df2dv_mat;
-//     // df/dG
-//     printf("f2 G grad..\n");
-//     df_dG_grads[bnd_normal->f2] += autodiff::gradient(f2_side_patch_ad, var_G);    
+// Eigen::Vector3d BoundaryBuilder::point_to_segment_normal(Eigen::Vector3d P, Eigen::Vector3d A, Eigen::Vector3d B){
+//     Eigen::Vector3d PB = P - B,
+//                     AB = A - B;
+//     return (PB * AB.dot(AB) - AB * AB.dot(PB)).normalized();
 // }
