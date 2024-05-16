@@ -154,9 +154,7 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false,
     tmp_solver->initialize_pre_computes();
   // std::vector<Vector3> boundary_normals;
   if (draw_boundary_patches){
-    auto net_pair = build_and_draw_stable_patches_on_gauss_map(bnd_builder, dummy_psMesh_for_regions,
-                                               vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
-                                               on_height_surface);
+    auto net_pair = build_and_draw_stable_patches_on_gauss_map(bnd_builder,vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, on_height_surface);
     if (test_guess)
       vis_utils.draw_guess_pc(net_pair.first, net_pair.second);
     else {
@@ -231,7 +229,12 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
 void color_faces(Forward3DSolver *fwd_solver){
   if (recolor_faces){
     // printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
-    face_colors = generate_random_colors(fwd_solver->hullMesh);
+    std::vector<Face> stable_faces;
+    for (Face f: fwd_solver->hullMesh->faces()){
+      if (fwd_solver->face_is_stable(f))
+        stable_faces.push_back(f);
+    }
+    face_colors = generate_random_colors(fwd_solver->hullMesh, stable_faces);
     for (Face f: fwd_solver->hullMesh->faces()){
       if (!fwd_solver->face_is_stable(f))
         face_colors[f] = default_face_color;
@@ -246,9 +249,9 @@ void update_solver_and_boundaries(){
   forwardSolver->set_G(G);
   // printf("forward precomputes \n");
   forwardSolver->initialize_pre_computes();
-  printf("building boundary normals \n");
+  // printf("building boundary normals \n");
   // boundary_builder->build_boundary_normals();
-  printf("  \n ************************************************ no AD \n");
+  // printf("  \n ************************************************ no AD \n");
   boundary_builder->build_boundary_normals();
 }
 
@@ -358,12 +361,12 @@ void test_approx_vs_ad_grads(){
     VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
     Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G, false);
     if (frozen_G){
-    auto GV_pair = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry);
-    tmp_solver->set_G(GV_pair.first);
-    tmp_solver->volume = GV_pair.second;
+      auto GV_pair = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry);
+      tmp_solver->set_G(GV_pair.first);
+      tmp_solver->volume = GV_pair.second;
     }
     else {
-    tmp_solver->set_uniform_G(); // frozen G matters here or not ???
+      tmp_solver->set_uniform_G(); // frozen G matters here or not ???
     }
     printf("initalize precomputes\n");
     tmp_solver->initialize_pre_computes();
@@ -414,7 +417,7 @@ void test_approx_vs_ad_grads(){
     // polyscope::frameTick();
 }
 
-void version2_dice_pipeline(size_t step_count = 1){
+void test_static_dice_pipeline(){
   // forwardSolver->set_uniform_G();
   ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
   VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
@@ -429,122 +432,21 @@ void version2_dice_pipeline(size_t step_count = 1){
   }
   printf("initalize precomputes\n");
   tmp_solver->initialize_pre_computes();
+
+  BoundaryBuilder *tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
+  tmp_bnd_builder->build_boundary_normals(); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true
   
-  if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(false);
-  if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);
-  if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
-  if (polyscope::hasSurfaceMesh("init input mesh")) polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
-  auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
-                                                  tmp_solver->inputMesh->getFaceVertexList());
-  pip2psmesh->setEdgeWidth(2.);
-  polyscope::screenshot(false);
-  BoundaryBuilder *tmp_bnd_builder;
-  InverseSolver *tmp_inv_solver;
-  tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
-  tmp_inv_solver = new InverseSolver(tmp_bnd_builder);
-
-  double current_sobolev_lambda = sobolev_lambda;
-  for (size_t iter = 0; iter < step_count; iter++){
-
-    // tmp_bnd_builder->build_boundary_normals();
-    // update_visuals_with_G();
-    // printf(" vertex derivatives found!\n");
-    printf("finding vertex derivatives\n");
-    if (!use_autodiff_for_dice_grad)
-      tmp_bnd_builder->build_boundary_normals(); // face-last-face is called 
-    else {
-      // autodiff::MatrixX3var poses_ad = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
-      // autodiff::Vector3var G_ad = vec32vec(tmp_solver->get_G());
-      printf("building normals bounds with AD\n");
-      tmp_bnd_builder->build_boundary_normals_for_autodiff(true); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true
-    }
-    update_visuals_with_G(tmp_solver, tmp_bnd_builder);
-    std::cout << ANSI_FG_YELLOW << " fair dice energy iter "<< iter<< "  f: " << tmp_bnd_builder->get_fair_dice_energy(fair_sides_count) << ANSI_RESET << "\n";
-
-    auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
-                                                  tmp_solver->inputMesh->getFaceVertexList());
-
-    // boundary_builder->print_area_of_boundary_loops();
-    if (first_time || always_update_structure){
-      tmp_inv_solver->flow_structure = tmp_solver->face_last_face; // face last face is built in build_boundary_normals...
-      if (first_time) stable_normal_update_thresh = -1.;
-      else stable_normal_update_thresh = 0.1;
-      first_time = false;
-    }
-
-    // checking approx grad vs real grads
-    tmp_inv_solver->find_uni_mass_d_pf_dv(false, frozen_G);
-    VertexData<Vector3> approx_dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
-                                                                                               structured_opt, stable_normal_update_thresh);
-    
-    tmp_inv_solver->find_uni_mass_d_pf_dv(use_autodiff_for_dice_grad, frozen_G);
-    VertexData<Vector3> dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
-                                                                                        structured_opt, stable_normal_update_thresh);
-    auto old_tmp_geo = tmp_solver->inputGeometry->inputVertexPositions;
-    auto old_tmp_mesh = tmp_solver->inputMesh->getFaceVertexList();
-    
-    pip2psmesh->setEnabled(true);
-    pip2psmesh->setTransparency(0.7);
-    // DEBUG
-    polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("ad total grads", dice_energy_grads)->setEnabled(true);
-    polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("approx total grads", approx_dice_energy_grads)->setEnabled(true);
-    polyscope::show();
-    // for (Face f: tmp_solver->hullMesh->faces()){
-    //   if (tmp_solver->face_last_face[f] == f){
-    //     polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("ad grads", tmp_bnd_builder->df_dv_grads_ad[f])->setEnabled(true);
-    //     polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("approx grads", approx_dpf_dv[f])->setEnabled(true);
-    //     polyscope::show();
-    //   }
-    // }
-
-    if (do_sobolev_dice_grads){
-      
-      current_sobolev_lambda *= sobolev_lambda_decay;
-      dice_energy_grads = tmp_inv_solver->sobolev_diffuse_gradients(dice_energy_grads, current_sobolev_lambda, sobolev_p);
-      
-      // std::cout << "energies: " << energies[0][iter] << " " << energies[1][iter] << " " << energies[2][iter] << "\n";
-      pip2psmesh->addVertexVectorQuantity(" sobolev diffused dice grads", dice_energy_grads)->setEnabled(true);
-    }
-
-    pip2psmesh->setSurfaceColor({0.1,0.9,0.1});
-    pip2psmesh->setEdgeWidth(2.);
-    polyscope::screenshot(false);
-    polyscope::frameTick();
-    // polyscope::show();
-
-    double opt_step_size = hull_update_line_search(dice_energy_grads, *tmp_solver, frozen_G);
-    std::cout << ANSI_FG_RED << "opt step size: " << opt_step_size << ANSI_RESET << "\n";
-    auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(tmp_solver->hullGeometry->inputVertexPositions + opt_step_size * dice_energy_grads);
-    tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, tmp_solver->get_G(), false); 
-    // TODO: is this ok?
+  Vector3 GG = tmp_solver->get_G();
+  tmp_solver->build_face_last_faces();
+  printf("testing static dice E\n");
+  tmp_bnd_builder->dice_energy(vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions),
+                               Eigen::Vector3d({GG.x, GG.y, GG.z}), *hull_mesh,
+                               tmp_bnd_builder->find_terminal_edges(), tmp_solver->face_last_face, tmp_solver->vertex_is_stabilizable, tmp_solver->edge_next_vertex,
+                               fair_sides_count);
   
-    // visuals
-    if (!frozen_G){
-      tmp_solver->set_uniform_G();
-    }
-    tmp_solver->updated = false;
-    tmp_solver->initialize_pre_computes();
-    tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
-    tmp_inv_solver = new InverseSolver(tmp_bnd_builder);
-  }
-  tmp_bnd_builder->build_boundary_normals();
-  update_visuals_with_G(tmp_solver, tmp_bnd_builder);
-  tmp_bnd_builder->print_area_of_boundary_loops();
-
-  //DEBUG
-  if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(true);
-
-  polyscope::removeAllStructures();
-  polyscope::SurfaceMesh *psHullFillMesh = polyscope::registerSurfaceMesh(
-    "fillable hull", tmp_solver->inputGeometry->inputVertexPositions, tmp_solver->inputMesh->getFaceVertexList());
-  psHullFillMesh->setTransparency(0.45);
-  psHullFillMesh->setEdgeWidth(2.);
-  psHullFillMesh->setEnabled(true);
-  gm_is_drawn = false;
-  
-  pre_deform_G = tmp_solver->get_G();
-  std::cout << "pre-deform G:" << tmp_solver->get_G() << "\n";
+  // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
 }
+
 
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
@@ -575,43 +477,12 @@ void myCallback() {
       }
       ImGui::EndCombo();
   }
-  // if (ImGui::Button("uniform mass G")){
-  //   G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
-  //   update_solver_and_boundaries();
-  //   update_visuals_with_G();
-  // }
-  // if (ImGui::Checkbox("draw artificial R3 boundaries", &test_guess)) {
-  //   if (test_guess)
-  //     draw_stable_patches_on_gauss_map();
-  //   else{
-  //     polyscope::getPointCloud("test point cloud")->setEnabled(false);
-  //     polyscope::getCurveNetwork("stable regions on polyhedra")->setEnabled(false);
-  //   }
-  // }
-
-  
-  // if (ImGui::SliderFloat("starting step size", &step_size3, 0., 1.0));
-  // if (ImGui::SliderInt("fair dice side count", &fair_sides_count, 1, 10));
-  // if (ImGui::Checkbox("frozen G", &frozen_G));
-
-  // if (ImGui::SliderFloat("dice energy step decay", &dice_search_decay, 0., 1.));
-  // if (ImGui::SliderInt("hull optimize step count", &hull_opt_steps, 1, 200));
-  // if (ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0));
-  // if (ImGui::Checkbox("Sobolev pre-condition", &do_sobolev_dice_grads));
-  // if (do_sobolev_dice_grads){
-  //   if (ImGui::SliderFloat("Sobolev lambda", &sobolev_lambda, 0., 5.));
-  //   if (ImGui::SliderFloat("Sobolev lambda decay", &sobolev_lambda_decay, 0., 1));
-  //   if (ImGui::SliderInt("Sobolev power", &sobolev_p, 1, 5));
-  // }
-  // if (ImGui::Checkbox("autodiff dice grads", &use_autodiff_for_dice_grad));
   if (ImGui::Button("test ad grads vs approx grads")) {
     test_approx_vs_ad_grads();
   }
-//   if (ImGui::Button("optimize hull (w.r.t. dice energy)")) {
-//     v2_dice_animate = true;
-//     if (polyscope::hasSurfaceMesh("v2pipeline final mesh")) polyscope::removeSurfaceMesh("v2pipeline final mesh");
-//     if (polyscope::hasSurfaceMesh("v2pipeline final hull")) polyscope::removeSurfaceMesh("v2pipeline final hull");
-//   }
+  if (ImGui::Button("test static dice pipeline")) {
+    test_static_dice_pipeline();
+  }
 }
 
 
@@ -632,15 +503,15 @@ int main(int argc, char **argv) {
   polyscope::state::userCallback = myCallback;
 
   
-  // polyscope::show();
-  while (true) {
-    if (v2_dice_animate){
-      // polyscope::removeAllStructures();
-      version2_dice_pipeline(hull_opt_steps);
-      v2_dice_animate = false;
-    }
-    polyscope::frameTick();
-  }
+  polyscope::show();
+  // while (true) {
+  //   if (v2_dice_animate){
+  //     // polyscope::removeAllStructures();
+  //     version2_dice_pipeline(hull_opt_steps);
+  //     v2_dice_animate = false;
+  //   }
+  //   polyscope::frameTick();
+  // }
 
   return EXIT_SUCCESS;
 }

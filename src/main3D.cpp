@@ -32,7 +32,7 @@
 #include "coloring.h"
 #include "forward3D.h"
 #include "mesh_factory.h"
-#include "visual_utils.h"
+// #include "visual_utils.h"
 // #include "markov_model.h"
 #include "boundary_tools.h"
 
@@ -117,7 +117,7 @@ bool test_guess = true;
 polyscope::PointCloud *test_pc;
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("cube"), std::string("tet"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("gomboc"), std::string("bunny"), std::string("bunnylp")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc"), std::string("mark_gomboc")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
@@ -546,7 +546,7 @@ void myCallback() {
     if(show_snail_trail && norm(old_g_vec-new_g_vec) != 0.){ // proly dont have to use tol
       draw_arc_on_sphere(old_g_vec, new_g_vec, vis_utils.center,
                          vis_utils.gm_radi, vis_utils.arcs_seg_count, 200 + snail_trail_dummy_counter, 
-                         dummy_ps_mesh_for_snail_trail, 3., {0.9,0.8,0.1});
+                         3., {0.9,0.8,0.1});
       snail_trail_dummy_counter++;
     }
     old_g_vec = new_g_vec;

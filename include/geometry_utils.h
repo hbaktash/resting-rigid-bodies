@@ -25,7 +25,7 @@ using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 
-// tiny geometry stuff; move elsewhere
+// tiny geometry stuff; move elsew
 // Gradient stuff
 // from: https://www.sciencedirect.com/science/article/pii/S0167839607000891 
 // Diherdral angle derivative; the angle <BAC on unit sphere

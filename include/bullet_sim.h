@@ -38,8 +38,11 @@ class PhysicsEnv {
     VertexPositionGeometry* geometry;
     
     // keeps track of current positions via a transformation
+    Vector3 initial_orientation;
+    btTransform init_btTransform;
     btTransform current_btTrans;
-
+    std::vector<Vector3> orientation_trail;
+    
     // Bullet3 shape var
     btConvexHullShape* bt_my_polyhedra;
 
@@ -73,7 +76,7 @@ class PhysicsEnv {
     void add_ground(double ground_box_y, Vector3 ground_box_shape);
 
     // add convex object; TODO double check center of mass issue
-    void add_object(Vector3 center_of_mass, Vector3 g_vec);
+    void add_object(Vector3 center_of_mass, Vector3 orientation);
     // just delete the polyhedra
     void delete_object();
 
@@ -83,11 +86,13 @@ class PhysicsEnv {
     // find the bottom face
     Face get_touching_face(VertexData<Vector3> new_positions);
     // simulate until reaching the stable orientation
-    Face final_stable_face();
+    Face final_stable_face(bool save_trail = false);
 
 
     //restart with the same polyhedra
     void refresh(Vector3 G, Vector3 g_vec);
+    Vector3 get_current_G();
+    Vector3 get_current_orientation();
     // delete stuff; for cache reasons?
     void delete_bullet_objects();
 

@@ -137,6 +137,7 @@ class Forward3DSolver {
     // rigid simulation
     void next_state(bool verbose = false);
     
+    std::vector<Vector3> snail_trail_log(Vector3 initial_orientation);
     // // empirical sampling
     Face final_touching_face(Vector3 initial_ori);
     // void empirically_build_probabilities(int sample_count);

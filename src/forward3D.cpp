@@ -28,7 +28,7 @@ Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPosition
     else {
         hullMesh = inputMesh_;
         hullGeometry = inputGeo_;
-        trivial_initialize_index_trackers();
+        trivial_initialize_index_trackers(); //
     }
     // hullMesh = inputMesh_;
     // hullGeometry = inputGeo_;
@@ -555,6 +555,20 @@ void Forward3DSolver::next_state(bool verbose){
     else {
         printf(" $$$ initialize the contact first! $$$\n");
     }
+}
+
+
+std::vector<Vector3> Forward3DSolver::snail_trail_log(Vector3 initial_orientation){
+    std::vector<Vector3> trail;
+    trail.push_back(initial_orientation);
+    find_contact(initial_orientation);
+    while (!stable_state){
+        next_state();
+        trail.push_back(curr_g_vec);
+        if (stable_state)
+            break;
+    }
+    return trail;
 }
 
 

@@ -43,7 +43,7 @@ using namespace geometrycentral::surface;
 
 // simulation stuff
 PhysicsEnv* my_env;
-float step_size = 0.006, // 0.016
+float step_size = 0.0001, // 0.016
       refresh_x, refresh_y, refresh_z;
 int step_count = 1;
 Vector3 G;
@@ -51,7 +51,7 @@ Vector3 refresh_orientation({0,-1,0});
 
 // stuff for Gauss map
 float face_normal_vertex_gm_radi = 0.03,
-      gm_distance = 2.1,
+      gm_distance = 2.,
       gm_radi = 1.;
 int arcs_seg_count = 13;
 Vector3 shift = {0., gm_distance , 0.},
@@ -59,13 +59,13 @@ Vector3 shift = {0., gm_distance , 0.},
 float arc_curve_radi = 0.01;
 
 
-double ground_box_y = -2;
+double ground_box_y = -2.1;
 Vector3 ground_box_shape({10,1,10});
 
 Vector3 default_face_color({0.99,0.99,0.99});
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc"), std::string("mark_gomboc")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
@@ -91,17 +91,43 @@ VisualUtils vis_utils;
 ManifoldSurfaceMesh* sphere_mesh;
 VertexPositionGeometry* sphere_geometry;
 bool gm_is_drawn = false;
-
+bool draw_snail_trail = true;
+bool save_pos_to_file = false;
+Vector3 old_g_vec, new_g_vec;
+int snail_trail_dummy_counter = 0;
 
 void update_positions(){
     Vector<Vector3> new_positions = my_env->get_new_positions(forwardSolver->inputGeometry->inputVertexPositions.toVector());
     polyscope::getSurfaceMesh("my polyhedra")->updateVertexPositions(new_positions);
-    
+    polyscope::getSurfaceMesh("my polyhedra")->setTransparency(0.55);
+    // // testing center of mass update
+    // VertexData<Vector3> new_positions_vd(*forwardSolver->inputMesh);
+    // new_positions_vd.fromVector(new_positions);
+    // VertexPositionGeometry new_geom(*forwardSolver->inputMesh, vertex_data_to_matrix(new_positions_vd));
+    // Vector3 new_center_of_mass = find_center_of_mass(*forwardSolver->inputMesh, new_geom).first;
+    // std::cout << "new center of mass is: " << new_center_of_mass << "\n";
+    // std::cout << "bullet current COM   : " << my_env->get_current_G() << "\n";
+    // polyscope::registerPointCloud("new COM", std::vector<Vector3>{new_center_of_mass});
+    // polyscope::registerPointCloud("env COM", std::vector<Vector3>{my_env->get_current_G()});
+    // Forward3DSolver *tmp_solver = new Forward3DSolver(forwardSolver->inputMesh, &new_geom, my_env->get_current_G(), true);
+    // tmp_solver->initialize_pre_computes();
+    // BoundaryBuilder *tmp_builder = new BoundaryBuilder(tmp_solver);
+    // tmp_builder->build_boundary_normals();
+    // printf("Testing COM issue\n");
+    // tmp_builder->print_area_of_boundary_loops();
+
     Vector<Vector3> new_hull_positions = my_env->get_new_positions(forwardSolver->hullGeometry->inputVertexPositions.toVector());
     VertexData<Vector3> new_hull_positions_vd(*my_env->mesh);
     new_hull_positions_vd.fromVector(new_hull_positions);
     Face touch_face =  my_env->get_touching_face(new_hull_positions_vd);
     printf("touching face after update is %d\n", touch_face.getIndex());
+
+    if (save_pos_to_file){
+      VertexPositionGeometry new_geom(*my_env->mesh, vertex_data_to_matrix(new_hull_positions_vd));
+      writeSurfaceMesh(*my_env->mesh, new_geom, "../meshes/restPoses/"+all_polygons_current_item+"_rest.obj");
+      printf(" current center of mass: \n");
+      std::cout << my_env->get_current_G() << "\n";
+    }
     // TODO: do this maybe instead of updating in the env _/_
     // psMesh->setTransform()
 }
@@ -125,6 +151,16 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
   geometry = geometry_ptr.release();
   preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0, false, 1.);
   G = find_center_of_mass(*mesh, *geometry).first;
+  for (Vertex v: mesh->vertices()){
+    geometry->inputVertexPositions[v] -= G;
+  }
+  G = find_center_of_mass(*mesh, *geometry).first;
+  double max_dist = 0;
+  for (Vertex v: mesh->vertices()){
+    max_dist = std::max(max_dist, geometry->inputVertexPositions[v].norm());
+  }
+  std::cout << "center of mass after shift: " << G << "\n";
+  std::cout << "max dist from center: " << max_dist << "\n";
   // first_time = true;
 }
 
@@ -185,7 +221,12 @@ void update_solver_and_boundaries(){
 void color_faces(Forward3DSolver *fwd_solver){
   // printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
   face_colors = FaceData<Vector3>(*fwd_solver->hullMesh, default_face_color);
-  face_colors = generate_random_colors(fwd_solver->hullMesh);
+  std::vector<Face> stable_faces;
+  for (Face f: fwd_solver->hullMesh->faces()){
+    if (fwd_solver->face_is_stable(f))
+      stable_faces.push_back(f);
+  }
+  face_colors = generate_random_colors(fwd_solver->hullMesh, stable_faces);
   
   for (Face f: fwd_solver->hullMesh->faces()){
     if (!fwd_solver->face_is_stable(f))
@@ -225,6 +266,15 @@ void visualize_gauss_map(){
 
   vis_utils.draw_gauss_map();
   gm_is_drawn = true;
+}
+
+void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
+  if (!forwardSolver->updated)
+    forwardSolver->initialize_pre_computes();
+  // std::vector<Vector3> boundary_normals;
+  auto net_pair = build_and_draw_stable_patches_on_gauss_map(boundary_builder,
+                                                              vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
+                                                              on_height_surface);
 }
 
 // // copying from main polyhedra exec; should proly move these to a sep module
@@ -274,7 +324,10 @@ void visualize_gauss_map(){
 // sample and raster
 void build_raster_image(){
   FaceData<std::vector<Vector3>> face_samples(*my_env->mesh);
+  std::vector<Vector3> final_orientations;
+  std::vector<Vector3> falsh;
   int total_invalids = 0, total_samples = 0;
+  auto t1 = clock();
   for (int i = 0; i < sample_count; i++){
     Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
     if (random_orientation.norm() <= 1){
@@ -283,18 +336,17 @@ void build_raster_image(){
         printf("$$$ at sample %d\n", i);
       random_orientation /= norm(random_orientation);
       my_env->refresh(G, random_orientation);
-      Face touching_face = my_env->final_stable_face();
+      Face touching_face = my_env->final_stable_face(); // Invalid if not close to a face normal; wtf?
+      final_orientations.push_back(my_env->get_current_orientation() + vis_utils.center);
       if (touching_face.getIndex() == INVALID_IND){
         total_invalids++;
+        falsh.push_back(random_orientation + vis_utils.center); //  shift for visualization
         continue;
       }
-      // if (touching_face.getIndex() == 0){
-        // std::cout<<" -- face 0 vec: "<< random_orientation << "\n";
-      // }
-      // printf("touching face is %d\n", touching_face.getIndex());
       face_samples[touching_face].push_back(random_orientation);
     }
   }
+  printf(" --- sampling time: %f\n", (double)(clock() - t1));
   printf(" ### total invalid faces: %d/%d\n", total_invalids, total_samples);
   std::vector<Vector3> raster_positions,
                        raster_colors;
@@ -309,26 +361,85 @@ void build_raster_image(){
     if(tmp_points.size() != 0) printf(" --- f %d: %f\n", f.getIndex(), prob);
     for (Vector3 tmp_p: tmp_points){
       raster_positions.push_back(tmp_p + shift);
-      raster_colors.push_back(face_colors[forwardSolver->face_last_face[f]]);
+      raster_colors.push_back(face_colors[forwardSolver->face_last_face[f]]); // 
       // std::cout<< "tmp color is: " << face_colors[f] << "\n";
     }
   }
-  printf("accumulated probs:\n");
+  printf("accumulated empirical -VS- MS complex:\n");
   for (Face f: my_env->mesh->faces()){
     if (forwardSolver->face_is_stable(f)){
-      printf("  f %d: %f\n", f.getIndex(), accum_facee_areas[f]);
+      printf("  f %d -> emp: %f    ----   MS: %f \n", f.getIndex(), accum_facee_areas[f], boundary_builder->face_region_area[f]/(4.*PI));
     }
   }
-  printf("morse complex probs:\n");
+  //
+  printf(" $$$ KL divergence! $$$\n");
+  double kl_divergence = 0.;
   for (Face f: my_env->mesh->faces()){
     if (forwardSolver->face_is_stable(f)){
-      printf("  f %d: %f\n", f.getIndex(), boundary_builder->face_region_area[f]/(4.*PI));
+      double emp_prob = accum_facee_areas[f];
+      double ms_prob = boundary_builder->face_region_area[f]/(4.*PI);
+      if (emp_prob != 0. && ms_prob != 0.)
+        kl_divergence += ms_prob * std::log(ms_prob/emp_prob);
     }
   }
-  // boundary_builder->print_area_of_boundary_loops();
+  printf("KL divergence: %f\n", kl_divergence);
+
+  auto final_ori_pc = polyscope::registerPointCloud("final orientations", final_orientations);
+  final_ori_pc->setPointColor({0.1,0.1,0.1});
+  final_ori_pc->setPointRadius(0.04, false);
+  final_ori_pc->setEnabled(true);
+
   auto raster_pc = polyscope::registerPointCloud("raster point cloud", raster_positions);
   polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("random color", raster_colors);
   pc_col_quant->setEnabled(true);
+  auto falsh_pc = polyscope::registerPointCloud("falsh point cloud", falsh);
+  falsh_pc->setPointColor({0.,0.,0.});
+  falsh_pc->setEnabled(true);
+}
+
+void draw_trail_on_gm(std::vector<Vector3> trail, glm::vec3 color, std::string name, double radi, bool color_gradient = false){
+  std::vector<std::pair<size_t, size_t>> edge_inds;
+  if (!color_gradient){
+    for (size_t i = 0; i < trail.size()-1; i++)
+      edge_inds.push_back({i, i+1});
+    draw_arc_network_on_sphere(edge_inds, trail, vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, name, radi, color);//{0.7,0.1,0.8}
+  }
+  else{
+    std::vector<glm::vec3> colors;
+    for (size_t i = 0; i < trail.size(); i++){
+      glm::vec3 tmp_color = color;
+      tmp_color.x = tmp_color.x * ((i/(float)trail.size()));
+      draw_arc_on_sphere(trail[i], trail[i+1], vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, i, radi, tmp_color);
+    }
+  }
+}
+
+
+void test_static_dice_pipeline(){
+  // forwardSolver->set_uniform_G();
+  ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
+  VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
+  Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G, false);
+  
+  auto GV_pair = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry);
+  tmp_solver->set_G(GV_pair.first);
+  tmp_solver->volume = GV_pair.second;
+  
+  printf("initalize precomputes\n");
+  tmp_solver->initialize_pre_computes();
+
+  BoundaryBuilder *tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
+  tmp_bnd_builder->build_boundary_normals(); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true
+  
+  Vector3 GG = tmp_solver->get_G();
+  tmp_solver->build_face_last_faces();
+  printf("testing static dice E\n");
+  tmp_bnd_builder->dice_energy(vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions),
+                               Eigen::Vector3d({GG.x, GG.y, GG.z}), *hull_mesh,
+                               tmp_bnd_builder->find_terminal_edges(), tmp_solver->face_last_face, tmp_solver->vertex_is_stabilizable, tmp_solver->edge_next_vertex,
+                               6);
+  
+  // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
 }
 
 
@@ -338,6 +449,7 @@ void myCallback() {
       for (std::string tmp_str: all_polyhedra_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
           bool is_selected = (all_polygons_current_item == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
           if (ImGui::Selectable(tmp_str.c_str(), is_selected)){ // selected smth
+              polyscope::removeAllStructures();
               all_polygons_current_item = tmp_str;
               generate_polyhedron_example(all_polygons_current_item);
               update_solver();
@@ -358,42 +470,78 @@ void myCallback() {
   }
     if (ImGui::Button("take simulation step")){
         my_env->take_step(step_count, step_size);
+        if(draw_snail_trail){
+          new_g_vec = my_env->get_current_orientation();
+          if (norm(old_g_vec-new_g_vec) != 0.){ // proly dont have to use tol
+            draw_arc_on_sphere(old_g_vec, new_g_vec, vis_utils.center,
+                               vis_utils.gm_radi, vis_utils.arcs_seg_count, 200 , //+snail_trail_dummy_counter, 
+                               1.2, {0.9,0.8,0.1});
+            snail_trail_dummy_counter++;
+          }
+          old_g_vec = new_g_vec;
+        }
         update_positions();
     }
-    if(ImGui::SliderFloat("sim step size", &step_size, 0.005, 0.1)) my_env->default_step_size = step_size;
+    if(ImGui::SliderFloat("sim step size", &step_size, 0.0001, 0.1)) my_env->default_step_size = step_size;
     if(ImGui::SliderInt("sim step count", &step_count, 1, 20));
     
     if (ImGui::Button("fast forward to stable state")){
-        Face touching_face = my_env->final_stable_face();
-        printf("final touching face is %d\n", touching_face.getIndex());
-        if (touching_face.getIndex() != INVALID_IND)
-          std::cout << "face normal is "<< forwardSolver->hullGeometry->faceNormal(touching_face)<< "\n";
-        update_positions();
+      Face touching_face = my_env->final_stable_face(draw_snail_trail);
+      if (draw_snail_trail){
+        std::vector<Vector3> snail_trail = my_env->orientation_trail;
+        // std::vector<Vector3> snail_trail;
+        // for (size_t i = 0; i < orig_snail_trail.size(); i++){
+        //   if (i % 2 == 0)
+        //     snail_trail.push_back(orig_snail_trail[i]);
+        // }
+        for (Vector3 &v: snail_trail)
+          v += vis_utils.center;
+        auto trail_pc = polyscope::registerPointCloud("bullet pc trail", snail_trail);
+        glm::vec3 init_color = {0.8,0.8,0.2};
+        std::vector<glm::vec3> colors;
+        for (size_t i = 0; i < snail_trail.size(); i++){
+          glm::vec3 tmp_color = init_color;
+          tmp_color = tmp_color * (1.f - (i/(float)snail_trail.size()));
+          colors.push_back(tmp_color);
+        }
+        trail_pc->addColorQuantity("time", colors)->setEnabled(true);
+        trail_pc->setEnabled(true);
+
+        // draw_trail_on_gm(snail_trail, {0.9,0.8,0.1}, "bullet trail",1.0, true);
+      }
+      printf("final touching face is %d\n", touching_face.getIndex());
+      if (touching_face.getIndex() != INVALID_IND)
+        std::cout << "face normal is "<< forwardSolver->hullGeometry->faceNormal(touching_face)<< "\n";
+      update_positions();
+    }
+    if (ImGui::Checkbox("snail trail", &draw_snail_trail));
+    if (ImGui::Button("Build quasistatic snail trail")){
+      std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(refresh_orientation);
+      draw_trail_on_gm(snail_trail, {0.7,0.1,0.8}, "quasi-static trail",1.);
     }
     if (ImGui::InputFloat("orientation_vec X", &refresh_x) ||
         ImGui::InputFloat("orientation_vec Y", &refresh_y) ||
         ImGui::InputFloat("orientation_vec Z", &refresh_z)){
-      refresh_orientation = {refresh_x, refresh_y, refresh_z};
+      refresh_orientation = Vector3({refresh_x, refresh_y, refresh_z}).normalize();
+      old_g_vec = refresh_orientation;
+      auto init_pc = polyscope::registerPointCloud("initial orientation", std::vector<Vector3>{refresh_orientation + vis_utils.center});
+      init_pc->setPointColor({0.1,0.1,0.1});
+      init_pc->setPointRadius(0.01, false);
+      init_pc->setEnabled(true);
     }
     if (ImGui::Button("refresh")){
         my_env->refresh(G, refresh_orientation);
+        old_g_vec = refresh_orientation;
     }
-    if (ImGui::Button("Show Gauss Map") || 
-        ImGui::SliderInt("seg count for arcs", &arcs_seg_count, 1, 100)||
-        ImGui::SliderFloat("arc curve radi", &arc_curve_radi, 0., 0.04)||
-        ImGui::SliderFloat("face normal vertex radi", &face_normal_vertex_gm_radi, 0., 0.04)){///face_normal_vertex_gm_radi
+    // if (ImGui::Button("Show Gauss Map") || 
+    //     ImGui::SliderInt("seg count for arcs", &arcs_seg_count, 1, 100)||
+    //     ImGui::SliderFloat("arc curve radi", &arc_curve_radi, 0., 0.04)||
+    //     ImGui::SliderFloat("face normal vertex radi", &face_normal_vertex_gm_radi, 0., 0.04)){///face_normal_vertex_gm_radi
             
-          // draw the default polyhedra
-          visualize_colored_polyhedra();
-          visualize_gauss_map();
-    }
-    
-    if (ImGui::Button("draw samples on Gauss map")){
-        Face touching_face = my_env->final_stable_face();
-        printf("final touching face is %d\n", touching_face.getIndex());
-        std::cout << "face normal is "<< forwardSolver->hullGeometry->faceNormal(touching_face)<< "\n";
-        update_positions();
-    }
+    //       // draw the default polyhedra
+    //       visualize_colored_polyhedra();
+    //       visualize_gauss_map();
+    // }
     if (ImGui::InputInt("sample count", &sample_count));
     if (ImGui::Button("build the raster image")){
       
@@ -401,6 +549,14 @@ void myCallback() {
       visualize_colored_polyhedra();
       visualize_gauss_map();
       build_raster_image();
+    }
+    if (ImGui::Button("draw MS complex")){
+      draw_stable_patches_on_gauss_map();
+    }
+    if (ImGui::Checkbox("Save pos to file", &save_pos_to_file));
+
+    if (ImGui::Button("test static dice E")){
+      test_static_dice_pipeline();
     }
 }
 
@@ -414,7 +570,6 @@ int main(int argc, char* argv[])
 #endif
   polyscope::init();
   vis_utils = VisualUtils();
-  vis_utils.gm_distance = gm_distance;
   generate_polyhedron_example(all_polygons_current_item);
   update_solver();
   init_visuals();

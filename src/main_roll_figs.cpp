@@ -123,7 +123,7 @@ float membrane_lambda = 0.2,
 int filling_max_iter = 200;
 int hull_opt_steps = 50;
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("Conway spiral 4"), std::string("oloid"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc"), std::string("mark_gomboc")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno")};
 std::string all_polygons_current_item = "sliced tet",
             all_polygons_current_item2 = "tet";
 static const char* all_polygons_current_item_c_str = "bunnylp";
@@ -134,6 +134,9 @@ std::string all_stable_face_current_item = "nothing yet";
 static const char* all_stable_face_current_item_c_str = "nothing yet";
 
 
+VertexPositionGeometry *tmp_oriented_geo;
+Face tmp_stable_face;
+
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false, 
                                       BoundaryBuilder *bnd_builder = boundary_builder,
                                       Forward3DSolver *tmp_solver = forwardSolver){
@@ -141,9 +144,8 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false,
     tmp_solver->initialize_pre_computes();
   // std::vector<Vector3> boundary_normals;
   if (draw_boundary_patches){
-    auto net_pair = build_and_draw_stable_patches_on_gauss_map(bnd_builder, dummy_psMesh_for_regions,
-                                               vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
-                                               on_height_surface);
+    auto net_pair = build_and_draw_stable_patches_on_gauss_map(bnd_builder, vis_utils.center, vis_utils.gm_radi, 
+                                                               vis_utils.arcs_seg_count, on_height_surface);
     if (test_guess)
       vis_utils.draw_guess_pc(net_pair.first, net_pair.second);
     else {
@@ -217,7 +219,12 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
 void color_faces(Forward3DSolver *fwd_solver){
   if (recolor_faces){
     // printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
-    face_colors = generate_random_colors(fwd_solver->hullMesh);
+    std::vector<Face> stable_faces;
+    for (Face f: fwd_solver->hullMesh->faces()){
+      if (fwd_solver->face_is_stable(f))
+        stable_faces.push_back(f);
+    }
+    face_colors = generate_random_colors(fwd_solver->hullMesh, stable_faces);
     for (Face f: fwd_solver->hullMesh->faces()){
       if (!fwd_solver->face_is_stable(f))
         face_colors[f] = default_face_color;
@@ -400,7 +407,6 @@ void myCallback() {
       double prob = p.second;
       all_stable_face_items.push_back("f " + std::to_string(f.getIndex()) + " prob: " + std::to_string(prob));
     }
-    writeSurfaceMesh(*forwardSolver->hullMesh, *forwardSolver->hullGeometry, "../meshes/hulls/" + all_polygons_current_item + "_hull.obj");
   }
   if (ImGui::BeginCombo("##combo2", all_stable_face_current_item.c_str())){
       for (std::string tmp_str: all_stable_face_items){ 
@@ -434,11 +440,22 @@ void myCallback() {
               Vector3 vis_shift({y_shift * 2., -2., 0.});
               auto tmp_ori_mesh = polyscope::registerSurfaceMesh("tmp orientation", -1. * rotated_poses + vis_shift, forwardSolver->inputMesh->getFaceVertexList());
               tmp_ori_mesh->setSurfaceColor({0.1, 0.4, 0.02});
+              tmp_oriented_geo = new VertexPositionGeometry(*forwardSolver->inputMesh, rotated_poses);
+              tmp_stable_face = f;
           }
           if (is_selected)
               ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
       }
       ImGui::EndCombo();
+  }
+  if (ImGui::Button("Save hull mesh")){
+    writeSurfaceMesh(*forwardSolver->hullMesh, *forwardSolver->hullGeometry, "../meshes/hulls/" + all_polygons_current_item + "_hull.obj");
+  }
+  if (ImGui::Button("Save current orientation")){
+    printf("saving current orientation\n");
+    printf("face index: %d\n", tmp_stable_face.getIndex());
+    printf("prob: %f\n", boundary_builder->face_region_area[tmp_stable_face]/(4.*PI));
+    writeSurfaceMesh(*forwardSolver->inputMesh, *tmp_oriented_geo, "../meshes/restPoses/" + all_polygons_current_item + "_rest_f"+ std::to_string(tmp_stable_face.getIndex())+ "_" + std::to_string(boundary_builder->face_region_area[tmp_stable_face]/(4.*PI)) +".obj");
   }
 }
 

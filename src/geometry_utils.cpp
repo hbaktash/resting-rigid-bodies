@@ -22,7 +22,6 @@
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
 
-
 // tiny geometry stuff; move elsewhere
 // Gradients
 // formula source in header file

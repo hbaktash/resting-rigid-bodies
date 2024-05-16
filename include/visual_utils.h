@@ -58,12 +58,11 @@ class VisualUtils{
 
 
         // Gauss map stuff
-        double gm_distance = 2.1,
+        double gm_distance = 2,
                gm_radi = 1.0;
-        Vector3 colored_shift = Vector3({gm_distance, gm_distance, 0.});
-        // gm_shift = Vector3({0., gm_distance, 0.}),
-                
-        Vector3 center = Vector3({0., gm_distance, 0.});
+        Vector3 colored_shift;
+        // gm_shift = Vector3({0., gm_distance, 0.}),        
+        Vector3 center;
         bool color_arcs = true, gm_is_drawn = false,
              draw_unstable_edge_arcs = true,
              draw_stable_g_vec_for_unstable_edge_arcs = false,
@@ -76,10 +75,14 @@ class VisualUtils{
         int arcs_seg_count = 12,
             arc_counter = 0;
 
-        VisualUtils(){}
+        VisualUtils(){
+            colored_shift = Vector3({gm_distance, gm_distance, 0.});
+            center = Vector3({0., gm_distance, 0.});
+        }
         VisualUtils(Forward3DSolver* forwardSolver){
                         this->forwardSolver = forwardSolver;
-            // face_normal_vertex_gm_radi = 0.03;
+            colored_shift = Vector3({gm_distance, gm_distance, 0.});
+            center = Vector3({0., gm_distance, 0.});
         }
 
         void draw_edge_arcs_on_gauss_map();
@@ -129,7 +132,6 @@ void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> ed
 
 std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
     build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
-                                      polyscope::SurfaceMesh* hosting_psMesh,
                                       Vector3 center, double radius, size_t seg_count,
                                       bool on_height_surface = false);
 

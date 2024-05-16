@@ -67,27 +67,43 @@ Vector<Vector3> PhysicsEnv::get_new_positions(Vector<Vector3> init_positions){
     return new_poses;
 }
 
+Vector3 PhysicsEnv::get_current_G(){
+    btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[1];
+    btRigidBody* body = btRigidBody::upcast(obj);
+    btVector3 btG = body->getCenterOfMassPosition();
+    Vector3 current_G({btG.getX(), btG.getY(), btG.getZ()});
+    return current_G;
+}
+
+Vector3 PhysicsEnv::get_current_orientation(){
+    geometrycentral::DenseMatrix<double> trans_mat = btTrans_to_GC_Mat(current_btTrans);
+    geometrycentral::DenseMatrix<double> init_trans_mat = btTrans_to_GC_Mat(init_btTransform);
+    geometrycentral::DenseMatrix<double> rot_mat = trans_mat.block<3,3>(0,0),
+                                         init_rot_mat = init_trans_mat.block<3,3>(0,0); 
+    Vector<double> tmp_vec(3);
+    tmp_vec[0] = initial_orientation.x; tmp_vec[1] = initial_orientation.y; tmp_vec[2] = initial_orientation.z;
+    tmp_vec = rot_mat.transpose()*init_rot_mat*tmp_vec;
+    return Vector3({tmp_vec[0], tmp_vec[1], tmp_vec[2]});
+}
+
 void PhysicsEnv::take_step(int step_count, double step_size){
     //print positions of all objects
     for (int i = 0; i < step_count; i++){
         dynamicsWorld->stepSimulation(step_size, 10);
     }
-    for (int j = dynamicsWorld->getNumCollisionObjects() - 1; j >= 0; j--) {
-        if (j == 1){ // object of interest; i.e. not ground
-            btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[j];
-            btRigidBody* body = btRigidBody::upcast(obj);
-            btTransform trans;
-            if (body && body->getMotionState()) {
-                body->getMotionState()->getWorldTransform(trans);
-            }
-            else {
-                trans = obj->getWorldTransform();
-            }
-            // btVector3 center_of_mass = body->getCenterOfMassPosition();
-            // std::cout<< "center of mass "<<center_of_mass.getX()<<","<< center_of_mass.getY()<< "," << center_of_mass.getZ() << "\n";
-            current_btTrans = trans;
-        }
+    btCollisionObject* obj = dynamicsWorld->getCollisionObjectArray()[1];
+    btRigidBody* body = btRigidBody::upcast(obj);
+    btTransform trans;
+    if (body && body->getMotionState()) {
+        body->getMotionState()->getWorldTransform(trans);
     }
+    else {
+        trans = obj->getWorldTransform();
+    }
+    // btVector3 center_of_mass = body->getCenterOfMassPosition();
+    // std::cout<< "center of mass "<<center_of_mass.getX()<<","<< center_of_mass.getY()<< "," << center_of_mass.getZ() << "\n";
+    current_btTrans = trans;
+
 }
 
 void PhysicsEnv::init_physics(){
@@ -130,13 +146,17 @@ void PhysicsEnv::add_ground(double ground_box_y, Vector3 ground_box_shape){
     btRigidBody* body = new btRigidBody(rbInfo);
 
     //add the body to the dynamics world
+    // body->setFriction(0.);
+    // body->setRollingFriction(0.);
+    // body->setSpinningFriction(0.);
     dynamicsWorld->addRigidBody(body);
 }
 
 
-void PhysicsEnv::add_object(Vector3 G, Vector3 g_vec){
+void PhysicsEnv::add_object(Vector3 G, Vector3 orientation){
     //create a dynamic rigidbody
     //btCollisionShape* colShape = new btBoxShape(btVector3(1,1,1));
+    initial_orientation = orientation;
     bt_my_polyhedra = new btConvexHullShape();
     for (Vertex v: mesh->vertices()) {
         Vector3 p = geometry->inputVertexPositions[v];
@@ -152,9 +172,9 @@ void PhysicsEnv::add_object(Vector3 G, Vector3 g_vec){
     /// Create Dynamic Objects
     btTransform startTransform;
     startTransform.setIdentity();
-    // rotate to face the g_vec down
-    assert(norm(g_vec) > 0);
-    startTransform.setRotation(quaternion_from_g_vec(Vector3({0., -1., 0.}), g_vec.normalize()));
+    // rotate to point the orientation down
+    assert(norm(orientation) > 0);
+    startTransform.setRotation(quaternion_from_g_vec(Vector3({0., -1., 0.}), orientation.normalize()));
     // any non-zero mass works
     btScalar mass(1.f);
 
@@ -164,12 +184,14 @@ void PhysicsEnv::add_object(Vector3 G, Vector3 g_vec){
     btVector3 localInertia(0, 0, 0);
     if (isDynamic)
         colShape->calculateLocalInertia(mass, localInertia);
-    startTransform.setOrigin(btVector3(G.x, G.y, G.z));
+    startTransform.setOrigin(btVector3(-G.x, -G.y, -G.z)); // TODO:::: G shift
 
+    init_btTransform = startTransform;
     //using motionstate is recommended, it provides interpolation capabilities, and only synchronizes 'active' objects
     btDefaultMotionState* myMotionState = new btDefaultMotionState(startTransform);
     btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, myMotionState, colShape, localInertia);
     btRigidBody* body = new btRigidBody(rbInfo);
+    body->setRestitution(0.9);
     dynamicsWorld->addRigidBody(body);
 }
 
@@ -210,118 +232,132 @@ Face PhysicsEnv::get_touching_face(VertexData<Vector3> positions){
     // printf("searching\n");
     double least_diff = 1000.;
     Face lowest_face;
+    Vector3 new_face_normal;
     for (Face adj_f: lowest_v.adjacentFaces()){
         Vertex v1 = adj_f.halfedge().vertex(),
             v2 = adj_f.halfedge().next().vertex(),
             v3 = adj_f.halfedge().next().next().vertex();
-        Vector3 new_face_normal = cross(positions[v2] - positions[v1], positions[v3] - positions[v1]).normalize();
+        new_face_normal = cross(positions[v2] - positions[v1], positions[v3] - positions[v1]).normalize();
         if ((new_face_normal - g_vec).norm() < least_diff){
             least_diff = (new_face_normal - g_vec).norm();
             lowest_face = adj_f;
         }
     }
-    // std::cout << "lowest face: "<< lowest_face.getIndex() << "\n";
-    // printf(" normal diff: %f\n", least_diff);
+    // std::cout << "lowest face normal: "<< new_face_normal << "\n";
+    if (least_diff > 0.1){
+        // printf(" normal diff: %f\n", least_diff);
+        return Face();
+    }
     return lowest_face;
-
-
-    return Face();
-
 
     // ================== old code ==================
     // printf(" \n--- the lowest vertex was: %d \n", lowest_v.getIndex());
-    bool found_first = false;
+    // bool found_first = false;
 
-    for (Vertex v: mesh->vertices()){
-        if (v != lowest_v){
-            Vector3 p = positions[v];
-            double curr_dot = dot(p - roof, g_vec);
-            // printf(" ### max dot: %f, curr dot: %f \n", max_dot, curr_dot);
-            if (abs(curr_dot - max_dot) <= 0.0001){
-                if (!found_first){
-                    v1 = v;
-                    found_first = true;
-                }
-                else {
-                    v2 = v;
-                    break;
-                }
-            }
-        }
-    }
-    // printf(" --- other low v's were: %d, %d \n", v1.getIndex(), v2.getIndex());
-    Face ans;
-    for (Face f: lowest_v.adjacentFaces()){
-        int inclusion_count = 0;
-        // printf("adj f: %d\n", f.getIndex());
-        for (Vertex v: f.adjacentVertices()){
-            // printf("adj f's adj v: %d\n", v.getIndex());
-            if (v == v1 || v == v2)
-                inclusion_count++;
-            if (inclusion_count == 2){
-                // printf(" *** touching face is %d\n", f.getIndex());
-                return f;
-            }
-        }
-    }
-    return ans;
+    // for (Vertex v: mesh->vertices()){
+    //     if (v != lowest_v){
+    //         Vector3 p = positions[v];
+    //         double curr_dot = dot(p - roof, g_vec);
+    //         // printf(" ### max dot: %f, curr dot: %f \n", max_dot, curr_dot);
+    //         if (abs(curr_dot - max_dot) <= 0.0001){
+    //             if (!found_first){
+    //                 v1 = v;
+    //                 found_first = true;
+    //             }
+    //             else {
+    //                 v2 = v;
+    //                 break;
+    //             }
+    //         }
+    //     }
+    // }
+    // // printf(" --- other low v's were: %d, %d \n", v1.getIndex(), v2.getIndex());
+    // Face ans;
+    // for (Face f: lowest_v.adjacentFaces()){
+    //     int inclusion_count = 0;
+    //     // printf("adj f: %d\n", f.getIndex());
+    //     for (Vertex v: f.adjacentVertices()){
+    //         // printf("adj f's adj v: %d\n", v.getIndex());
+    //         if (v == v1 || v == v2)
+    //             inclusion_count++;
+    //         if (inclusion_count == 2){
+    //             // printf(" *** touching face is %d\n", f.getIndex());
+    //             return f;
+    //         }
+    //     }
+    // }
+    // return ans;
 }
 
 
 // take many steps till stable
-Face PhysicsEnv::final_stable_face(){
+Face PhysicsEnv::final_stable_face(bool save_trail){
     Vector3 old_G, curr_G;
     btCollisionObject* obj;
     btRigidBody* body;
     btTransform trans;
     Face final_stable_face;
+    if (save_trail)
+        orientation_trail.clear();
     for (int i = 0; i < MAX_ITERS; i++){
         // take a step
         dynamicsWorld->stepSimulation(default_step_size, 10);
         // fetch data
         obj = dynamicsWorld->getCollisionObjectArray()[1]; // shape
         body = btRigidBody::upcast(obj);
+        
+        
+        if (body && body->getMotionState()) {
+            body->getMotionState()->getWorldTransform(trans);
+        }
+        else { // idk why this is needed?!
+            trans = obj->getWorldTransform();
+        }
+        current_btTrans = trans;
+        if (save_trail){
+            Vector3 current_ori  =get_current_orientation();
+            if (orientation_trail.size() > 0){
+                if ((current_ori - orientation_trail.back()).norm() != 0. )
+                    orientation_trail.push_back(get_current_orientation());
+            }
+            else 
+                orientation_trail.push_back(get_current_orientation());
+        }
+        
         // check center of mass motion
         btVector3 btG = body->getCenterOfMassPosition();
         curr_G = Vector3({btG.getX(), btG.getY(), btG.getZ()});
-        btVector3 btG_rel_velo = body->getVelocityInLocalPoint(btG);
-        Vector3 G_rel_velo = Vector3({btG_rel_velo.getX(), btG_rel_velo.getY(), btG_rel_velo.getZ()});
-
-        // std::cout << "g rel velo: "<< G_rel_velo << "   norm:" << G_rel_velo.norm()<< "\n";
-        // if (i == 0){
-        //     old_G = curr_G;
-        // }
-        // else {
-        //     if (norm(old_G - curr_G) < tol){
-        //         printf("---- at a stable state; step %d\n", i);
-        //         // if (body && body->getMotionState()) {
-        //         //     body->getMotionState()->getWorldTransform(trans);
-        //         // }
-        //         // else { // idk why this is needed?!
-        //         //     trans = obj->getWorldTransform();
-        //         // }
-        //         // current_btTrans = trans;
-        //         // Vector<Vector3> new_positions = get_new_positions(geometry->inputVertexPositions.toVector());
-        //         // VertexData<Vector3> new_positions_vd(*mesh);
-        //         // new_positions_vd.fromVector(new_positions);
-        //         // final_stable_face = get_touching_face(new_positions_vd);
-        //         // if (final_stable_face.getIndex() != INVALID_IND)
-        //             break;
-        //     }
-        //     old_G = curr_G;
-        // }
+        if (i == 0){
+            old_G = curr_G;
+        }
+        else {
+            if (norm(old_G - curr_G) < tol && i > MIN_ITERS){ // has stopped moving
+                // printf("---- at a stable state; step %d\n", i);
+                Vector<Vector3> new_positions = get_new_positions(geometry->inputVertexPositions.toVector());
+                VertexData<Vector3> new_positions_vd(*mesh);
+                new_positions_vd.fromVector(new_positions);
+                final_stable_face = get_touching_face(new_positions_vd);
+                if (final_stable_face.getIndex() != INVALID_IND){
+                    break; // break if valid face
+                    // printf(" --- stopped at face %d\n", final_stable_face.getIndex());
+                    // std::cout << " --- initial face normal: "<< geometry->faceNormal(final_stable_face) << "\n";
+                }
+                break; // TODOOO::: checking if running for too long is helpful
+            }
+            old_G = curr_G;
+        }
     }
-    if (body && body->getMotionState()) {
-        body->getMotionState()->getWorldTransform(trans);
-    }
-    else { // idk why this is needed?!
-        trans = obj->getWorldTransform();
-    }
-    current_btTrans = trans;
-    Vector<Vector3> new_positions = get_new_positions(geometry->inputVertexPositions.toVector());
-    VertexData<Vector3> new_positions_vd(*mesh);
-    new_positions_vd.fromVector(new_positions);
-    final_stable_face = get_touching_face(new_positions_vd);
+    // if (body && body->getMotionState()) {
+    //     body->getMotionState()->getWorldTransform(trans);
+    // }
+    // else { // idk why this is needed?!
+    //     trans = obj->getWorldTransform();
+    // }
+    // current_btTrans = trans;
+    // Vector<Vector3> new_positions = get_new_positions(geometry->inputVertexPositions.toVector());
+    // VertexData<Vector3> new_positions_vd(*mesh);
+    // new_positions_vd.fromVector(new_positions);
+    // final_stable_face = get_touching_face(new_positions_vd);
     return final_stable_face;
 }
 

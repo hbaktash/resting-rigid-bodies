@@ -20,6 +20,45 @@
 #include "boundary_tools.h"
 
 
+void draw_arc_on_sphere_static(Vector3 p1, Vector3 p2, Vector3 center, double radius, 
+                        size_t seg_count, size_t edge_ind, 
+                        double radi_scale, glm::vec3 color, 
+                        float arc_curve_radi){
+// p1, p2 just represent normal vectors
+  if (norm(p1) > 1.01)
+    polyscope::warning("wtf? p1 norm larger than 1");
+  if (norm(p2) > 1.01)
+    polyscope::warning("wtf? p2 norm larger than 1");
+
+  std::vector<std::array<size_t, 2>> edgeInds;
+  std::vector<Vector3> positions;
+  double sqrt_radi = sqrt(radius);
+  // walk on p1-p2 segment
+  Vector3 curr_point = p1,
+          forward_vec = (p2-p1)/(double)seg_count;
+  Vector3 next_point = curr_point + forward_vec;
+  Vector3 curr_point_on_sphere = normalize(curr_point) * sqrt_radi + center ,
+          next_point_on_sphere = normalize(next_point) * sqrt_radi + center;
+  positions.push_back(curr_point_on_sphere);
+  for (size_t i = 0; i < seg_count; i++){
+    // add to positions list
+    curr_point_on_sphere = normalize(curr_point) * sqrt_radi + center ,
+    next_point_on_sphere = normalize(next_point) * sqrt_radi + center;
+    positions.push_back(next_point_on_sphere);
+    // add segment indices
+    edgeInds.push_back({i, i+1});
+
+    // update points
+    curr_point = next_point;
+    next_point += forward_vec;
+  }
+  auto psArcCurveNet = polyscope::registerCurveNetwork("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
+  psArcCurveNet->setRadius(arc_curve_radi * radi_scale, false);
+  psArcCurveNet->setColor(color);
+  psArcCurveNet->setEnabled(true);
+}
+
+
 size_t BoundaryNormal::counter = 0;
 
 // constructor
@@ -681,94 +720,117 @@ autodiff::Vector2var BoundaryBuilder::complex_mult(autodiff::Vector2var &A, auto
 
 
 
-// double BoundaryBuilder::dice_energy(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G,  // TODO: template
-//                                     ManifoldSurfaceMesh hull_mesh, 
-//                                     std::vector<Edge> terminal_edges, // one-time computes to avoid templating everything
-//                                     size_t side_count){
-//     // pre compute face nomrals; GC normals not templated
-//     FaceData<Eigen::Vector3d> face_normals(hull_mesh); // TODO: template
-//     for (Face f: hull_mesh.faces()){
-//         Halfedge he = f.halfedge();
-//         Vertex v1 = he.vertex(),
-//                v2 = he.next().vertex(),
-//                v3 = he.next().next().vertex();
-//         face_normals[f] = (hull_positions.row(v2.getIndex()) - hull_positions.row(v1.getIndex())).cross(hull_positions.row(v3.getIndex()) - hull_positions.row(v1.getIndex()));//.normalized();
-//     }
+double BoundaryBuilder::dice_energy(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G,  // TODO: template
+                                    ManifoldSurfaceMesh &hull_mesh, 
+                                    std::vector<Edge> terminal_edges, // one-time computes to avoid templating everything
+                                    FaceData<Face> face_last_face,
+                                    VertexData<bool> vertex_is_stabilizable, // maximum vertex
+                                    EdgeData<Vertex> edge_next_vertex,
+                                    size_t side_count){
+    // pre compute face nomrals; GC normals not templated
+    FaceData<Eigen::Vector3d> face_normals(hull_mesh); // TODO: template
+    for (Face f: hull_mesh.faces()){
+        Halfedge he = f.halfedge();
+        Vertex v1 = he.vertex(),
+               v2 = he.next().vertex(),
+               v3 = he.next().next().vertex();
+        face_normals[f] = (hull_positions.row(v2.getIndex()) - hull_positions.row(v1.getIndex()))
+                         .cross(hull_positions.row(v3.getIndex()) - hull_positions.row(v1.getIndex())).normalized();//.normalized();
+    }
 
-//     // morse complex areas; only non-zero for stable faces
-//     FaceData<double> face_region_area(hull_mesh, 0.); // TODO: template
-//     printf("  back-flowing terminal edges %d \n", terminal_edges.size());
-//     int i = 1;
-//     for (Edge e: terminal_edges){
-//         printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
-//         // bnd_normal->normal_ad = point_to_segment_normal_ad(e);
-//         autodiff::Vector3var bnd_normal_ad = point_to_segment_normal(G, hull_positions.row(e.firstVertex().getIndex()), hull_positions.row(e.secondVertex().getIndex()));
-       
-//         Face f1 = e.halfedge().face(),
-//              f2 = e.halfedge().twin().face();
-//         bnd_normal->f1 = forward_solver->face_last_face[f1];
-//         bnd_normal->f2 = forward_solver->face_last_face[f2];
-//         bnd_normal->host_e = e;
-//         // for visuals
-//         edge_boundary_normals[e].push_back(bnd_normal);
-//         for (Vertex v: {e.firstVertex(), e.secondVertex()}){
+    // morse complex areas; only non-zero for stable faces
+    FaceData<double> face_region_area(hull_mesh, 0.); // TODO: template
+    printf("  back-flowing terminal edges %d \n", terminal_edges.size());
+    int i = 1;
+    for (Edge e: terminal_edges){
+        printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
+        // bnd_normal->normal_ad = point_to_segment_normal_ad(e);
+        Eigen::Vector3d edge_bnd_normal = point_to_segment_normal(G, hull_positions.row(e.firstVertex().getIndex()), hull_positions.row(e.secondVertex().getIndex()));
+        Edge current_e = e;
+        Face f1 = current_e.halfedge().face(),
+             f2 = current_e.halfedge().twin().face();
+        Face ff1 = face_last_face[f1];
+        Face ff2 = face_last_face[f2];
+        // for visuals
+        Eigen::Vector3d ff1_normal  = face_normals[ff1], // static
+                        ff2_normal  = face_normals[ff2]; // static
+        for (Vertex v: {e.firstVertex(), e.secondVertex()}){ // two ways to go from a saddle edge
             
-//             // // TESTING dependency speed-ups
-//             // std::set<Vertex> effective_vertices;
-//             // effective_vertices.insert(e.firstVertex());
-//             // effective_vertices.insert(e.secondVertex());
-//             // for (Vertex tmp_v: bnd_normal->f1.adjacentVertices())
-//             //     effective_vertices.insert(tmp_v);
-//             // for (Vertex tmp_v: bnd_normal->f2.adjacentVertices())
-//             //     effective_vertices.insert(tmp_v);
-            
-//             Vector3 tmp_normal = bnd_normal->normal,
-//                     f1_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f1),
-//                     f2_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f2),
-//                     v_normal   = forward_solver->vertex_stable_normal[v];
-//             // Vector3 imm_f1_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().face()), // immediate face neighbors
-//             //         imm_f2_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().twin().face());
-//             double f1_area_sign = dot(f1_normal, cross(v_normal, tmp_normal)) >= 0 ? 1. : -1.; // f1 on rhs of bndN->vN
-    
-//             if (forward_solver->vertex_is_stabilizable[v]){
-//                 // printf("-SV-\n");
-//                 flow_back_boundary_on_edge_for_autodiff(bnd_normal, bnd_normal_ad, Edge(), v, f1_area_sign //, var_positions, var_G
-//                                                         // ,effective_vertices
-//                                                         );
-//             }
-//             else {
-//                 for (Edge neigh_e: v.adjacentEdges()){
-//                     if (neigh_e != e &&
-//                         forward_solver->edge_next_vertex[neigh_e] == v){ // neigh_e is a source for this vertex
-//                         // face_attraction_boundary[bnd_normal->f1].push_back(bnd_normal);
-//                         // face_attraction_boundary[bnd_normal->f2].push_back(bnd_normal);
-//                         // printf(" -Se %d-", neigh_e.getIndex());
-//                         bool res = flow_back_boundary_on_edge_for_autodiff(bnd_normal, bnd_normal_ad, neigh_e, v, f1_area_sign //, effective_vertices //, var_positions, var_G
-//                         );
-//                         if (res) break; // kinda redundant; since source-ness is checked before going in
-//                     }
-//                 }
-//             }
-//             printf(" \n One side done! \n");
-//         }
-//     }
-//     double total_area = 0.;
-//     autodiff::var total_area_ad = 0.;
-//     for (Face f: forward_solver->hullMesh->faces()){
-//         if (forward_solver->face_last_face[f] == f){
-//             total_area += face_region_area[f];
-//             total_area_ad += 2 * atan2(face_region_area_complex_value_ad[f][1], face_region_area_complex_value_ad[f][0]);
-//             // std::cout << "face " << f.getIndex() << " area: " << face_region_area[f] << ",  " << face_region_area_ad[f] << std::endl;
-//         }
-//     }
-//     std::cout << "total face areas: " << total_area << "--- from complex stuff: " << total_area_ad << std::endl;
-    
-//     return 0.;
-// }
+            Eigen::Vector3d tmp_normal  = edge_bnd_normal;   // changes in the while loop
+            Vertex current_v = v;                            // changes in the while loop
+            Eigen::Vector3d v_normal    = (hull_positions.row(current_v.getIndex()) - G.transpose()).normalized(); // changes in the while loop
+            // DONT COVERT these to template
+            double ff1_area_sign = ff1_normal.dot(tmp_normal.cross(v_normal)) >= 0 ? 1. : -1.; // ff1 on rhs of bndN->vN; static
+            double ff2_area_sign = ff2_normal.dot(tmp_normal.cross(v_normal)) >= 0 ? 1. : -1.; // ff2 on rhs of bndN->vN; static
+            Eigen::Vector3d next_normal;                     // changes in the while loop
+            while (true) {
+                if (vertex_is_stabilizable[current_v]){
+                    next_normal = v_normal;
+                    double patch_area_ff1 = triangle_patch_signed_area_on_sphere(ff1_normal, tmp_normal, next_normal);
+                    face_region_area[ff1] += ff1_area_sign * patch_area_ff1;
+                    double patch_area_ff2 = triangle_patch_signed_area_on_sphere(ff2_normal, tmp_normal, next_normal);
+                    face_region_area[ff2] += ff2_area_sign * patch_area_ff2;
+                    break; // Exit while; got to a maximum
+                }
+                else{
+                    for (Edge neigh_e: current_v.adjacentEdges()){
+                        if (neigh_e != current_e && edge_next_vertex[neigh_e] == current_v){ // neigh_e is a source for this vertex
+                            Face f1 = neigh_e.halfedge().face(),
+                                 f2 = neigh_e.halfedge().twin().face();
+                            bool sign_change = false;
+                            next_normal = intersect_arcs(v_normal, tmp_normal, 
+                                                         face_normals[f1], 
+                                                         face_normals[f2]);
+                            if(next_normal.norm() != 0.){ // found the next source normal
+                                double patch_area_ff1 = triangle_patch_signed_area_on_sphere(ff1_normal, tmp_normal, next_normal);
+                                face_region_area[ff1] += ff1_area_sign * patch_area_ff1;
+                                double patch_area_ff2 = triangle_patch_signed_area_on_sphere(ff2_normal, tmp_normal, next_normal);
+                                face_region_area[ff2] += ff2_area_sign * patch_area_ff2;
+                    
+                                // updates
+                                tmp_normal = next_normal;
+                                current_v = neigh_e.otherVertex(current_v);
+                                current_e = neigh_e;
+                                v_normal  = (hull_positions.row(current_v.getIndex()) - G.transpose()).normalized();
+                                break; // don't check other edges; go for next cell
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    printf(" static func face areas:\n");
+    double total_area = 0.;
+    for (Face f: hull_mesh.faces()){
+        if (face_last_face[f] == f){
+            total_area += face_region_area[f];
+            printf("  -- face %d: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
+        }
+    }
+    printf("total face areas: %f\n", total_area);
+    return 0.;
+}
 
 
-// Eigen::Vector3d BoundaryBuilder::point_to_segment_normal(Eigen::Vector3d P, Eigen::Vector3d A, Eigen::Vector3d B){
-//     Eigen::Vector3d PB = P - B,
-//                     AB = A - B;
-//     return (PB * AB.dot(AB) - AB * AB.dot(PB)).normalized();
-// }
+Eigen::Vector3d BoundaryBuilder::point_to_segment_normal(Eigen::Vector3d P, Eigen::Vector3d A, Eigen::Vector3d B){
+    Eigen::Vector3d PB = B - P,
+                    AB = B - A;
+    return (PB * AB.dot(AB) - AB * AB.dot(PB)).normalized();
+}
+
+Eigen::Vector3d BoundaryBuilder::intersect_arcs(Eigen::Vector3d v_normal, Eigen::Vector3d R2, Eigen::Vector3d A, Eigen::Vector3d B){
+    Eigen::Vector3d p = (((v_normal.cross(R2)).cross(A.cross(B)))).normalized(); // var_G.transpose()
+    if (p.dot(A) >= A.dot(B) && p.dot(B) >= A.dot(B))
+        return p;
+    else if (-p.dot(A) >= A.dot(B) && -p.dot(B) >= A.dot(B))
+        return -p;
+    else 
+        return Eigen::Vector3d::Zero();
+}
+
+double BoundaryBuilder::triangle_patch_signed_area_on_sphere(Eigen::Vector3d A, Eigen::Vector3d B, Eigen::Vector3d C){
+    double Adotbc = A.dot(B.cross(C));
+    double denom = A.norm()*B.norm()*C.norm() + A.dot(B)*C.norm() + B.dot(C)*A.norm() + C.dot(A)*B.norm();
+    return 2. * atan2(Adotbc, denom);
+}

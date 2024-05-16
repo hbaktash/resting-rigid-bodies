@@ -167,7 +167,6 @@ void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> ed
 
 std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
 build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
-                                          polyscope::SurfaceMesh* hosting_psMesh,
                                           Vector3 center, double radius, size_t seg_count,
                                           bool on_height_surface){
   std::vector<Vector3> boundary_normals(BoundaryNormal::counter);
@@ -293,7 +292,6 @@ void VisualUtils::draw_stable_vertices_on_gauss_map(){
 
 
 void VisualUtils::draw_stable_face_normals_on_gauss_map(){
-  
   std::vector<Vector3> stable_face_normals, face_normal_points;
   for (Face f: forwardSolver->hullMesh->faces()){
     Vector3 normal_pos_on_gm = forwardSolver->hullGeometry->faceNormal(f) + center;
@@ -367,6 +365,9 @@ void VisualUtils::draw_gauss_map(){
 
   // arcs for edge-normals set
   draw_edge_arcs_on_gauss_map();
+
+  // edge equilibria
+  show_edge_equilibria_on_gauss_map();
 }
 
 

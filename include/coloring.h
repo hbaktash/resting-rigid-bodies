@@ -25,4 +25,4 @@
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
-FaceData<Vector3> generate_random_colors(ManifoldSurfaceMesh *mesh);
+FaceData<Vector3> generate_random_colors(ManifoldSurfaceMesh *mesh, std::vector<Face> stable_faces);

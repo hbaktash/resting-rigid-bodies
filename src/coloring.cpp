@@ -19,15 +19,15 @@
 #include "coloring.h"
 
 
-FaceData<Vector3> generate_random_colors(ManifoldSurfaceMesh *mesh){
+FaceData<Vector3> generate_random_colors(ManifoldSurfaceMesh *mesh, std::vector<Face> stable_faces){
   FaceData<Vector3> face_colors(*mesh, Vector3({0.,0.,0.}));
   // printf("mesh size %d, fcolor size: %d\n",mesh->nFaces(), face_colors.size());
   // fingers crossed for a prime enough vector
-  Vector3 holy_vec({exp(1.), PI, 1});
+  Vector3 holy_vec({exp(1.), PI/2., 1});
   holy_vec = holy_vec.normalize();
   // init point
   Vector3 curr_color = {0.8, 0.6, 0.2}; //{randomReal(0,1), randomReal(0,1), randomReal(0,1)};
-  for (Face f: mesh->faces()){
+  for (Face f: stable_faces){
     curr_color += holy_vec;
     if ((curr_color - Vector3::constant(1.)).norm() < 0.1) // too white
       continue;

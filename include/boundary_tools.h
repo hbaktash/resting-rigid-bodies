@@ -24,6 +24,10 @@
 // #include "geometrycentral/surface/surface_point.h"
 #include "forward3D.h"
 #include "utils.h"
+#include "polyscope/polyscope.h"
+#include "polyscope/surface_mesh.h"
+#include "polyscope/point_cloud.h"
+#include "polyscope/curve_network.h"
 
 // Add missing include path for autodiff library
 #include <autodiff/reverse/var/eigen.hpp>
@@ -129,8 +133,13 @@ class BoundaryBuilder {
 
 
         // TODO template
-        // static double dice_energy(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G, ManifoldSurfaceMesh hull_mesh,  
-        //                           std::vector<Edge> terminal_edges, // one-time computes to avoid templating everything 
-        //                           size_t side_count);
-        // static Eigen::Vector3d BoundaryBuilder::point_to_segment_normal(Eigen::Vector3d P, Eigen::Vector3d A, Eigen::Vector3d B);
+        static double dice_energy(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G, ManifoldSurfaceMesh &hull_mesh,  
+                                  std::vector<Edge> terminal_edges, // one-time computes to avoid templating everything 
+                                  FaceData<Face> face_last_face, 
+                                  VertexData<bool> vertex_is_stabilizable, // maximum vertex
+                                  EdgeData<Vertex> edge_next_vertex, // wheel edge; INVALID if singular
+                                  size_t side_count);
+        static Eigen::Vector3d point_to_segment_normal(Eigen::Vector3d P, Eigen::Vector3d A, Eigen::Vector3d B);
+        static Eigen::Vector3d intersect_arcs(Eigen::Vector3d v_normal, Eigen::Vector3d R2, Eigen::Vector3d A, Eigen::Vector3d B);
+        static double triangle_patch_signed_area_on_sphere(Eigen::Vector3d A, Eigen::Vector3d B, Eigen::Vector3d C);
 };
