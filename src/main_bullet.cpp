@@ -43,7 +43,7 @@ using namespace geometrycentral::surface;
 
 // simulation stuff
 PhysicsEnv* my_env;
-float step_size = 0.0001, // 0.016
+float step_size = 0.001, // 0.016
       refresh_x, refresh_y, refresh_z;
 int step_count = 1;
 Vector3 G;
@@ -65,7 +65,7 @@ Vector3 ground_box_shape({10,1,10});
 Vector3 default_face_color({0.99,0.99,0.99});
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno")};
 std::string all_polygons_current_item = "tet";
 static const char* all_polygons_current_item_c_str = "tet";
 
@@ -180,13 +180,16 @@ void initalize_env(std::string poly_str){
 void initialize_boundary_builder(){
   boundary_builder = new BoundaryBuilder(forwardSolver);
   boundary_builder->build_boundary_normals();
+  boundary_builder->print_area_of_boundary_loops();
 }
 
 
 void update_solver(){
   //assuming convex input here
+  auto t1 = clock();
   forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
   forwardSolver->initialize_pre_computes();
+  printf("solver precompute time: %f\n", (clock() - t1)/(double)CLOCKS_PER_SEC);
   initialize_boundary_builder();
   vis_utils.forwardSolver = forwardSolver;
 }
@@ -452,7 +455,9 @@ void myCallback() {
               polyscope::removeAllStructures();
               all_polygons_current_item = tmp_str;
               generate_polyhedron_example(all_polygons_current_item);
+              auto t1 = clock();
               update_solver();
+              printf("solver update time: %f\n", (clock() - t1)/(double)CLOCKS_PER_SEC);
               initalize_env(all_polygons_current_item);
               init_visuals();
 
@@ -486,7 +491,9 @@ void myCallback() {
     if(ImGui::SliderInt("sim step count", &step_count, 1, 20));
     
     if (ImGui::Button("fast forward to stable state")){
+      auto t1 = clock();
       Face touching_face = my_env->final_stable_face(draw_snail_trail);
+      printf("time to stable state: %f\n", (clock() - t1)/(double)CLOCKS_PER_SEC);
       if (draw_snail_trail){
         std::vector<Vector3> snail_trail = my_env->orientation_trail;
         // std::vector<Vector3> snail_trail;
@@ -516,7 +523,9 @@ void myCallback() {
     }
     if (ImGui::Checkbox("snail trail", &draw_snail_trail));
     if (ImGui::Button("Build quasistatic snail trail")){
+      auto t1 = clock();
       std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(refresh_orientation);
+      printf(" Quasistatic trail time: %f\n", (clock() - t1)/(double)CLOCKS_PER_SEC);
       draw_trail_on_gm(snail_trail, {0.7,0.1,0.8}, "quasi-static trail",1.);
     }
     if (ImGui::InputFloat("orientation_vec X", &refresh_x) ||

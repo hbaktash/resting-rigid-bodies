@@ -43,8 +43,15 @@ using namespace geometrycentral::surface;
 // == Geometry-central data
 std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr, cv_mesh_ptr;
 std::unique_ptr<VertexPositionGeometry> geometry_ptr, cv_geometry_ptr;
+std::unique_ptr<SurfaceMesh> general_mesh_ptr; // non manifold input
+std::unique_ptr<VertexPositionGeometry> genral_geometry_ptr;
+
 ManifoldSurfaceMesh* mesh, *convex_to_fill_mesh;
+SurfaceMesh* general_mesh;
+
 VertexPositionGeometry* geometry, *convex_to_fill_geometry;
+VertexPositionGeometry* general_geometry;
+
 Vector3 G, // center of Mass
         initial_g_vec({0,-1,0}),
         default_face_color({0.99,0.99,0.99}),
@@ -123,7 +130,10 @@ float membrane_lambda = 0.2,
 int filling_max_iter = 200;
 int hull_opt_steps = 50;
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno")};
+std::vector<std::string> toy_names = {std::string("fox"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("knuckle_bone_real"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("D100"), std::string("D120"), std::string("Diplodocus"), std::string("Stegosaurus"), std::string("T-Rex"), std::string("mouse"),std::string("squirrel"), std::string("treefrog"), std::string("Cinderella"), std::string("barbie")};
+std::vector<std::string> stock_toys = {std::string("Metal_Kangaroo"), std::string("giraffe_plushie_doll"),std::string("Metal_Slime")				                ,std::string("longtrain_wood"),std::string("Miniature_Mimic_Pillow")            ,std::string("ornament06"),std::string("Octopus")				                    ,std::string("owlToy"),std::string("Piggy_Bank")		      	            ,std::string("Plastic_Dog")		      	            ,std::string("rubberDuckie"),std::string("Roller_Dog_Chew_Toy")		            ,std::string("toy_bear"),std::string("Wood_Penguin")				              ,std::string("toy_bear_with_gift"),std::string("Wood_Snowman")				              ,std::string("toy_train_STJ4KQ4"),std::string("antique_wooden_rocking_horse_1285")	,std::string("trainToy"),std::string("baby_car")				                  ,std::string("turtle_toy"),std::string("dinosaur_plush_toy")};         
+
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("D100"), std::string("D120")};
 std::string all_polygons_current_item = "sliced tet",
             all_polygons_current_item2 = "tet";
 static const char* all_polygons_current_item_c_str = "bunnylp";
@@ -213,6 +223,62 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
   geometry = geometry_ptr.release();
   preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0);
   first_time = true;
+}
+
+
+void save_highest_prob_rest_pose(std::string poly_str){
+  // readManifoldSurfaceMesh()
+  std::unique_ptr<CornerData<Vector2>> texture_ptr;
+  // try {
+  std::string filename = "../meshes/downloads/stock/" + poly_str + "/" + poly_str + ".obj";
+  std::tie(general_mesh_ptr, genral_geometry_ptr, texture_ptr) = readParameterizedSurfaceMesh(filename);
+  // }
+  // catch(const std::exception& e) {
+  //   std::string filename = "../meshes/downloads/stock/" + poly_str + "/" + poly_str + ".stl";
+  //   std::tie(general_mesh_ptr, genral_geometry_ptr, texture_ptr) = readParameterizedSurfaceMesh(filename);
+  // }
+  general_mesh = general_mesh_ptr.release();
+  general_geometry = genral_geometry_ptr.release();
+  CornerData<Vector2>* texture = texture_ptr.release();
+  center_and_normalize(general_mesh, general_geometry);
+  
+  Vector3 tmp_G = Vector3::zero();
+  std::vector<Vector3> point_cloud;
+  for (Vertex v: general_mesh->vertices()){
+    point_cloud.push_back(general_geometry->inputVertexPositions[v]);
+    tmp_G += general_geometry->inputVertexPositions[v];
+  }
+  tmp_G = tmp_G / (double)general_mesh->nVertices();
+  auto [hull_mesh, hull_geo] = get_convex_hull_mesh(point_cloud);
+
+  Forward3DSolver* tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, tmp_G, false);
+  tmp_solver->initialize_pre_computes();
+  BoundaryBuilder* tmp_builder = new BoundaryBuilder(tmp_solver);
+  tmp_builder->build_boundary_normals();
+  std::vector<std::pair<Face, double>> probs;
+  for (Face f: tmp_solver->hullMesh->faces())
+      if (tmp_builder->face_region_area[f] > 0)
+          probs.push_back({f, tmp_builder->face_region_area[f]/(4.*PI)});
+  std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
+  Face highest_prob_face = probs[0].first;
+  
+  
+  double floor_z = -1.;
+  Vector3 floor_vec = Vector3({0,0,floor_z});
+  size_t i = 0;
+  Face f = highest_prob_face;
+  //   double prob = p.second;
+  Vector3 f_normal = hull_geo->faceNormal(f);
+  Vector3 rot_axis = cross(f_normal, floor_vec);
+  double rot_angle = angle(f_normal, floor_vec);
+  Vector3 offset = - hull_geo->inputVertexPositions[f.halfedge().vertex()].rotateAround(rot_axis, rot_angle);
+  for (Vertex v: general_mesh->vertices()){
+    general_geometry->inputVertexPositions[v] = general_geometry->inputVertexPositions[v].rotateAround(rot_axis, rot_angle) + offset;
+  }
+
+  // saving to file    std::string filename = "../meshes/downloads/stock/" + poly_str + "/" + poly_str + ".obj";
+
+  writeSurfaceMesh(*general_mesh, *general_geometry, *texture,  "../meshes/downloads/stock/" + poly_str + "/" + poly_str + "_p_" + std::to_string(probs[0].second) +".obj");
 }
 
 
@@ -342,7 +408,6 @@ void build_raster_image(){
 void myCallback() {
   if (ImGui::BeginCombo("##combo1", all_polygons_current_item.c_str())){ // The second parameter is the label previewed before opening the combo.
       for (std::string tmp_str: all_polyhedra_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
-          
           bool is_selected = (all_polygons_current_item == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
           if (ImGui::Selectable(tmp_str.c_str(), is_selected)){ // selected smth
               polyscope::removeAllStructures();
@@ -352,15 +417,12 @@ void myCallback() {
               init_visuals();
               recolor_faces = true;
               color_faces(forwardSolver);
-
               // //
               visualize_gauss_map();//
               G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
               update_solver_and_boundaries();
               boundary_builder->print_area_of_boundary_loops();
-              printf("here1\n");
               update_visuals_with_G(forwardSolver, boundary_builder);
-              printf("here2\n");
               if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(false);
               if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);
           }
@@ -432,7 +494,7 @@ void myCallback() {
               Vector3 f_normal = forwardSolver->hullGeometry->faceNormal(f);
               Vector3 rot_axis = cross(f_normal, floor_vec);
               double rot_angle = angle(f_normal, floor_vec);
-              Vector3 offset = floor_vec - forwardSolver->hullGeometry->inputVertexPositions[f.halfedge().vertex()].rotateAround(rot_axis, rot_angle);
+              Vector3 offset = - forwardSolver->hullGeometry->inputVertexPositions[f.halfedge().vertex()].rotateAround(rot_axis, rot_angle);
               for (Vertex v: forwardSolver->inputMesh->vertices()){
                 rotated_poses[v] = forwardSolver->inputGeometry->inputVertexPositions[v].rotateAround(rot_axis, rot_angle) + offset;
               }
@@ -470,6 +532,9 @@ int main(int argc, char **argv) {
   update_solver();
   init_visuals();
 
+  // for (std::string poly_str: stock_toys){
+  //   save_highest_prob_rest_pose(poly_str);
+  // }
   // Initialize polyscope
   // Set the callback function
   polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;

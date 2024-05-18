@@ -21,7 +21,7 @@
 
 // std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
 std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>, std::vector<Vector3>>
-get_convex_hull(VertexData<Vector3> point_set){
+get_convex_hull(std::vector<Vector3> point_set){
     const size_t num_points = point_set.size();
     const size_t dim = 3;
     char flags[64];
@@ -110,9 +110,33 @@ get_convex_hull(VertexData<Vector3> point_set){
 }
 
 
+std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>, std::vector<Vector3>>
+get_convex_hull(VertexData<Vector3> point_set){
+    const size_t num_points = point_set.size();
+    std::vector<Vector3> point_set_vec;
+    for (size_t i = 0; i < num_points ; i++){
+        Vector3 p = point_set[i];
+        point_set_vec.push_back(p);
+    }
+    return get_convex_hull(point_set_vec);
+}
+
+
 
 std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>
 get_convex_hull_mesh(VertexData<Vector3> point_set) {
+    const size_t num_points = point_set.size();
+    std::vector<Vector3> point_set_vec;
+    for (size_t i = 0; i < num_points ; i++){
+        Vector3 p = point_set[i];
+        point_set_vec.push_back(p);
+    }
+    return get_convex_hull_mesh(point_set_vec);
+}
+
+
+std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>
+get_convex_hull_mesh(std::vector<Vector3> point_set) {
     std::vector<std::vector<size_t>> hull_faces; 
     std::vector<size_t> hull_vertex_mapping;
     std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean

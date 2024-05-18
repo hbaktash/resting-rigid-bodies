@@ -54,7 +54,7 @@ bool G_is_inside(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry, Ve
 // assumes uniform mass density
 std::pair<Vector3, double> find_center_of_mass(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geometry);
 
-void center_and_normalize(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);
+void center_and_normalize(SurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);
 
 bool check_hollow_tet_vertex(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, Vertex v);
 bool check_convexity_and_repair(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);

@@ -37,7 +37,14 @@ using namespace geometrycentral::surface;
 
 // std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
 std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>, std::vector<Vector3>>
+get_convex_hull(std::vector<Vector3> point_set);
+
+std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>, std::vector<Vector3>>
 get_convex_hull(VertexData<Vector3> point_set);
+
+
+std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>
+get_convex_hull_mesh(std::vector<Vector3> point_set);
 
 std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>
 get_convex_hull_mesh(VertexData<Vector3> point_set);

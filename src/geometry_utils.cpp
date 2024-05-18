@@ -155,7 +155,7 @@ std::pair<Vector3, double> find_center_of_mass(ManifoldSurfaceMesh &mesh, Vertex
 }
 
 
-void center_and_normalize(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry){
+void center_and_normalize(SurfaceMesh* mesh, VertexPositionGeometry* geometry){
     Vector3 G({0.,0.,0.});
     for (Vertex v: mesh->vertices()){
         G += geometry->inputVertexPositions[v];
