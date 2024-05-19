@@ -221,7 +221,6 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
   mesh = mesh_ptr.release();
   geometry = geometry_ptr.release();
   preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0, do_remesh, scale_for_remesh);
-
   first_time = true;
 }
 
@@ -418,30 +417,41 @@ void test_approx_vs_ad_grads(){
 }
 
 void test_static_dice_pipeline(){
-  // forwardSolver->set_uniform_G();
-  ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
-  VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
-  Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G, false);
-  if (frozen_G){
-    auto GV_pair = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry);
-    tmp_solver->set_G(GV_pair.first);
-    tmp_solver->volume = GV_pair.second;
-  }
-  else {
-    tmp_solver->set_uniform_G(); // frozen G matters here or not ???
-  }
-  printf("initalize precomputes\n");
+  Forward3DSolver *tmp_solver = new Forward3DSolver(mesh, geometry, G, true);
+  tmp_solver->set_uniform_G();
+  tmp_solver->updated = false;
+  // printf("initalize precomputes\n");
   tmp_solver->initialize_pre_computes();
+  tmp_solver->build_face_last_faces();
 
-  BoundaryBuilder *tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
-  tmp_bnd_builder->build_boundary_normals(); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true
-  
+  std::vector<Edge> terminal_edges;
+  for (Edge e: tmp_solver->hullMesh->edges())
+    if (tmp_solver->edge_next_vertex[e].getIndex() == INVALID_IND){ // singular edge
+      Face f1 = e.halfedge().face(),
+           f2 = e.halfedge().twin().face();
+      if (tmp_solver->face_last_face[f1] != tmp_solver->face_last_face[f2]){ // saddle edge
+          terminal_edges.push_back(e);
+      }
+  }
   Vector3 GG = tmp_solver->get_G();
   tmp_solver->build_face_last_faces();
   printf("testing static dice E\n");
-  tmp_bnd_builder->dice_energy(vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions),
-                               Eigen::Vector3d({GG.x, GG.y, GG.z}), *hull_mesh,
-                               tmp_bnd_builder->find_terminal_edges(), tmp_solver->face_last_face, tmp_solver->vertex_is_stabilizable, tmp_solver->edge_next_vertex,
+  // // Boundar
+  // Eigen::Vector3<double> GG_eigen({GG.x, GG.y, GG.z});
+  // BoundaryBuilder::intersect_arcs(GG_eigen, GG_eigen,GG_eigen,GG_eigen);
+  VertexData<Vector3> positions = tmp_solver->hullGeometry->inputVertexPositions;
+  size_t n = positions.getMesh()->nVertices();
+  Eigen::MatrixX3<double> mat(n, 3);
+  for (geometrycentral::surface::Vertex v: positions.getMesh()->vertices()){
+      geometrycentral::Vector3 p = positions[v];
+      mat(v.getIndex(),0) = p.x;
+      mat(v.getIndex(),1) = p.y;
+      mat(v.getIndex(),2) = p.z;
+  }
+  // Eigen::MatrixX3<double> tmp_positions = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
+  BoundaryBuilder::dice_energy(mat,
+                               Eigen::Vector3<double>({GG.x, GG.y, GG.z}), *tmp_solver->hullMesh,
+                               terminal_edges, tmp_solver->face_last_face, tmp_solver->vertex_is_stabilizable, tmp_solver->edge_next_vertex,
                                fair_sides_count);
   
   // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
@@ -464,10 +474,11 @@ void myCallback() {
               init_visuals();
 
               // //
-              // visualize_gauss_map();//
+              visualize_gauss_map();//
               G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
               update_solver_and_boundaries();
               boundary_builder->print_area_of_boundary_loops();
+              draw_stable_patches_on_gauss_map();
               // update_visuals_with_G(forwardSolver, boundary_builder);
               // if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(false);
               // if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);

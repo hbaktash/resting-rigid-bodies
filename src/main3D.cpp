@@ -34,7 +34,7 @@
 #include "mesh_factory.h"
 // #include "visual_utils.h"
 // #include "markov_model.h"
-#include "boundary_tools.h"
+// #include "boundary_tools.h"
 
 // #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 // #include <CGAL/Polyhedron_3.h>
@@ -112,7 +112,7 @@ int snail_trail_dummy_counter = 0;
 BoundaryBuilder *boundary_builder;
 polyscope::PointCloud *boundary_normals_pc;
 polyscope::SurfaceMesh *dummy_psMesh_for_regions, *dummy_psMesh_for_height_surface;
-bool draw_boundary_patches = false;
+bool draw_boundary_patches = true;
 bool test_guess = true;
 polyscope::PointCloud *test_pc;
 

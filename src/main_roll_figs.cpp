@@ -131,12 +131,11 @@ int filling_max_iter = 200;
 int hull_opt_steps = 50;
 // example choice
 std::vector<std::string> toy_names = {std::string("fox"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("knuckle_bone_real"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("D100"), std::string("D120"), std::string("Diplodocus"), std::string("Stegosaurus"), std::string("T-Rex"), std::string("mouse"),std::string("squirrel"), std::string("treefrog"), std::string("Cinderella"), std::string("barbie")};
-std::vector<std::string> stock_toys = {std::string("Metal_Kangaroo"), std::string("giraffe_plushie_doll"),std::string("Metal_Slime")				                ,std::string("longtrain_wood"),std::string("Miniature_Mimic_Pillow")            ,std::string("ornament06"),std::string("Octopus")				                    ,std::string("owlToy"),std::string("Piggy_Bank")		      	            ,std::string("Plastic_Dog")		      	            ,std::string("rubberDuckie"),std::string("Roller_Dog_Chew_Toy")		            ,std::string("toy_bear"),std::string("Wood_Penguin")				              ,std::string("toy_bear_with_gift"),std::string("Wood_Snowman")				              ,std::string("toy_train_STJ4KQ4"),std::string("antique_wooden_rocking_horse_1285")	,std::string("trainToy"),std::string("baby_car")				                  ,std::string("turtle_toy"),std::string("dinosaur_plush_toy")};         
+std::vector<std::string> stock_toys = {std::string("Metal_Kangaroo"), std::string("giraffe_plushie_doll"),std::string("Metal_Slime")				                ,std::string("longtrain_wood"),std::string("Miniature_Mimic_Pillow")            ,std::string("ornament06"),std::string("Octopus")				                    ,std::string("owlToy"),std::string("Piggy_Bank")		      	            ,std::string("Plastic_Dog")		      	            ,std::string("rubberDuckie"),std::string("Roller_Dog_Chew_Toy")		            ,std::string("toy_bear"),std::string("Wood_Penguin")				              ,std::string("toy_bear_with_gift"),std::string("Wood_Snowman")				              ,std::string("toy_train_STJ4KQ4"),std::string("antique_wooden_rocking_horse_1285")	,std::string("trainToy"),std::string("baby_car"), std::string("turtle_toy"),std::string("dinosaur_plush_toy")};         
 
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("D100"), std::string("D120")};
-std::string all_polygons_current_item = "sliced tet",
-            all_polygons_current_item2 = "tet";
-static const char* all_polygons_current_item_c_str = "bunnylp";
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("baby_car"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("D100"), std::string("D120")};
+std::string all_polygons_current_item = "baby_car";
+static const char* all_polygons_current_item_c_str = "baby_car";
 
 // oris
 std::vector<std::string> all_stable_face_items = {"nothing yet"};
@@ -218,6 +217,7 @@ void update_solver(){
 
 void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
     // readManifoldSurfaceMesh()
+  
   std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
   mesh = mesh_ptr.release();
   geometry = geometry_ptr.release();
@@ -529,6 +529,7 @@ int main(int argc, char **argv) {
 
   generate_polyhedron_example(all_polygons_current_item);
   G = {0.,0,0};
+  printf("here! here\n");
   update_solver();
   init_visuals();
 

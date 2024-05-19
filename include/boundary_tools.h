@@ -133,13 +133,19 @@ class BoundaryBuilder {
 
 
         // TODO template
-        static double dice_energy(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G, ManifoldSurfaceMesh &hull_mesh,  
+        template <typename Scalar>
+        static Scalar dice_energy(Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hull_positions, Eigen::Matrix<Scalar, 3, 1, 0, 3, 1> G,
+                                //   Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G, 
+                                  ManifoldSurfaceMesh &hull_mesh,  
                                   std::vector<Edge> terminal_edges, // one-time computes to avoid templating everything 
                                   FaceData<Face> face_last_face, 
                                   VertexData<bool> vertex_is_stabilizable, // maximum vertex
                                   EdgeData<Vertex> edge_next_vertex, // wheel edge; INVALID if singular
                                   size_t side_count);
-        static Eigen::Vector3d point_to_segment_normal(Eigen::Vector3d P, Eigen::Vector3d A, Eigen::Vector3d B);
-        static Eigen::Vector3d intersect_arcs(Eigen::Vector3d v_normal, Eigen::Vector3d R2, Eigen::Vector3d A, Eigen::Vector3d B);
-        static double triangle_patch_signed_area_on_sphere(Eigen::Vector3d A, Eigen::Vector3d B, Eigen::Vector3d C);
+        template <typename Scalar>
+        static Eigen::Vector3<Scalar> point_to_segment_normal(Eigen::Vector3<Scalar> P, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B);
+        template <typename Scalar>
+        static Eigen::Vector3<Scalar> intersect_arcs(Eigen::Vector3<Scalar> v_normal, Eigen::Vector3<Scalar> R2, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B);
+        template <typename Scalar>
+        static Scalar triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B, Eigen::Vector3<Scalar> C);
 };

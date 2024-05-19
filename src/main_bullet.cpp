@@ -44,7 +44,8 @@ using namespace geometrycentral::surface;
 // simulation stuff
 PhysicsEnv* my_env;
 float step_size = 0.001, // 0.016
-      refresh_x, refresh_y, refresh_z;
+      refresh_x, refresh_y, refresh_z,
+      G_x, G_y, G_z;
 int step_count = 1;
 Vector3 G;
 Vector3 refresh_orientation({0,-1,0});
@@ -62,12 +63,13 @@ float arc_curve_radi = 0.01;
 double ground_box_y = -2.1;
 Vector3 ground_box_shape({10,1,10});
 
-Vector3 default_face_color({0.99,0.99,0.99});
+// Vector3 default_face_color({0.99,0.99,0.99});
+Vector3 default_face_color({240./256.,178/256.,44./256.});
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno")};
-std::string all_polygons_current_item = "tet";
-static const char* all_polygons_current_item_c_str = "tet";
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("baby_car"), std::string("rubberDuckie")};
+std::string all_polygons_current_item = "rubberDuckie";
+static const char* all_polygons_current_item_c_str = "rubberDuckie";
 
 // GC stuff
 std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
@@ -146,10 +148,26 @@ void initialize_vis(bool with_plane = true){
 
 void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
     // readManifoldSurfaceMesh()
-  std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
-  mesh = mesh_ptr.release();
-  geometry = geometry_ptr.release();
-  preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0, false, 1.);
+  
+  // if(poly_str == "baby_car"){
+  //   printf("reading baby car\n");
+    std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
+    std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
+    std::string filename = "../meshes/"+poly_str+".obj";
+    std::tie(nm_mesh_ptr, geometry_ptr) = readSurfaceMesh(filename);
+    SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
+    mesh_ptr = nm_mesh->toManifoldMesh();
+    mesh = mesh_ptr.release();
+    geometry = geometry_ptr.release();
+    preprocess_mesh(mesh, geometry, true);
+  //   printf("baby car read\n");
+  // }
+  // else{
+  //   std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
+  //   mesh = mesh_ptr.release();
+  //   geometry = geometry_ptr.release();
+  //   preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0, false, 1.);
+  // }
   G = find_center_of_mass(*mesh, *geometry).first;
   for (Vertex v: mesh->vertices()){
     geometry->inputVertexPositions[v] -= G;
@@ -196,6 +214,10 @@ void update_solver(){
 
 void init_visuals(){
   // Register the mesh with polyscope
+  polyscope::registerSurfaceMesh(
+    "temp input mesh",
+    geometry->inputVertexPositions + Vector3({1.4,2,1.4}), mesh->getFaceVertexList(),
+    polyscopePermutations(*mesh));
   auto psInputMesh = polyscope::registerSurfaceMesh(
     "init input mesh",
     geometry->inputVertexPositions, mesh->getFaceVertexList(),
@@ -331,15 +353,18 @@ void build_raster_image(){
   std::vector<Vector3> falsh;
   int total_invalids = 0, total_samples = 0;
   auto t1 = clock();
+  double avg_time = 0.;
   for (int i = 0; i < sample_count; i++){
     Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
     if (random_orientation.norm() <= 1){
+      auto t2 = clock();
       total_samples++;
       if (i % 2000 == 0)
         printf("$$$ at sample %d\n", i);
       random_orientation /= norm(random_orientation);
       my_env->refresh(G, random_orientation);
       Face touching_face = my_env->final_stable_face(); // Invalid if not close to a face normal; wtf?
+      avg_time += (double)((clock() - t2)/(double)CLOCKS_PER_SEC);
       final_orientations.push_back(my_env->get_current_orientation() + vis_utils.center);
       if (touching_face.getIndex() == INVALID_IND){
         total_invalids++;
@@ -355,12 +380,15 @@ void build_raster_image(){
                        raster_colors;
   
   forwardSolver->build_face_last_faces();
-  FaceData<double> accum_facee_areas(*forwardSolver->hullMesh, 0.);
+  FaceData<double> accum_face_areas(*forwardSolver->hullMesh, 0.);
   printf("empirical probs:\n");
+  size_t unstable_faces = 0;
   for (Face f: my_env->mesh->faces()){
+    if (forwardSolver->face_last_face[f]!= f)
+      unstable_faces++;
     std::vector<Vector3> tmp_points = face_samples[f];
     double prob = tmp_points.size()/(double)(total_samples - total_invalids);
-    accum_facee_areas[forwardSolver->face_last_face[f]] += prob;
+    accum_face_areas[forwardSolver->face_last_face[f]] += prob;
     if(tmp_points.size() != 0) printf(" --- f %d: %f\n", f.getIndex(), prob);
     for (Vector3 tmp_p: tmp_points){
       raster_positions.push_back(tmp_p + shift);
@@ -368,10 +396,11 @@ void build_raster_image(){
       // std::cout<< "tmp color is: " << face_colors[f] << "\n";
     }
   }
+  printf(" &&& unstable faces: %d\n", unstable_faces);
   printf("accumulated empirical -VS- MS complex:\n");
   for (Face f: my_env->mesh->faces()){
     if (forwardSolver->face_is_stable(f)){
-      printf("  f %d -> emp: %f    ----   MS: %f \n", f.getIndex(), accum_facee_areas[f], boundary_builder->face_region_area[f]/(4.*PI));
+      printf("  f %d -> emp: %f    ----   MS: %f \n", f.getIndex(), accum_face_areas[f], boundary_builder->face_region_area[f]/(4.*PI));
     }
   }
   //
@@ -379,7 +408,7 @@ void build_raster_image(){
   double kl_divergence = 0.;
   for (Face f: my_env->mesh->faces()){
     if (forwardSolver->face_is_stable(f)){
-      double emp_prob = accum_facee_areas[f];
+      double emp_prob = accum_face_areas[f];
       double ms_prob = boundary_builder->face_region_area[f]/(4.*PI);
       if (emp_prob != 0. && ms_prob != 0.)
         kl_divergence += ms_prob * std::log(ms_prob/emp_prob);
@@ -418,32 +447,136 @@ void draw_trail_on_gm(std::vector<Vector3> trail, glm::vec3 color, std::string n
 }
 
 
-void test_static_dice_pipeline(){
-  // forwardSolver->set_uniform_G();
-  ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
-  VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
-  Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G, false);
+// void test_static_dice_pipeline(){
+//   // forwardSolver->set_uniform_G();
+//   ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
+//   VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
+//   Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G, false);
   
-  auto GV_pair = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry);
-  tmp_solver->set_G(GV_pair.first);
-  tmp_solver->volume = GV_pair.second;
+//   auto GV_pair = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry);
+//   tmp_solver->set_G(GV_pair.first);
+//   tmp_solver->volume = GV_pair.second;
   
-  printf("initalize precomputes\n");
-  tmp_solver->initialize_pre_computes();
+//   printf("initalize precomputes\n");
+//   tmp_solver->initialize_pre_computes();
 
-  BoundaryBuilder *tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
-  tmp_bnd_builder->build_boundary_normals(); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true
+//   BoundaryBuilder *tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
+//   tmp_bnd_builder->build_boundary_normals(); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true
   
-  Vector3 GG = tmp_solver->get_G();
-  tmp_solver->build_face_last_faces();
-  printf("testing static dice E\n");
-  tmp_bnd_builder->dice_energy(vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions),
-                               Eigen::Vector3d({GG.x, GG.y, GG.z}), *hull_mesh,
-                               tmp_bnd_builder->find_terminal_edges(), tmp_solver->face_last_face, tmp_solver->vertex_is_stabilizable, tmp_solver->edge_next_vertex,
-                               6);
+//   Vector3 GG = tmp_solver->get_G();
+//   tmp_solver->build_face_last_faces();
+//   printf("testing static dice E\n");
+//   tmp_bnd_builder->dice_energy(vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions),
+//                                Eigen::Vector3d({GG.x, GG.y, GG.z}), *hull_mesh,
+//                                tmp_bnd_builder->find_terminal_edges(), tmp_solver->face_last_face, tmp_solver->vertex_is_stabilizable, tmp_solver->edge_next_vertex,
+//                                6);
   
-  // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
+//   // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
+// }
+
+
+void find_best_duck_G(){
+  double initial_low_face_probs = 0.;
+  for (Face f: forwardSolver->hullMesh->faces()){
+    if ( (forwardSolver->hullGeometry->faceNormal(f) - Vector3({0,-1.,0})).norm() < 0.2){
+      initial_low_face_probs += boundary_builder->face_region_area[f]/(4.*PI);
+    }
+  }
+  int resolution_x = 10,
+      resolution_z = 40;
+  double h_y = 0.;
+  double highest_stand_prob = 0.0;
+  Vector3 best_G;
+  for (int i = 0; i < resolution_x; i++){
+    double h_x = -0.2 + 0.4*(double)i/(double)resolution_x;
+    for (int j = 0; j < resolution_z; j++){
+      double h_z = -0.5 + 1.*(double)j/(double)resolution_z;
+      Vector3 tmp_G({h_x, h_y, h_z});
+      forwardSolver->set_G(tmp_G);
+      forwardSolver->initialize_pre_computes();
+      boundary_builder = new BoundaryBuilder(forwardSolver);
+      boundary_builder->build_boundary_normals();
+      double low_face_probs = 0.;
+      for (Face f: forwardSolver->hullMesh->faces()){
+        if ( (forwardSolver->hullGeometry->faceNormal(f) - Vector3({0,-1.,0})).norm() < 0.2){
+          low_face_probs += boundary_builder->face_region_area[f]/(4.*PI);
+        }
+      }
+      if (low_face_probs > highest_stand_prob){
+        highest_stand_prob = low_face_probs;
+        best_G = tmp_G;
+        printf("current best prob  : %f\n", highest_stand_prob);
+      }
+    }
+  }
+  forwardSolver->set_G(best_G);
+  forwardSolver->initialize_pre_computes();
+  boundary_builder = new BoundaryBuilder(forwardSolver);
+  boundary_builder->build_boundary_normals();
+  
+  printf("best G is: %f, %f, %f\n", best_G.x, best_G.y, best_G.z);
+  printf("with best prob        : %f\n", highest_stand_prob);   
+  printf("initial low face probs: %f\n", initial_low_face_probs);
+  draw_stable_patches_on_gauss_map();
+  auto G_pc = polyscope::registerPointCloud("best COM", std::vector<Vector3>{best_G});
+  G_pc->setPointColor({0.1,0.1,0.1});
+  G_pc->setPointRadius(0.03, false);
+  G_pc->setEnabled(true);
+  visualize_colored_polyhedra();
 }
+
+
+void find_best_bunny_G(){
+  size_t side_count = 6;
+  double old_dice_E = boundary_builder->get_fair_dice_energy(side_count);
+  int resolution_x = 20,
+      resolution_z = 20,
+      resolution_y = 20;
+  // double x0 = 0.23,
+  //        y0 = 0.23,
+  //        z0 = 0.23;
+  double x0 = 0.022,
+         y0 = 0.14,
+         z0 = 0.2;
+  double lowest_dice_E = old_dice_E;
+  Vector3 best_G;
+  for (int i = 0; i < resolution_x; i++){
+    printf(" at i: %d\n", i);
+    double h_x = -x0 + x0*0.5*(double)i/(double)resolution_x;
+    for (int k = 0; k < resolution_y; k++){
+      double h_y = -y0 + y0*0.5*(double)k/(double)resolution_y;
+      for (int j = 0; j < resolution_z; j++){
+        double h_z = -z0 + z0*0.5*(double)j/(double)resolution_z;
+        Vector3 tmp_G({h_x, h_y, h_z});
+        forwardSolver->set_G(tmp_G);
+        forwardSolver->initialize_pre_computes();
+        boundary_builder = new BoundaryBuilder(forwardSolver);
+        boundary_builder->build_boundary_normals();
+        double dice_E = boundary_builder->get_fair_dice_energy(side_count);
+        if (dice_E < lowest_dice_E){
+          lowest_dice_E = dice_E;
+          best_G = tmp_G;
+          printf("current dice E  : %f\n", lowest_dice_E);
+        }
+      }
+    }
+  }
+  forwardSolver->set_G(best_G);
+  forwardSolver->initialize_pre_computes();
+  boundary_builder = new BoundaryBuilder(forwardSolver);
+  boundary_builder->build_boundary_normals();
+  boundary_builder->print_area_of_boundary_loops();
+  printf("best G is: %f, %f, %f\n", best_G.x, best_G.y, best_G.z);
+  printf("with best Dice E        : %f\n", lowest_dice_E);   
+  printf("initial dice E: %f\n", old_dice_E);
+  draw_stable_patches_on_gauss_map();
+  auto G_pc = polyscope::registerPointCloud("best COM", std::vector<Vector3>{best_G});
+  G_pc->setPointColor({0.1,0.9,0.1});
+  G_pc->setPointRadius(0.2, false);
+  G_pc->setEnabled(true);
+  visualize_colored_polyhedra();
+}
+
 
 
 // polyscope callback
@@ -528,9 +661,9 @@ void myCallback() {
       printf(" Quasistatic trail time: %f\n", (clock() - t1)/(double)CLOCKS_PER_SEC);
       draw_trail_on_gm(snail_trail, {0.7,0.1,0.8}, "quasi-static trail",1.);
     }
-    if (ImGui::InputFloat("orientation_vec X", &refresh_x) ||
-        ImGui::InputFloat("orientation_vec Y", &refresh_y) ||
-        ImGui::InputFloat("orientation_vec Z", &refresh_z)){
+    if (ImGui::SliderFloat("orientation_vec X", &refresh_x, -1, 1) ||
+        ImGui::SliderFloat("orientation_vec Y", &refresh_y, -1, 1) ||
+        ImGui::SliderFloat("orientation_vec Z", &refresh_z, -1, 1)){
       refresh_orientation = Vector3({refresh_x, refresh_y, refresh_z}).normalize();
       old_g_vec = refresh_orientation;
       auto init_pc = polyscope::registerPointCloud("initial orientation", std::vector<Vector3>{refresh_orientation + vis_utils.center});
@@ -542,15 +675,6 @@ void myCallback() {
         my_env->refresh(G, refresh_orientation);
         old_g_vec = refresh_orientation;
     }
-    // if (ImGui::Button("Show Gauss Map") || 
-    //     ImGui::SliderInt("seg count for arcs", &arcs_seg_count, 1, 100)||
-    //     ImGui::SliderFloat("arc curve radi", &arc_curve_radi, 0., 0.04)||
-    //     ImGui::SliderFloat("face normal vertex radi", &face_normal_vertex_gm_radi, 0., 0.04)){///face_normal_vertex_gm_radi
-            
-    //       // draw the default polyhedra
-    //       visualize_colored_polyhedra();
-    //       visualize_gauss_map();
-    // }
     if (ImGui::InputInt("sample count", &sample_count));
     if (ImGui::Button("build the raster image")){
       
@@ -564,8 +688,46 @@ void myCallback() {
     }
     if (ImGui::Checkbox("Save pos to file", &save_pos_to_file));
 
-    if (ImGui::Button("test static dice E")){
-      test_static_dice_pipeline();
+    if (ImGui::SliderFloat("G Y", &G_y, -0.5, 0.5) ||
+        ImGui::SliderFloat("G X", &G_x, -0.5, 0.5) ||
+        ImGui::SliderFloat("G Z", &G_z, -0.5, 0.5)){
+      G = Vector3({G_x, G_y, G_z});
+      forwardSolver->set_G(G);
+      forwardSolver->initialize_pre_computes();
+      boundary_builder = new BoundaryBuilder(forwardSolver);
+      boundary_builder->build_boundary_normals();
+      draw_stable_patches_on_gauss_map();
+      auto G_pc = polyscope::registerPointCloud("COM", std::vector<Vector3>{G});
+      G_pc->setPointColor({0.1,0.1,0.1});
+      G_pc->setPointRadius(0.03, false);
+      G_pc->setEnabled(true);
+      visualize_colored_polyhedra();
+      if (forwardSolver->hullMesh->nFaces() > 300){ // for baby car
+        double p1 = boundary_builder->face_region_area[forwardSolver->hullMesh->face(298)]/(4.*PI);
+        double p2 = boundary_builder->face_region_area[forwardSolver->hullMesh->face(297)]/(4.*PI);
+        if (p1 > 0 && p2 == 0)
+          printf(" face 298 prob: %f\n", p1);
+        else if (p2 > 0 && p1 == 0)
+          printf(" face 297 prob: %f\n", p2);
+        else
+          printf(" face 297+298 prob: %f\n", p1+p2);
+      }
+    }
+    if (ImGui::Button("highlight low faces")){
+      face_colors = FaceData<Vector3>(*forwardSolver->hullMesh, default_face_color);
+      for (Face f: forwardSolver->hullMesh->faces()){
+        if ( (forwardSolver->hullGeometry->faceNormal(f) - Vector3({0,-1.,0})).norm() < 0.2){
+          face_colors[f] = {0.,0.,0.};
+        }
+      }
+      polyscope::SurfaceFaceColorQuantity *faceQnty2 = polyscope::getSurfaceMesh("init hull mesh")->addFaceColorQuantity("random face colors2", face_colors);
+      faceQnty2->setEnabled(true);
+    }
+    if (ImGui::Button("find best duck G")){
+      find_best_duck_G();
+    }
+    if (ImGui::Button("find best Bunny G")){
+      find_best_bunny_G();
     }
 }
 

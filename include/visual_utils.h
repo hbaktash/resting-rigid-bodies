@@ -63,7 +63,7 @@ class VisualUtils{
         Vector3 colored_shift;
         // gm_shift = Vector3({0., gm_distance, 0.}),        
         Vector3 center;
-        bool color_arcs = true, gm_is_drawn = false,
+        bool color_arcs = false, gm_is_drawn = false,
              draw_unstable_edge_arcs = true,
              draw_stable_g_vec_for_unstable_edge_arcs = false,
              show_hidden_stable_vertex_normals = false;
