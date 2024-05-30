@@ -68,8 +68,8 @@ Vector3 default_face_color({240./256.,178/256.,44./256.});
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("baby_car"), std::string("rubberDuckie")};
-std::string all_polygons_current_item = "rubberDuckie";
-static const char* all_polygons_current_item_c_str = "rubberDuckie";
+std::string all_polygons_current_item = "bunny";
+static const char* all_polygons_current_item_c_str = "bunny";
 
 // GC stuff
 std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
@@ -93,7 +93,8 @@ VisualUtils vis_utils;
 ManifoldSurfaceMesh* sphere_mesh;
 VertexPositionGeometry* sphere_geometry;
 bool gm_is_drawn = false;
-bool draw_snail_trail = true;
+bool draw_snail_trail = true,
+     animate = true;
 bool save_pos_to_file = false;
 Vector3 old_g_vec, new_g_vec;
 int snail_trail_dummy_counter = 0;
@@ -151,6 +152,13 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
   
   // if(poly_str == "baby_car"){
   //   printf("reading baby car\n");
+  if (poly_str == "tet" || poly_str == "tet2" || poly_str == "sliced tet"){
+    std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
+    mesh = mesh_ptr.release();
+    geometry = geometry_ptr.release();
+    preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0, false, 1.);
+  }
+  else{
     std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
     std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
     std::string filename = "../meshes/"+poly_str+".obj";
@@ -160,13 +168,10 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
     mesh = mesh_ptr.release();
     geometry = geometry_ptr.release();
     preprocess_mesh(mesh, geometry, true);
+  }
   //   printf("baby car read\n");
   // }
   // else{
-  //   std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
-  //   mesh = mesh_ptr.release();
-  //   geometry = geometry_ptr.release();
-  //   preprocess_mesh(mesh, geometry, triangulate || std::strcmp(poly_str.c_str(), "gomboc") == 0, false, 1.);
   // }
   G = find_center_of_mass(*mesh, *geometry).first;
   for (Vertex v: mesh->vertices()){
@@ -213,11 +218,6 @@ void update_solver(){
 }
 
 void init_visuals(){
-  // Register the mesh with polyscope
-  polyscope::registerSurfaceMesh(
-    "temp input mesh",
-    geometry->inputVertexPositions + Vector3({1.4,2,1.4}), mesh->getFaceVertexList(),
-    polyscopePermutations(*mesh));
   auto psInputMesh = polyscope::registerSurfaceMesh(
     "init input mesh",
     geometry->inputVertexPositions, mesh->getFaceVertexList(),
@@ -594,9 +594,9 @@ void myCallback() {
               initalize_env(all_polygons_current_item);
               init_visuals();
 
-              visualize_colored_polyhedra();
+              // visualize_colored_polyhedra();
               visualize_gauss_map();
-              // //
+              
               // G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
               // update_solver_and_boundaries();
               // boundary_builder->print_area_of_boundary_loops();
@@ -623,17 +623,23 @@ void myCallback() {
     if(ImGui::SliderFloat("sim step size", &step_size, 0.0001, 0.1)) my_env->default_step_size = step_size;
     if(ImGui::SliderInt("sim step count", &step_count, 1, 20));
     
-    if (ImGui::Button("fast forward to stable state")){
+    if (ImGui::Button("fast forward to stable state (Bullet)")){
       auto t1 = clock();
       Face touching_face = my_env->final_stable_face(draw_snail_trail);
       printf("time to stable state: %f\n", (clock() - t1)/(double)CLOCKS_PER_SEC);
+      if (animate) {
+        std::vector<geometrycentral::DenseMatrix<double>> trans_mat_trail = my_env->trans_mat_trail;
+        Vector<Vector3> init_positions = forwardSolver->inputGeometry->inputVertexPositions.toVector();
+        for (geometrycentral::DenseMatrix<double> tmp_trans: trans_mat_trail){
+          Vector<Vector3> tmp_positions = apply_trans_to_positions(init_positions, tmp_trans);
+          auto tmp_mesh = polyscope::registerSurfaceMesh("tmp mesh", tmp_positions, forwardSolver->inputMesh->getFaceVertexList());
+          tmp_mesh->setSurfaceColor({136./255., 229./255., 107./255.});
+          tmp_mesh->setEnabled(true);      
+          polyscope::screenshot(false);
+        }
+      }
       if (draw_snail_trail){
         std::vector<Vector3> snail_trail = my_env->orientation_trail;
-        // std::vector<Vector3> snail_trail;
-        // for (size_t i = 0; i < orig_snail_trail.size(); i++){
-        //   if (i % 2 == 0)
-        //     snail_trail.push_back(orig_snail_trail[i]);
-        // }
         for (Vector3 &v: snail_trail)
           v += vis_utils.center;
         auto trail_pc = polyscope::registerPointCloud("bullet pc trail", snail_trail);
@@ -646,18 +652,93 @@ void myCallback() {
         }
         trail_pc->addColorQuantity("time", colors)->setEnabled(true);
         trail_pc->setEnabled(true);
-
         // draw_trail_on_gm(snail_trail, {0.9,0.8,0.1}, "bullet trail",1.0, true);
       }
+      
       printf("final touching face is %d\n", touching_face.getIndex());
       if (touching_face.getIndex() != INVALID_IND)
         std::cout << "face normal is "<< forwardSolver->hullGeometry->faceNormal(touching_face)<< "\n";
       update_positions();
     }
+    if (ImGui::Checkbox("animate drop", &animate));
     if (ImGui::Checkbox("snail trail", &draw_snail_trail));
     if (ImGui::Button("Build quasistatic snail trail")){
       auto t1 = clock();
       std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(refresh_orientation);
+      std::vector<Vector3> snail_trail_updated;
+      // split the snail trail
+      // S^2 shift
+      double goal_angle_step = 0.005;
+      for (int i = 1; i < snail_trail.size()-1; i++){
+        Vector3 local_axis = cross(snail_trail[i-1], snail_trail[i]).normalize();
+        double local_total_angle = angle(snail_trail[i-1], snail_trail[i]);
+        int steps = (int)ceil(local_total_angle/goal_angle_step) + 1;
+        // int steps = 2;
+        for (int t = 0; t < steps; t++){
+          double angle_0 = local_total_angle * (double)t/double(steps);
+          Vector3 normal_0 = snail_trail[i-1].rotateAround(local_axis, angle_0);
+          snail_trail_updated.push_back(normal_0);
+        }
+      }
+      snail_trail_updated.push_back(snail_trail[snail_trail.size()-1]);
+
+      // polyscope::registerPointCloud(" subdiv trail", snail_trail_updated);
+      // polyscope::show();
+      if (animate){
+        Vector3 floor_vec({0,-1,0});
+        VertexData<Vector3> init_positions_interior = forwardSolver->inputGeometry->inputVertexPositions;
+        VertexData<Vector3> init_positions_hull = forwardSolver->hullGeometry->inputVertexPositions;
+        VertexData<Vector3> tmp_poses_interior(*forwardSolver->inputMesh);
+        tmp_poses_interior = init_positions_interior;
+        
+        Vector3 height_shift_vis({0,-1,0});
+        for (int i = 0; i < snail_trail_updated.size(); i++){
+          printf("at step %d/%d\n", i, snail_trail_updated.size()-1);
+          // get n_i locally
+          // SO3 conversion
+          Vector3 normal_0 = snail_trail_updated[i];
+          Vector3 rot_axis = cross(normal_0, floor_vec).normalize();
+          double rot_angle = angle(normal_0, floor_vec);
+          
+          for (int j = 0; j < snail_trail_updated.size(); j++){
+            snail_trail_updated[j] = snail_trail_updated[j].rotateAround(rot_axis, rot_angle);
+          }
+          // polyscope::registerPointCloud(" subdiv trail", snail_trail_updated);
+          // polyscope::show();
+          // shift contact to origin
+          double lowest_height = 1e4;
+          Vector3 contact_p;
+          for (Vertex v: forwardSolver->inputMesh->vertices()){
+            if (tmp_poses_interior[v].y < lowest_height){
+              lowest_height = tmp_poses_interior[v].y;
+              contact_p = tmp_poses_interior[v];
+            }
+          }
+          // shifting contact
+          tmp_poses_interior -= contact_p;
+
+          // do the rotation
+          for (Vertex v: forwardSolver->inputMesh->vertices()){
+            tmp_poses_interior[v] = tmp_poses_interior[v].rotateAround(rot_axis, rot_angle);
+          }
+          // shift back
+          tmp_poses_interior += contact_p;
+          
+          // correct height
+          lowest_height = 1e4;
+          for (Vertex v: forwardSolver->inputMesh->vertices()){
+            if (tmp_poses_interior[v].y < lowest_height)
+              lowest_height = tmp_poses_interior[v].y;
+          }
+          Vector3 contact_height_shift({0, lowest_height, 0 });
+          polyscope::registerSurfaceMesh("tmp quasi state", tmp_poses_interior + (height_shift_vis - contact_height_shift) , 
+          forwardSolver->inputMesh->getFaceVertexList())->setEnabled(true);
+          polyscope::screenshot(false);
+          // polyscope::show();
+          // }
+        }
+        polyscope::warning("done");
+      }
       printf(" Quasistatic trail time: %f\n", (clock() - t1)/(double)CLOCKS_PER_SEC);
       draw_trail_on_gm(snail_trail, {0.7,0.1,0.8}, "quasi-static trail",1.);
     }
@@ -761,3 +842,38 @@ int main(int argc, char* argv[])
   return EXIT_SUCCESS;
 	
 }
+
+
+
+
+// printf("  -vertex log: %d\n", vertex_log[i].getIndex());
+// printf("  -edge   log:   %d\n", edge_log[i].getIndex());
+// printf("  -face   log:   %d\n\n", face_log[i].getIndex());
+// if (vertex_log[i].getIndex()!= INVALID_IND){
+//   contact_v_front = vertex_log[i];
+//   contact_v_back = contact_v_front;
+//   polyscope::registerPointCloud("contact point", std::vector<Vector3>{contact_point})->setEnabled(true);
+// }
+// else if (edge_log[i].getIndex() != INVALID_IND){
+//   if (vertex_log[i-1].getIndex()!= INVALID_IND){
+//     if (vertex_log[i-1] != edge_log[i].firstVertex() && vertex_log[i-1] != edge_log[i].secondVertex()){
+//       printf("some vertex or edge was skipped!\n");
+//     }
+//     contact_v_front = edge_log[i].otherVertex(vertex_log[i-1]);
+//     contact_v_back = edge_log[i].otherVertex(contact_v_front);
+//   }
+//   else if (edge_log[i-1].getIndex()!= INVALID_IND){
+//     for (Vertex v : edge_log[i-1].adjacentVertices()){
+//       for (Vertex v2 : edge_log[i].adjacentVertices()){
+//         if (v == v2){
+//           contact_v_front = v;
+//           break;
+//         }
+//       }
+//     }
+//   }
+// }
+// else if (face_log[i].getIndex() != INVALID_IND){
+//   contact_v_front = face_log[i].halfedge().vertex();
+//   contact_v_back = face_log[i].halfedge().next().vertex();
+// }

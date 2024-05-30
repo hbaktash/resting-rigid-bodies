@@ -135,6 +135,10 @@ class Forward3DSolver {
     void face_to_next(Face f);
     
     // rigid simulation
+    std::vector<Vector3> translation_log;
+    std::vector<Vertex> vertex_log;
+    std::vector<Edge> edge_log;
+    std::vector<Face> face_log;
     void next_state(bool verbose = false);
     
     std::vector<Vector3> snail_trail_log(Vector3 initial_orientation);

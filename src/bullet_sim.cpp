@@ -50,11 +50,23 @@ geometrycentral::DenseMatrix<double> PhysicsEnv::btTrans_to_GC_Mat(btTransform b
     return openGL_mat_to_GC_mat(m);
 }
 
+Vector<Vector3> apply_trans_to_positions(Vector<Vector3> init_positions, geometrycentral::DenseMatrix<double> trans_mat){
+    Vector<Vector3> new_poses(init_positions.size());
+    for (size_t i = 0 ; i < init_positions.size(); i++) {
+        Vector3 old_p = init_positions[i];
+        Vector<double> tmp_vec(4);
+        tmp_vec[0] = old_p.x; tmp_vec[1] = old_p.y; tmp_vec[2] = old_p.z; tmp_vec[3] = 1.;
+        tmp_vec = trans_mat*tmp_vec;
+        Vector3 new_p({tmp_vec[0]/tmp_vec[3], tmp_vec[1]/tmp_vec[3], tmp_vec[2]/tmp_vec[3]});
+        // new_positions[v] = new_p; 
+        new_poses[i] = new_p;
+    }
+    return new_poses;
+}
 
 Vector<Vector3> PhysicsEnv::get_new_positions(Vector<Vector3> init_positions){
     geometrycentral::DenseMatrix<double> trans_mat = btTrans_to_GC_Mat(current_btTrans);
     Vector<Vector3> new_poses(init_positions.size());
-    // VertexData<Vector3> new_positions(*mesh);
     for (size_t i = 0 ; i < init_positions.size(); i++) {
         Vector3 old_p = init_positions[i];
         Vector<double> tmp_vec(4);
@@ -297,8 +309,10 @@ Face PhysicsEnv::final_stable_face(bool save_trail){
     btRigidBody* body;
     btTransform trans;
     Face final_stable_face;
-    if (save_trail)
+    if (save_trail){
         orientation_trail.clear();
+        trans_mat_trail.clear();
+    }
     for (int i = 0; i < MAX_ITERS; i++){
         // take a step
         dynamicsWorld->stepSimulation(default_step_size, 10);
@@ -315,13 +329,17 @@ Face PhysicsEnv::final_stable_face(bool save_trail){
         }
         current_btTrans = trans;
         if (save_trail){
-            Vector3 current_ori  =get_current_orientation();
+            Vector3 current_ori = get_current_orientation();
             if (orientation_trail.size() > 0){
-                if ((current_ori - orientation_trail.back()).norm() != 0. )
+                if ((current_ori - orientation_trail.back()).norm() != 0. ){
                     orientation_trail.push_back(get_current_orientation());
+                    trans_mat_trail.push_back(btTrans_to_GC_Mat(current_btTrans));
+                }
             }
-            else 
+            else {
                 orientation_trail.push_back(get_current_orientation());
+                trans_mat_trail.push_back(btTrans_to_GC_Mat(current_btTrans));
+            }
         }
         
         // check center of mass motion

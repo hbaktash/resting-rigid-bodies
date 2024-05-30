@@ -31,6 +31,8 @@ using namespace geometrycentral::surface;
 geometrycentral::DenseMatrix<double> openGL_mat_to_GC_mat(btScalar* m);
 btQuaternion quaternion_from_g_vec(Vector3 default_g_vec, Vector3 g_vec);
 
+Vector<Vector3> apply_trans_to_positions(Vector<Vector3> init_positions, geometrycentral::DenseMatrix<double> trans_mat);
+
 class PhysicsEnv {
   public:
     // GC stuff
@@ -42,6 +44,7 @@ class PhysicsEnv {
     btTransform init_btTransform;
     btTransform current_btTrans;
     std::vector<Vector3> orientation_trail;
+    std::vector<geometrycentral::DenseMatrix<double>> trans_mat_trail;
     
     // Bullet3 shape var
     btConvexHullShape* bt_my_polyhedra;
@@ -56,7 +59,7 @@ class PhysicsEnv {
     //make sure to re-use collision shapes among rigid bodies whenever possible!
     btAlignedObjectArray<btCollisionShape*> collisionShapes;
 
-    int MAX_ITERS = 10000, MIN_ITERS = 100;
+    int MAX_ITERS = 100000, MIN_ITERS = 100;
     double tol = 1e-9,
            default_step_size = 0.017; // 1/60
 

@@ -560,9 +560,19 @@ void Forward3DSolver::next_state(bool verbose){
 
 std::vector<Vector3> Forward3DSolver::snail_trail_log(Vector3 initial_orientation){
     std::vector<Vector3> trail;
+    translation_log.empty();
+    vertex_log.empty();
+    edge_log.empty();
+    face_log.empty();
     trail.push_back(initial_orientation);
     find_contact(initial_orientation);
+    vertex_log.push_back(curr_v);
+    edge_log.push_back(curr_e);
+    face_log.push_back(curr_f);    
     while (!stable_state){
+        vertex_log.push_back(curr_v);
+        edge_log.push_back(curr_e);
+        face_log.push_back(curr_f);
         next_state();
         trail.push_back(curr_g_vec);
         if (stable_state)
