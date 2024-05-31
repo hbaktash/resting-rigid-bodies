@@ -733,8 +733,8 @@ autodiff::Vector2var BoundaryBuilder::complex_mult(autodiff::Vector2var &A, auto
 
 
 template <typename Scalar>
-Scalar BoundaryBuilder::dice_energy(Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hull_positions, Eigen::Matrix<Scalar, 3, 1, 0, 3, 1> G,
-                                    // Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,  // TODO: template
+Scalar BoundaryBuilder::dice_energy(//Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hull_positions, Eigen::Matrix<Scalar, 3, 1, 0, 3, 1> G,
+                                    Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,  // TODO: template
                                     ManifoldSurfaceMesh &hull_mesh, 
                                     std::vector<Edge> terminal_edges, // one-time computes to avoid templating everything
                                     FaceData<Face> face_last_face,
@@ -759,7 +759,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hull_
     for (Edge e: terminal_edges){
         printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
         // bnd_normal->normal_ad = point_to_segment_normal_ad(e);
-        Eigen::Vector3<Scalar> edge_bnd_normal = point_to_segment_normal(G, hull_positions.row(e.firstVertex().getIndex()), hull_positions.row(e.secondVertex().getIndex()));
+        Eigen::Vector3<Scalar> edge_bnd_normal = point_to_segment_normal<Scalar>(G, hull_positions.row(e.firstVertex().getIndex()), hull_positions.row(e.secondVertex().getIndex()));
         // std::vector<std::pair<size_t, size_t>> vertex_pairs;
         // vertex_pairs.push_back({e.firstVertex().getIndex(), e.secondVertex().getIndex()});
         // polyscope::registerCurveNetwork("current edge", hull_positions, vertex_pairs);
@@ -771,7 +771,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hull_
         Face ff2 = face_last_face[f2];
         // for visuals
         Eigen::Vector3<Scalar> ff1_normal  = face_normals[ff1], // static
-                        ff2_normal  = face_normals[ff2]; // static
+                               ff2_normal  = face_normals[ff2]; // static
         for (Vertex v: {e.firstVertex(), e.secondVertex()}){ // two ways to go from a saddle edge
             
             Eigen::Vector3<Scalar> tmp_normal  = edge_bnd_normal;   // changes in the while loop
@@ -787,9 +787,9 @@ Scalar BoundaryBuilder::dice_energy(Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hull_
             while (true) {
                 if (vertex_is_stabilizable[current_v]){
                     next_normal = v_normal;
-                    Scalar patch_area_ff1 = triangle_patch_signed_area_on_sphere(ff1_normal, tmp_normal, next_normal);
+                    Scalar patch_area_ff1 = triangle_patch_signed_area_on_sphere<Scalar>(ff1_normal, tmp_normal, next_normal);
                     face_region_area[ff1] += ff1_area_sign * patch_area_ff1;
-                    Scalar patch_area_ff2 = triangle_patch_signed_area_on_sphere(ff2_normal, tmp_normal, next_normal);
+                    Scalar patch_area_ff2 = triangle_patch_signed_area_on_sphere<Scalar>(ff2_normal, tmp_normal, next_normal);
                     face_region_area[ff2] += ff2_area_sign * patch_area_ff2;
                     // draw_arc_on_sphere_static(vec_to_GC_vec3(tmp_normal), vec_to_GC_vec3(next_normal), Vector3({0,2,0}), 1., 12, 0, 0.1, glm::vec3(1., 0., 1.), 0.5);
                     // polyscope::show();            
@@ -806,9 +806,9 @@ Scalar BoundaryBuilder::dice_energy(Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hull_
                                                          face_normals[f1], 
                                                          face_normals[f2]);
                             if(next_normal.norm() != 0.){ // found the next source normal
-                                Scalar patch_area_ff1 = triangle_patch_signed_area_on_sphere(ff1_normal, tmp_normal, next_normal);
+                                Scalar patch_area_ff1 = triangle_patch_signed_area_on_sphere<Scalar>(ff1_normal, tmp_normal, next_normal);
                                 face_region_area[ff1] += ff1_area_sign * patch_area_ff1;
-                                Scalar patch_area_ff2 = triangle_patch_signed_area_on_sphere(ff2_normal, tmp_normal, next_normal);
+                                Scalar patch_area_ff2 = triangle_patch_signed_area_on_sphere<Scalar>(ff2_normal, tmp_normal, next_normal);
                                 face_region_area[ff2] += ff2_area_sign * patch_area_ff2;
                     
                                 // draw_arc_on_sphere_static(vec_to_GC_vec3(tmp_normal), vec_to_GC_vec3(next_normal), Vector3({0,2,0}), 1., 12, 0, 0.1, glm::vec3(1., 0., 1.), 0.5);

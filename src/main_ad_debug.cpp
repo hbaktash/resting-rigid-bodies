@@ -449,11 +449,13 @@ void test_static_dice_pipeline(){
       mat(v.getIndex(),2) = p.z;
   }
   // Eigen::MatrixX3<double> tmp_positions = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
-  BoundaryBuilder::dice_energy(mat,
-                               Eigen::Vector3<double>({GG.x, GG.y, GG.z}), *tmp_solver->hullMesh,
-                               terminal_edges, tmp_solver->face_last_face, tmp_solver->vertex_is_stabilizable, tmp_solver->edge_next_vertex,
-                               fair_sides_count);
   
+  double dice_e = BoundaryBuilder::dice_energy<double>(mat, Eigen::Vector3<double>({GG.x, GG.y, GG.z}), *tmp_solver->hullMesh,
+                                          terminal_edges, 
+                                          tmp_solver->face_last_face, 
+                                          tmp_solver->vertex_is_stabilizable, 
+                                          tmp_solver->edge_next_vertex,
+                                          fair_sides_count);
   // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
 }
 

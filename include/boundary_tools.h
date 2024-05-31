@@ -134,13 +134,13 @@ class BoundaryBuilder {
 
         // TODO template
         template <typename Scalar>
-        static Scalar dice_energy(Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hull_positions, Eigen::Matrix<Scalar, 3, 1, 0, 3, 1> G,
-                                //   Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G, 
-                                  ManifoldSurfaceMesh &hull_mesh,  
-                                  std::vector<Edge> terminal_edges, // one-time computes to avoid templating everything 
-                                  FaceData<Face> face_last_face, 
+        static Scalar dice_energy(//Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hull_positions, Eigen::Matrix<Scalar, 3, 1, 0, 3, 1> G,
+                                  Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,  // TODO: template
+                                  ManifoldSurfaceMesh &hull_mesh, 
+                                  std::vector<Edge> terminal_edges, // one-time computes to avoid templating everything
+                                  FaceData<Face> face_last_face,
                                   VertexData<bool> vertex_is_stabilizable, // maximum vertex
-                                  EdgeData<Vertex> edge_next_vertex, // wheel edge; INVALID if singular
+                                  EdgeData<Vertex> edge_next_vertex,
                                   size_t side_count);
         template <typename Scalar>
         static Eigen::Vector3<Scalar> point_to_segment_normal(Eigen::Vector3<Scalar> P, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B);
