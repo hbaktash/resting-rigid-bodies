@@ -149,3 +149,5 @@ class BoundaryBuilder {
         template <typename Scalar>
         static Scalar triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B, Eigen::Vector3<Scalar> C);
 };
+
+#include "boundary_tools.impl.h"

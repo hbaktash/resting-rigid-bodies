@@ -224,12 +224,12 @@ set(ad_debug
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
 
-add_executable(polyhedra "${polyhedra_SRCS}")
-target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+#add_executable(polyhedra "${polyhedra_SRCS}")
+#target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+#target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 # add the args.hxx project which we use for command line args
-target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-target_link_libraries(polyhedra PUBLIC geometry-central polyscope qhullcpp qhullstatic_r)
+#target_include_directories(polyhedra PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+#target_link_libraries(polyhedra PUBLIC geometry-central polyscope qhullcpp qhullstatic_r)
 
 
 # To change the name of your executable, change "gc_project" in the lines below to whatever you want
@@ -254,18 +254,18 @@ if(GUROBI_FOUND)
   # To change the name of your executable, change "gc_project" in the lines below to whatever you want
   # SET(qhull_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/build")
   # Find_Package(qhull)
-  add_executable(convexFill "${convex_fill}")
+  #add_executable(convexFill "${convex_fill}")
   # target_link_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
   # target_include_directories(invDesign PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src/libqhullcpp")
-  target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-  target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
-  target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+  #target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+  #target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+  #target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
   # target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
-  target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
+  #target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
 
-  target_include_directories(convexFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
+  #target_include_directories(convexFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
   
-  target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
+  #target_include_directories(convexFill PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
   # target_link_libraries(convexFill PUBLIC ${GUROBI_CXX_LIBRARY} ${GUROBI_CXX_DEBUG_LIBRARY})
   # target_link_libraries(convexFill PUBLIC ${GUROBI_LIBRARIES})
   
@@ -273,20 +273,20 @@ if(GUROBI_FOUND)
   # target_include_directories(convexFill PUBLIC ${MOSEK_INCLUDE_DIRS})
   # target_link_directories   (convexFill PUBLIC ${MOSEK_LIBRARY_DIR})
   
-  target_link_libraries(convexFill PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib
+  #target_link_libraries(convexFill PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib
   
   # # paper figure stuff
-  add_executable(paper_figs "${paper_figs}")
-  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+  #add_executable(paper_figs "${paper_figs}")
+  #target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+  #target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
   # add the args.hxx project which we use for command line args
-  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
-  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
-  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
-  target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
-  target_include_directories(paper_figs PUBLIC "${GUROBI_INCLUDE_DIRS}")
-  
-  target_link_libraries(paper_figs PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) #qhull_r libqhull_r
+  #target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+  #target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/libigl/include")
+  #target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
+  #target_include_directories(paper_figs PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
+  #target_include_directories(paper_figs PUBLIC "${GUROBI_INCLUDE_DIRS}")
+  #
+  #target_link_libraries(paper_figs PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r ${GUROBI_LIBRARIES}) #qhull_r libqhull_r
 else()
   message(STATUS "!!!!!!!! Gurobi not found, skipping convexFill and paper_figs builds !!!!!!!!")
 endif()
@@ -298,18 +298,18 @@ SET(Bullet_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/bullet3/build_cmake")
 Find_Package(Bullet CONFIG)
 SET(BULLET_INCLUDE_DIR ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_INCLUDE_DIR})
 SET(BLA ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
-add_executable(bullet_sim "${bullet_SRCS}")
+#add_executable(bullet_sim "${bullet_SRCS}")
 
-target_include_directories(bullet_sim PUBLIC ${BULLET_INCLUDE_DIR})
-target_compile_definitions(bullet_sim PUBLIC ${BULLET_DEFINITIONS})
-target_link_directories(bullet_sim PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
-target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
-target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
+#target_include_directories(bullet_sim PUBLIC ${BULLET_INCLUDE_DIR})
+#target_compile_definitions(bullet_sim PUBLIC ${BULLET_DEFINITIONS})
+#target_link_directories(bullet_sim PUBLIC ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
+#target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
+#target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 # add the args.hxx project which we use for command line args
-target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
+#target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 
-target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
-target_link_libraries(bullet_sim PUBLIC BulletDynamics BulletCollision LinearMath geometry-central polyscope qhullcpp qhullstatic_r autodiff)
+#target_include_directories(bullet_sim PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
+#target_link_libraries(bullet_sim PUBLIC BulletDynamics BulletCollision LinearMath geometry-central polyscope qhullcpp qhullstatic_r autodiff)
 # target_link_libraries(bullet_sim )
 
 
