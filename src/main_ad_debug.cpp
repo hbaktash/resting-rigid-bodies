@@ -35,6 +35,7 @@
 #include "inv_design.h"
 // #include "igl/arap.h"
 // #include "optimization.h"
+#include <stan/math.hpp>
 
 #define ANSI_FG_MAGENTA "\x1b[35m"
 #define ANSI_FG_YELLOW "\x1b[33m"

@@ -76,6 +76,7 @@ add_subdirectory(deps/polyscope)
 add_subdirectory(deps/qhull)
 
 add_subdirectory(deps/autodiff)
+
 # FetchContent_Declare(
 #   autodiff
 #   GIT_REPOSITORY https://github.com/autodiff/autodiff/
@@ -87,11 +88,11 @@ add_subdirectory(deps/autodiff)
 
 # SET(GUROBI_DIR "/Library/gurobi1100/macos_universal2")
 find_package(GUROBI)
-if (GUROBI_FOUND)
-  message(STATUS "Gurobi found at ${GUROBI_USE_PRECOMPILED_CXX}")
-else ()
-  message(STATUS "Gurobi not found!")
-endif ()
+# if (GUROBI_FOUND)
+#   message(STATUS "Gurobi found at ${GUROBI_USE_PRECOMPILED_CXX}")
+# else ()
+#   message(STATUS "Gurobi not found!")
+# endif ()
 # include_directories(${GUROBI_INCLUDE_DIRS})
 
 # find_package(MOSEK)
@@ -314,15 +315,16 @@ SET(BLA ${Bullet_DIR}/${BULLET_ROOT_DIR}/${BULLET_LIBRARY_DIRS})
 
 
 # Debugging AutoDiff stuff
-
 add_executable(adDebug "${ad_debug}")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhull/src")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/geometric-central/include")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math")
 # target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
-
+# find_package(stan)
+# include(stan)
 # target_include_directories(adDebug PUBLIC "${GUROBI_INCLUDE_DIRS}")
 
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
-target_link_libraries(adDebug PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib
+target_link_libraries(adDebug PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r stan) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib
