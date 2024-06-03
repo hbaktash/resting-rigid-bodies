@@ -320,11 +320,20 @@ target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/qhul
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/polyscope/deps/args")
 target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/geometric-central/include")
-target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
+
 # target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/TinyAD/include")
 # find_package(stan)
 # include(stan)
 # target_include_directories(adDebug PUBLIC "${GUROBI_INCLUDE_DIRS}")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math/lib/boost_1.84.0")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math/lib/tbb_2020.3/include")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math/lib/sundials_6.1.1/include")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math/lib/benchmark_1.5.1/include")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math/lib/cpplint_1.4.5")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math/lib/opencl_3.0.0/CL")
+# target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math/lib/eigen_3.4.0")
+# target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math/lib")
+target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/math")
 
-target_include_directories(adDebug PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/deps/autodiff")
 target_link_libraries(adDebug PUBLIC geometry-central polyscope autodiff qhullcpp qhullstatic_r stan) # ${MOSEK_LIBRARIES} qhull_r libqhull_r libfusion64.10.1.dylib libmosek64.10.1.dylib
