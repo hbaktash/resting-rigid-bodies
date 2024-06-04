@@ -17,6 +17,10 @@
 *************************************************************************
 */
 
+// stan needs to be included before any Eigen headers.
+// https://github.com/stan-dev/math/issues/2879
+#include <stan/math.hpp>
+
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/meshio.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
@@ -24,7 +28,7 @@
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
 #include "polyscope/point_cloud.h"
-#include "args/args.hxx"
+#include "args.hxx"
 #include "imgui.h"
 
 #include "coloring.h"
@@ -35,7 +39,6 @@
 #include "inv_design.h"
 // #include "igl/arap.h"
 // #include "optimization.h"
-#include <stan/math.hpp>
 
 #define ANSI_FG_MAGENTA "\x1b[35m"
 #define ANSI_FG_YELLOW "\x1b[33m"
