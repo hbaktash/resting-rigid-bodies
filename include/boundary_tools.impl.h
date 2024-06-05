@@ -26,10 +26,10 @@ Scalar BoundaryBuilder::dice_energy(//Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hul
 
     // morse complex areas; only non-zero for stable faces
     FaceData<Scalar> face_region_area(hull_mesh, 0.);
-    printf("  back-flowing terminal edges %d \n", terminal_edges.size());
+    printf("  back-flowing terminal edges %lu \n", terminal_edges.size());
     int i = 1;
     for (Edge e: terminal_edges){
-        printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
+        // printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
         // bnd_normal->normal_ad = point_to_segment_normal_ad(e);
         Eigen::Vector3<Scalar> edge_bnd_normal = point_to_segment_normal<Scalar>(G, hull_positions.row(e.firstVertex().getIndex()), hull_positions.row(e.secondVertex().getIndex()));
         // std::vector<std::pair<size_t, size_t>> vertex_pairs;
@@ -103,7 +103,7 @@ Scalar BoundaryBuilder::dice_energy(//Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hul
     for (Face f: hull_mesh.faces()){
         if (face_last_face[f] == f){
             total_area += face_region_area[f];
-            printf("  -- face %d: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
+            printf("  -- face %zu: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
         }
     }
     printf("total face areas: %f\n", total_area);

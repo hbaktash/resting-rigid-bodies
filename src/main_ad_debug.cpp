@@ -213,6 +213,7 @@ void init_visuals(){
 void update_solver(){
   //assuming convex input here
   forwardSolver = new Forward3DSolver(mesh, geometry, G);
+  // forwardSolver->set_uniform_G();
   forwardSolver->initialize_pre_computes();
   initialize_boundary_builder();
   inverseSolver = new InverseSolver(boundary_builder);
@@ -453,14 +454,53 @@ void test_static_dice_pipeline(){
       mat(v.getIndex(),2) = p.z;
   }
   // Eigen::MatrixX3<double> tmp_positions = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
-  
-  double dice_e = BoundaryBuilder::dice_energy<double>(mat, Eigen::Vector3<double>({GG.x, GG.y, GG.z}), *tmp_solver->hullMesh,
+  Eigen::Vector3<double> G_vec({GG.x, GG.y, GG.z});
+  double dice_e1 = BoundaryBuilder::dice_energy<double>(mat, G_vec, *tmp_solver->hullMesh,
                                           terminal_edges, 
                                           tmp_solver->face_last_face, 
                                           tmp_solver->vertex_is_stabilizable, 
                                           tmp_solver->edge_next_vertex,
                                           fair_sides_count);
+  printf("pre-lambda dice e: %f\n", dice_e1);
   // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
+  printf("stan math test: %f \n", stan::math::normal_lpdf(1, 2, 3));
+  // C++20 templated lambda version of total_surface_area taking V_vec
+  auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
+    // decompose flat vector to positions and center of mass
+    // G is the last 3 elements
+    Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
+    printf("here0\n");
+    size_t flat_n = hull_poses_G_append_vec.rows();
+    Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
+    printf("here1\n");
+    printf("G: %f %f %f\n", G_eigen(0), G_eigen(1), G_eigen(2));
+    // auto testpc = polyscope::registerPointCloud("test for lambda", hull_poses);
+    // auto testpcG = polyscope::registerPointCloud("test for lambda G", std::vector<Eigen::Vector3d>({G_eigen}));
+    // test_pc->setEnabled(true);
+    // polyscope::show();
+    return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, *tmp_solver->hullMesh,
+                                                terminal_edges, 
+                                                tmp_solver->face_last_face, 
+                                                tmp_solver->vertex_is_stabilizable, 
+                                                tmp_solver->edge_next_vertex,
+                                                fair_sides_count);
+  };
+  Eigen::VectorXd hull_poses_vec = mat.reshaped();
+  Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
+  hull_poses_and_G_vec << hull_poses_vec, G_vec;
+  // printf("dice energy lambda: %f\n", dice_energy_lambda(hull_poses_and_G_vec));
+  Eigen::VectorXd dfdU_vec;
+  double dice_e;
+  stan::math::gradient(dice_energy_lambda, hull_poses_and_G_vec, dice_e, dfdU_vec);
+  Eigen::Map<Eigen::MatrixXd> dfdU(dfdU_vec.data(), mat.rows(), mat.cols());
+  
+
+  // visualize grad vectors
+  auto hullpsmesh = polyscope::registerSurfaceMesh("stan grads hull", tmp_solver->hullGeometry->inputVertexPositions,
+                                                  tmp_solver->hullMesh->getFaceVertexList());
+  hullpsmesh->setEnabled(true);
+  hullpsmesh->setTransparency(0.7);
+  hullpsmesh->addVertexVectorQuantity("stan grads", dfdU)->setEnabled(true);
 }
 
 
@@ -468,8 +508,7 @@ void test_static_dice_pipeline(){
 // Use ImGUI commands to build whatever you want here, see
 // https://github.com/ocornut/imgui/blob/master/imgui.h
 void myCallback() {
-  if (ImGui::Checkbox("do remeshing", &do_remesh));
-  if (ImGui::SliderFloat("remesh edge len scale", &scale_for_remesh, 0.1, 4.));
+  if (ImGui::Checkbox("do remeshing", &do_remesh)) {}
   if (ImGui::BeginCombo("##combo1", all_polygons_current_item.c_str())){ // The second parameter is the label previewed before opening the combo.
       for (std::string tmp_str: all_polyhedra_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
           bool is_selected = (all_polygons_current_item == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
