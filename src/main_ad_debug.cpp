@@ -469,15 +469,9 @@ void test_static_dice_pipeline(){
     // decompose flat vector to positions and center of mass
     // G is the last 3 elements
     Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
-    printf("here0\n");
     size_t flat_n = hull_poses_G_append_vec.rows();
     Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-    printf("here1\n");
-    printf("G: %f %f %f\n", G_eigen(0), G_eigen(1), G_eigen(2));
-    // auto testpc = polyscope::registerPointCloud("test for lambda", hull_poses);
-    // auto testpcG = polyscope::registerPointCloud("test for lambda G", std::vector<Eigen::Vector3d>({G_eigen}));
-    // test_pc->setEnabled(true);
-    // polyscope::show();
+    std::cout << "G:" << G_eigen << std::endl;
     return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, *tmp_solver->hullMesh,
                                                 terminal_edges, 
                                                 tmp_solver->face_last_face, 
@@ -496,11 +490,11 @@ void test_static_dice_pipeline(){
   
 
   // visualize grad vectors
-  auto hullpsmesh = polyscope::registerSurfaceMesh("stan grads hull", tmp_solver->hullGeometry->inputVertexPositions,
-                                                  tmp_solver->hullMesh->getFaceVertexList());
-  hullpsmesh->setEnabled(true);
-  hullpsmesh->setTransparency(0.7);
-  hullpsmesh->addVertexVectorQuantity("stan grads", dfdU)->setEnabled(true);
+  // auto hullpsmesh = polyscope::registerSurfaceMesh("stan grads hull", tmp_solver->hullGeometry->inputVertexPositions,
+  //                                                 tmp_solver->hullMesh->getFaceVertexList());
+  // hullpsmesh->setEnabled(true);
+  // hullpsmesh->setTransparency(0.7);
+  // hullpsmesh->addVertexVectorQuantity("stan grads", dfdU)->setEnabled(true);
 }
 
 

@@ -49,3 +49,5 @@ target_link_libraries(adDebug
     taywee::args
     stan::stan
 )
+
+set_property(TARGET adDebug PROPERTY CXX_STANDARD 20)

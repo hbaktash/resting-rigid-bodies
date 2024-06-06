@@ -103,11 +103,11 @@ Scalar BoundaryBuilder::dice_energy(//Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hul
     for (Face f: hull_mesh.faces()){
         if (face_last_face[f] == f){
             total_area += face_region_area[f];
-            printf("  -- face %zu: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
+            // printf("  -- face %zu: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
         }
     }
-    printf("total face areas: %f\n", total_area);
-    return 0.;
+    // printf("total face areas: %f\n", total_area);
+    return total_area;
 }
 
 template <typename Scalar>
