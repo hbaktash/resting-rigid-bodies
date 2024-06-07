@@ -387,7 +387,7 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(size_t goal_
     // }
     // else if (stable_normal_update_thres > 0)
     //     update_fair_distribution(stable_normal_update_thres);
-    set_fair_distribution_for_sink_faces(goal_stable_count); // TODO: TESTING
+    set_fair_distribution_for_sink_faces(goal_stable_count); // top k faces are set
 
     for (Face f: forwardSolver->hullMesh->faces()){ 
         Face last_sink_face;

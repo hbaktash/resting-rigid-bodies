@@ -213,7 +213,7 @@ void init_visuals(){
 void update_solver(){
   //assuming convex input here
   forwardSolver = new Forward3DSolver(mesh, geometry, G);
-  // forwardSolver->set_uniform_G();
+  forwardSolver->set_uniform_G();
   forwardSolver->initialize_pre_computes();
   initialize_boundary_builder();
   inverseSolver = new InverseSolver(boundary_builder);
@@ -361,24 +361,13 @@ double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver fwd_sol
 
 void test_approx_vs_ad_grads(){
     // forwardSolver->set_uniform_G();
-    ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
-    VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
-    Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G, false);
-    if (frozen_G){
-      auto GV_pair = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry);
-      tmp_solver->set_G(GV_pair.first);
-      tmp_solver->volume = GV_pair.second;
-    }
-    else {
-      tmp_solver->set_uniform_G(); // frozen G matters here or not ???
-    }
-    printf("initalize precomputes\n");
+    Forward3DSolver *tmp_solver = new Forward3DSolver(mesh, geometry, G, true);
+    tmp_solver->set_uniform_G();
+    tmp_solver->updated = false;
+    // printf("initalize precomputes\n");
     tmp_solver->initialize_pre_computes();
+    tmp_solver->build_face_last_faces();
 
-    if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(false);
-    if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);
-    if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
-    if (polyscope::hasSurfaceMesh("init input mesh")) polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
     BoundaryBuilder *tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
     tmp_bnd_builder->build_boundary_normals_for_autodiff(true); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true
     InverseSolver *tmp_inv_solver = new InverseSolver(tmp_bnd_builder);
@@ -389,8 +378,8 @@ void test_approx_vs_ad_grads(){
     // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << " fair dice energy: " << tmp_bnd_builder->get_fair_dice_energy(fair_sides_count) << ANSI_RESET << "\n";
 
-    auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
-                                                  tmp_solver->inputMesh->getFaceVertexList());
+    auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->hullGeometry->inputVertexPositions,
+                                                  tmp_solver->hullMesh->getFaceVertexList());
     pip2psmesh->setEnabled(true);
     pip2psmesh->setTransparency(0.7);
 
@@ -420,6 +409,7 @@ void test_approx_vs_ad_grads(){
     printf("registered\n");
     // polyscope::frameTick();
 }
+
 
 void test_static_dice_pipeline(){
   Forward3DSolver *tmp_solver = new Forward3DSolver(mesh, geometry, G, true);
@@ -486,15 +476,18 @@ void test_static_dice_pipeline(){
   Eigen::VectorXd dfdU_vec;
   double dice_e;
   stan::math::gradient(dice_energy_lambda, hull_poses_and_G_vec, dice_e, dfdU_vec);
-  Eigen::Map<Eigen::MatrixXd> dfdU(dfdU_vec.data(), mat.rows(), mat.cols());
-  
-
+  // extract gradients
+  printf("extracting grads");
+  Eigen::Vector3d G_grad = dfdU_vec.tail(3);
+  size_t flat_n = dfdU_vec.rows();
+  Eigen::Map<Eigen::MatrixXd> dfdV(dfdU_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
+    
   // visualize grad vectors
-  // auto hullpsmesh = polyscope::registerSurfaceMesh("stan grads hull", tmp_solver->hullGeometry->inputVertexPositions,
-  //                                                 tmp_solver->hullMesh->getFaceVertexList());
-  // hullpsmesh->setEnabled(true);
-  // hullpsmesh->setTransparency(0.7);
-  // hullpsmesh->addVertexVectorQuantity("stan grads", dfdU)->setEnabled(true);
+  auto hullpsmesh = polyscope::registerSurfaceMesh("stan grads hull", tmp_solver->hullGeometry->inputVertexPositions,
+                                                  tmp_solver->hullMesh->getFaceVertexList());
+  hullpsmesh->setEnabled(true);
+  hullpsmesh->setTransparency(0.7);
+  hullpsmesh->addVertexVectorQuantity("stan grads", dfdV)->setEnabled(true);
 }
 
 

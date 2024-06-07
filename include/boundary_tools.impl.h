@@ -38,7 +38,7 @@ Scalar BoundaryBuilder::dice_energy(//Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hul
         Edge current_e = e;
         Face f1 = current_e.halfedge().face(),
              f2 = current_e.halfedge().twin().face();
-        draw_arc_on_sphere_static(vec_to_GC_vec3(face_normals[f1]), vec_to_GC_vec3(face_normals[f2]), Vector3({0,2,0}), 1., 12, 1, 0.1, glm::vec3(1., 0., 1.), 0.5);
+        // draw_arc_on_sphere_static(vec_to_GC_vec3(face_normals[f1]), vec_to_GC_vec3(face_normals[f2]), Vector3({0,2,0}), 1., 12, 1, 0.1, glm::vec3(1., 0., 1.), 0.5);
         Face ff1 = face_last_face[f1];
         Face ff2 = face_last_face[f2];
         // for visuals
@@ -98,16 +98,45 @@ Scalar BoundaryBuilder::dice_energy(//Eigen::Matrix<Scalar, -1, 3, 0, -1, 3> hul
             }
         }
     }
-    printf(" static func face areas:\n");
-    Scalar total_area = 0.;
+    // sort for dice energy
+    std::vector<std::pair<Face, Scalar>> probs;
     for (Face f: hull_mesh.faces()){
-        if (face_last_face[f] == f){
-            total_area += face_region_area[f];
-            // printf("  -- face %zu: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
+        if (face_region_area[f] > 0){
+            // face_region_area[f] /= (4.*PI);
+            probs.push_back({f, face_region_area[f]});
         }
     }
+    std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
+    printf(" static sorted probs: \n");
+    Scalar energy = 0.;
+    size_t tmp_side_cnt = 0;
+    double goal_prob = 1. / (double)side_count;
+    for (auto pair: probs){
+        std::cout << "  -f" << pair.first.getIndex() << " : " << pair.second << std::endl;
+        
+        if (tmp_side_cnt < side_count){
+            Scalar diff = face_region_area[pair.first] - goal_prob * 4. * PI;
+            energy += diff * diff;
+        }
+        tmp_side_cnt++;
+    }
+    if (tmp_side_cnt < side_count){
+        printf("  - not enough faces\n");
+        energy += (side_count - tmp_side_cnt) * goal_prob * goal_prob * 4. * PI * 4. * PI;
+    }
+
+    
+    return energy; // max prob
+    // DEBUG with total area = 4 PI
+    // Scalar total_area = 0.;
+    // for (Face f: hull_mesh.faces()){
+    //     if (face_last_face[f] == f){
+    //         total_area += face_region_area[f];
+    //         // printf("  -- face %zu: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
+    //     }
+    // }
     // printf("total face areas: %f\n", total_area);
-    return total_area;
+    // return total_area;
 }
 
 template <typename Scalar>

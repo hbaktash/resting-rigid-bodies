@@ -270,7 +270,7 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
 
 
 double BoundaryBuilder::get_fair_dice_energy(size_t side_count){
-    double energy = 0., goal_area = 4.*PI/(double)side_count, goal_prob = 1./6.;
+    double energy = 0., goal_area = 4.*PI/(double)side_count, goal_prob = 1./(double)side_count;
     std::vector<double> face_areas;
     for (Face f: forward_solver->hullMesh->faces()){
         if (forward_solver->face_last_face[f] == f)
