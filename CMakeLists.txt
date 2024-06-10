@@ -28,8 +28,8 @@ set(SRC_FILES
     src/boundary_tools.cpp
     src/inv_design.cpp
     src/convex_hull.cpp
-    src/deformation.cpp
-    src/optimization.cpp
+    # src/deformation.cpp
+    # src/optimization.cpp
     src/remesh_tools.cpp
 )
 
@@ -56,11 +56,4 @@ stan::stan
 )
 set_property(TARGET adDebug PROPERTY CXX_STANDARD 20)
 
-add_executable(convexFill src/main_convex_fill.cpp)
-target_link_libraries(convexFill
-PRIVATE
-rolling_dragons::rolling_dragons
-taywee::args
-stan::stan
-)
 

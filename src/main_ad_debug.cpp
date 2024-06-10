@@ -414,26 +414,7 @@ void test_approx_vs_ad_grads(){
 void test_static_dice_pipeline(){
   Forward3DSolver *tmp_solver = new Forward3DSolver(mesh, geometry, G, true);
   tmp_solver->set_uniform_G();
-  tmp_solver->updated = false;
-  // printf("initalize precomputes\n");
-  tmp_solver->initialize_pre_computes();
-  tmp_solver->build_face_last_faces();
-
-  std::vector<Edge> terminal_edges;
-  for (Edge e: tmp_solver->hullMesh->edges())
-    if (tmp_solver->edge_next_vertex[e].getIndex() == INVALID_IND){ // singular edge
-      Face f1 = e.halfedge().face(),
-           f2 = e.halfedge().twin().face();
-      if (tmp_solver->face_last_face[f1] != tmp_solver->face_last_face[f2]){ // saddle edge
-          terminal_edges.push_back(e);
-      }
-  }
   Vector3 GG = tmp_solver->get_G();
-  tmp_solver->build_face_last_faces();
-  printf("testing static dice E\n");
-  // // Boundar
-  // Eigen::Vector3<double> GG_eigen({GG.x, GG.y, GG.z});
-  // BoundaryBuilder::intersect_arcs(GG_eigen, GG_eigen,GG_eigen,GG_eigen);
   VertexData<Vector3> positions = tmp_solver->hullGeometry->inputVertexPositions;
   size_t n = positions.getMesh()->nVertices();
   Eigen::MatrixX3<double> mat(n, 3);
@@ -445,29 +426,13 @@ void test_static_dice_pipeline(){
   }
   // Eigen::MatrixX3<double> tmp_positions = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
   Eigen::Vector3<double> G_vec({GG.x, GG.y, GG.z});
-  double dice_e1 = BoundaryBuilder::dice_energy<double>(mat, G_vec, *tmp_solver->hullMesh,
-                                          terminal_edges, 
-                                          tmp_solver->face_last_face, 
-                                          tmp_solver->vertex_is_stabilizable, 
-                                          tmp_solver->edge_next_vertex,
-                                          fair_sides_count);
-  printf("pre-lambda dice e: %f\n", dice_e1);
-  // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
-  printf("stan math test: %f \n", stan::math::normal_lpdf(1, 2, 3));
-  // C++20 templated lambda version of total_surface_area taking V_vec
   auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
     // decompose flat vector to positions and center of mass
     // G is the last 3 elements
     Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
     size_t flat_n = hull_poses_G_append_vec.rows();
     Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-    std::cout << "G:" << G_eigen << std::endl;
-    return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, *tmp_solver->hullMesh,
-                                                terminal_edges, 
-                                                tmp_solver->face_last_face, 
-                                                tmp_solver->vertex_is_stabilizable, 
-                                                tmp_solver->edge_next_vertex,
-                                                fair_sides_count);
+    return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, *tmp_solver, fair_sides_count);
   };
   Eigen::VectorXd hull_poses_vec = mat.reshaped();
   Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
@@ -490,6 +455,60 @@ void test_static_dice_pipeline(){
   hullpsmesh->addVertexVectorQuantity("stan grads", dfdV)->setEnabled(true);
 }
 
+
+void dice_energy_optimization(sizet_t max_iters = 100){
+  Forward3DSolver *tmp_solver = new Forward3DSolver(mesh, geometry, G, true);
+  tmp_solver->set_uniform_G();
+  
+  auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
+    // decompose flat vector to positions and center of mass
+    // G is the last 3 elements
+    Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
+    size_t flat_n = hull_poses_G_append_vec.rows();
+    Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
+    return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, *tmp_solver, fair_sides_count);
+  };
+
+  // vectorize hull positions and G
+  Vector3 GG = tmp_solver->get_G();
+  Eigen::Vector3<double> G_vec({GG.x, GG.y, GG.z});
+  
+  VertexData<Vector3> positions = tmp_solver->hullGeometry->inputVertexPositions;
+  Eigen::MatrixX3<double> mat(positions.getMesh()->nVertices(), 3);
+  for (geometrycentral::surface::Vertex v: positions.getMesh()->vertices()){
+      geometrycentral::Vector3 p = positions[v];
+      mat(v.getIndex(),0) = p.x;
+      mat(v.getIndex(),1) = p.y;
+      mat(v.getIndex(),2) = p.z;
+  }
+
+  for (size_t iter = 0; iter < max_iters; iter++){
+
+    // flatten and concat
+    Eigen::VectorXd hull_poses_vec = mat.reshaped();
+    Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
+    hull_poses_and_G_vec << hull_poses_vec, G_vec;
+    // printf("dice energy lambda: %f\n", dice_energy_lambda(hull_poses_and_G_vec));
+    Eigen::VectorXd dfdU_vec;
+    double dice_e;
+    stan::math::gradient(dice_energy_lambda, hull_poses_and_G_vec, dice_e, dfdU_vec);
+    // extract gradients and unflatten
+    std::cout << "energy at iter " << iter << ": " << dice_e << std::endl;
+    std::cout << "extracting grads" << std::endl;
+    Eigen::Vector3d G_grad = dfdU_vec.tail(3);
+    size_t flat_n = dfdU_vec.rows();
+    Eigen::Map<Eigen::MatrixXd> dfdV(dfdU_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
+
+    // TODO
+  }
+    
+  // visualize grad vectors
+  auto hullpsmesh = polyscope::registerSurfaceMesh("stan grads hull", tmp_solver->hullGeometry->inputVertexPositions,
+                                                  tmp_solver->hullMesh->getFaceVertexList());
+  hullpsmesh->setEnabled(true);
+  hullpsmesh->setTransparency(0.7);
+  hullpsmesh->addVertexVectorQuantity("stan grads", dfdV)->setEnabled(true);
+}
 
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
@@ -524,7 +543,8 @@ void myCallback() {
     test_approx_vs_ad_grads();
   }
   if (ImGui::Button("test static dice pipeline")) {
-    test_static_dice_pipeline();
+    // test_static_dice_pipeline();
+    dice_energy_optimization();
   }
 }
 
