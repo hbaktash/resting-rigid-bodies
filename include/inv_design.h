@@ -24,7 +24,6 @@
 // #include "geometrycentral/surface/surface_point.h"
 // #include "geometrycentral/utilities/eigen_interop_helpers.h"
 #include "boundary_tools.h"
-#include "geometrycentral/numerical/linear_solvers.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -111,5 +110,7 @@ class InverseSolver{
 
         // Diffuse gradients
         VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, 
+                                              double sobolev_lambda, size_t sobolev_p = 2);
+        VertexData<Vector3> sobolev_diffuse_gradients(Eigen::MatrixXd grads, 
                                               double sobolev_lambda, size_t sobolev_p = 2);
 };

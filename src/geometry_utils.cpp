@@ -22,6 +22,22 @@
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
 
+
+
+
+
+// tmp tools ; should be in utils
+Vector3 vec2vec3(Vector<double> v){
+    Vector3 ans({v[0], v[1], v[2]});
+    return ans;
+}
+
+
+Vector3 vec3d_to_vec3(Eigen::Vector3d v){
+    Vector3 ans({v[0], v[1], v[2]});
+    return ans;
+}
+
 // tiny geometry stuff; move elsewhere
 // Gradients
 // formula source in header file
@@ -280,4 +296,57 @@ Edge single_convexity_repair(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* 
     }
         // mesh->compress();
     // }
+}
+
+
+DenseMatrix<double> solve_dense_b(LinearSolver<double> *solver, DenseMatrix<double> b){
+    DenseMatrix<double> sol(b.rows(), b.cols());
+    
+    for (size_t i = 0; i < b.cols(); i++){
+        sol.col(i) = solver->solve(b.col(i));
+    }
+
+    return sol;
+}
+
+
+Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurfaceMesh &hull_mesh, 
+                                              double sobolev_lambda, size_t sobolev_p){
+    if (sobolev_lambda == 0.){
+        return grads;
+    }
+    size_t n = hull_mesh.nVertices(), 
+           e = hull_mesh.nEdges();
+    SparseMatrix<double> graph_L(n, n);
+    std::vector<Eigen::Triplet<double>> gL_tripletList;
+    gL_tripletList.reserve(4*e);
+    for (Edge e: hull_mesh.edges()){
+        Vertex v1 = e.halfedge().vertex(),
+               v2 = e.halfedge().twin().vertex();
+        gL_tripletList.push_back(Eigen::Triplet<double>(v1.getIndex(), v2.getIndex(), -1.));
+        gL_tripletList.push_back(Eigen::Triplet<double>(v2.getIndex(), v1.getIndex(), -1.));
+        gL_tripletList.push_back(Eigen::Triplet<double>(v1.getIndex(), v1.getIndex(), 1.));
+        gL_tripletList.push_back(Eigen::Triplet<double>(v2.getIndex(), v2.getIndex(), 1.));
+    }
+    graph_L.setFromTriplets(gL_tripletList.begin(), gL_tripletList.end());
+
+    // Sobolev operator
+    SparseMatrix<double> sobolevOp = sobolev_lambda * graph_L + identityMatrix<double>(n);
+    PositiveDefiniteSolver<double> sobolevSolver(sobolevOp);
+    DenseMatrix<double> sobolev_grads;
+    for (size_t i = 0; i < sobolev_p; i++){
+        sobolev_grads = solve_dense_b(&sobolevSolver, grads);
+    }
+    
+    return sobolev_grads;                                                    
+}
+
+
+VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, ManifoldSurfaceMesh &hull_mesh, double sobolev_lambda, size_t sobolev_p){
+    Eigen::MatrixXd sobolev_grads = sobolev_diffuse_gradients(vertex_data_to_matrix(grads), hull_mesh, sobolev_lambda, sobolev_p);
+    VertexData<Vector3> sobolev_grads_vd(hull_mesh);
+    for (Vertex v: hull_mesh.vertices()){
+        sobolev_grads_vd[v] = vec2vec3(sobolev_grads.row(v.getIndex()));
+    }
+    return sobolev_grads_vd;
 }

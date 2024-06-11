@@ -107,6 +107,13 @@ geometrycentral::DenseMatrix<double> face_data_to_matrix(geometrycentral::surfac
     return mat;
 }
 
-// Eigen::SparseMatrix<double> tinyADify_constraint_mat(Eigen::MatrixXd A){
-    
-// }
+
+geometrycentral::surface::VertexData<geometrycentral::Vector3> vertex_matrix_to_data(Eigen::MatrixXd positions, 
+                                                                                     geometrycentral::surface::ManifoldSurfaceMesh& mesh){
+    geometrycentral::surface::VertexData<geometrycentral::Vector3> ans(mesh);
+    for (geometrycentral::surface::Vertex v: mesh.vertices()){
+        ans[v] = vec_to_GC_vec3(positions.row(v.getIndex()));
+    }
+    return ans;
+}
+

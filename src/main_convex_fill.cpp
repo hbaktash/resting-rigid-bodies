@@ -372,64 +372,6 @@ void update_hull_of_hull(VertexData<Vector3> positions){
     forwardSolver->hullGeometry->inputVertexPositions[v] = hull_poses[v.getIndex()];
 }
 
-// hull update stuff
-double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver fwd_solver, bool frozen_G){
-  printf(" ---- hull update line search ----\n");
-  // if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(true);
-  double grad_norm2 = 0.;
-  for (Vector3 v3: grad.toVector())
-    grad_norm2 += v3.norm2();
-  
-  VertexData<Vector3> initial_poses = fwd_solver.hullGeometry->inputVertexPositions;
-  std::vector<std::vector<size_t>> old_face_list = fwd_solver.hullMesh->getFaceVertexList();
-  //TODO: revert the current solver
-  ManifoldSurfaceMesh *tmp_mesh = new ManifoldSurfaceMesh(old_face_list);
-  VertexPositionGeometry *tmp_geo = new VertexPositionGeometry(*tmp_mesh, vertex_data_to_matrix(initial_poses));
-  Forward3DSolver *tmp_solver = new Forward3DSolver(tmp_mesh, tmp_geo,
-                                                    fwd_solver.get_G(), false);
-  tmp_solver->updated = false;
-  tmp_solver->initialize_pre_computes();
-
-  BoundaryBuilder *tmp_builder = new BoundaryBuilder(tmp_solver);
-  tmp_builder->build_boundary_normals();
-
-  double s_min_dice_energy = tmp_builder->get_fair_dice_energy(fair_sides_count);
-  printf(" current fair dice energy: %f\n", s_min_dice_energy);
-  double s_max = step_size3,
-         s_min = 0.,
-         _armijo_const = 0.; //1e-4;
-  int max_iters = 400;
-  double s = s_max; //
-
-  double tmp_fair_dice_energy;
-  int j;
-  bool found_smth_optimal = false;
-  for (j = 0; j < max_iters; j++) {
-      // update stuff
-      // printf(" ^^ at line search iter: %d  s = %f\n", j, s);
-      auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(initial_poses + s * grad); // changes tmp folver's "hull" mesh ..
-      tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, tmp_solver->get_G(), false);
-      if (!frozen_G)
-        tmp_solver->set_uniform_G();
-      tmp_solver->updated = false;
-      tmp_solver->initialize_pre_computes();
-      tmp_builder = new BoundaryBuilder(tmp_solver);
-      tmp_builder->build_boundary_normals();
-      
-      tmp_fair_dice_energy = tmp_builder->get_fair_dice_energy(fair_sides_count);
-      // printf("  *** temp fair dice energy %d: %f\n", j, tmp_fair_dice_energy);
-      if (tmp_fair_dice_energy <= s_min_dice_energy - _armijo_const * s * grad_norm2){
-        found_smth_optimal = true;
-        break; //  x new is good
-      }
-      else
-          s *= dice_search_decay;
-  }
-  s = found_smth_optimal ? s : 0.;
-  printf("line search for dice ended at iter %d, s: %.10f, \n \t\t\t\t\t fnew: %f \n", j, s, tmp_fair_dice_energy);
-  return s;
-} 
-
 
 void animate_convex_fill_deformation(ManifoldSurfaceMesh *_mesh, VertexPositionGeometry *_old_geometry,
                                      ManifoldSurfaceMesh *_convex_mesh, VertexPositionGeometry *_convex_geometry){

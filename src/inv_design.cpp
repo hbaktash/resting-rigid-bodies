@@ -21,18 +21,6 @@
 
 
 
-// tmp tools
-Vector3 vec2vec3(Vector<double> v){
-    Vector3 ans({v[0], v[1], v[2]});
-    return ans;
-}
-
-
-Vector3 vec3d_to_vec3(Eigen::Vector3d v){
-    Vector3 ans({v[0], v[1], v[2]});
-    return ans;
-}
-
 // optimization stuff
 
 InverseSolver::InverseSolver(BoundaryBuilder* boundaryBuilder){
@@ -461,16 +449,6 @@ void InverseSolver::subdivide_for_aggressive_updates(VertexData<Vector3> hull_up
 }
 
 
-DenseMatrix<double> solve_dense_b(LinearSolver<double> *solver, DenseMatrix<double> b){
-    DenseMatrix<double> sol(b.rows(), b.cols());
-    
-    for (size_t i = 0; i < b.cols(); i++){
-        sol.col(i) = solver->solve(b.col(i));
-    }
-
-    return sol;
-}
-
 VertexData<DenseMatrix<double>> 
 InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos){
     VertexData<DenseMatrix<double>> rotations(*forwardSolver->inputMesh);
@@ -704,32 +682,7 @@ VertexData<Vector3> InverseSolver::diffusive_update_positions(VertexData<Vector3
 }
 
 
-VertexData<Vector3> InverseSolver::sobolev_diffuse_gradients(VertexData<Vector3> grads, double sobolev_lambda, size_t sobolev_p){
-    size_t n = forwardSolver->hullMesh->nVertices(), 
-           e = forwardSolver->hullMesh->nEdges();
-    SparseMatrix<double> graph_L(n, n);
-    std::vector<Eigen::Triplet<double>> gL_tripletList;
-    gL_tripletList.reserve(4*e);
-    for (Edge e: forwardSolver->hullMesh->edges()){
-        Vertex v1 = e.halfedge().vertex(),
-               v2 = e.halfedge().twin().vertex();
-        gL_tripletList.push_back(Eigen::Triplet<double>(v1.getIndex(), v2.getIndex(), -1.));
-        gL_tripletList.push_back(Eigen::Triplet<double>(v2.getIndex(), v1.getIndex(), -1.));
-        gL_tripletList.push_back(Eigen::Triplet<double>(v1.getIndex(), v1.getIndex(), 1.));
-        gL_tripletList.push_back(Eigen::Triplet<double>(v2.getIndex(), v2.getIndex(), 1.));
-    }
-    graph_L.setFromTriplets(gL_tripletList.begin(), gL_tripletList.end());
 
-    // Sobolev operator
-    SparseMatrix<double> sobolevOp = sobolev_lambda * graph_L + identityMatrix<double>(n);
-    PositiveDefiniteSolver<double> sobolevSolver(sobolevOp);
-    DenseMatrix<double> sobolev_grads;
-    for (size_t i = 0; i < sobolev_p; i++){
-        sobolev_grads = solve_dense_b(&sobolevSolver, vertex_data_to_matrix(grads));
-    }
-    VertexData<Vector3> sobolev_grads_vd(*forwardSolver->hullMesh);
-    for (Vertex v: forwardSolver->hullMesh->vertices()){
-        sobolev_grads_vd[v] = vec2vec3(sobolev_grads.row(v.getIndex()));
-    }
-    return sobolev_grads_vd;
-}
+// VertexData<Vector3> InverseSolver::sobolev_diffuse_gradients(Eigen::MatrixXd grads, double sobolev_lambda, size_t sobolev_p = 2){
+//     vertex_data_to_matrix
+// }

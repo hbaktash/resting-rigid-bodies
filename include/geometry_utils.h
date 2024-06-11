@@ -18,12 +18,21 @@
 */
 #pragma once
 
+#include "utils.h"
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
+#include "geometrycentral/numerical/linear_solvers.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
+
+
+
+
+// tmp tools
+Vector3 vec2vec3(Vector<double> v);
+Vector3 vec3d_to_vec3(Eigen::Vector3d v);
 
 // tiny geometry stuff; move elsew
 // Gradient stuff
@@ -60,3 +69,10 @@ bool check_hollow_tet_vertex(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* 
 bool check_convexity_and_repair(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);
 
 Edge single_convexity_repair(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);
+
+DenseMatrix<double> solve_dense_b(LinearSolver<double> *solver, DenseMatrix<double> b);
+
+VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, ManifoldSurfaceMesh &hull_mesh, 
+                                              double sobolev_lambda, size_t sobolev_p = 2);
+Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurfaceMesh &hull_mesh,
+                                              double sobolev_lambda, size_t sobolev_p = 2);
