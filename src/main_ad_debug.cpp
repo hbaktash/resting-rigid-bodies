@@ -372,7 +372,8 @@ void test_static_dice_pipeline(){
   double dice_e;
   stan::math::gradient(dice_energy_lambda, hull_poses_and_G_vec, dice_e, dfdU_vec);
   // extract gradients
-  printf("extracting grads");
+  std::cout << "Stan energy: " << dice_e << std::endl;
+  std::cout << "extracting grads" << std::endl;
   Eigen::Vector3d G_grad = dfdU_vec.tail(3);
   size_t flat_n = dfdU_vec.rows();
   Eigen::Map<Eigen::MatrixXd> dfdV(dfdU_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
@@ -394,16 +395,18 @@ void dice_energy_optimization(size_t max_iters = 100){
   Vector3 GG = tmp_solver->get_G();
   Eigen::Vector3<double> G_vec({GG.x, GG.y, GG.z});
   
-  VertexData<Vector3> positions = tmp_solver->hullGeometry->inputVertexPositions;
-  Eigen::MatrixX3<double> mat(positions.getMesh()->nVertices(), 3);
-  for (geometrycentral::surface::Vertex v: positions.getMesh()->vertices()){
-      geometrycentral::Vector3 p = positions[v];
-      mat(v.getIndex(),0) = p.x;
-      mat(v.getIndex(),1) = p.y;
-      mat(v.getIndex(),2) = p.z;
-  }
+  // VertexData<Vector3> positions = tmp_solver->hullGeometry->inputVertexPositions;
+  // Eigen::MatrixX3<double> mat(positions.getMesh()->nVertices(), 3);
+  // for (geometrycentral::surface::Vertex v: positions.getMesh()->vertices()){
+  //     geometrycentral::Vector3 p = positions[v];
+  //     mat(v.getIndex(),0) = p.x;
+  //     mat(v.getIndex(),1) = p.y;
+  //     mat(v.getIndex(),2) = p.z;
+  // }
 
   for (size_t iter = 0; iter < max_iters; iter++){
+    Eigen::MatrixXd mat = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
+    // redefine lambda to get the latest solver; TODO should I?
     auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
       // decompose flat vector to positions and center of mass
       // G is the last 3 elements
@@ -421,7 +424,7 @@ void dice_energy_optimization(size_t max_iters = 100){
     double dice_e;
     stan::math::gradient(dice_energy_lambda, hull_poses_and_G_vec, dice_e, dfdU_vec);
     // extract gradients and unflatten
-    std::cout << "energy at iter " << iter << ": " << dice_e << std::endl;
+    std::cout << "Stan energy at iter " << iter << ": " << dice_e << std::endl;
     std::cout << "extracting grads" << std::endl;
     Eigen::Vector3d G_grad = dfdU_vec.tail(3);
     size_t flat_n = dfdU_vec.rows();
@@ -442,7 +445,8 @@ void dice_energy_optimization(size_t max_iters = 100){
 
     // line search
     VertexData<Vector3> grad = vertex_matrix_to_data(dfdV, *tmp_solver->hullMesh);
-    double step_size0 = 1., decay = 0.95;
+    double step_size0 = 0.01, decay = 0.95;
+    grad = -1. * grad;
     double s = hull_update_line_search(grad, *tmp_solver, fair_sides_count, step_size0, decay, frozen_G, 400, 1e-6);
 
     // update hull 
@@ -451,7 +455,9 @@ void dice_energy_optimization(size_t max_iters = 100){
     if (!frozen_G){
       tmp_solver->set_uniform_G();
     }
-    mat = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
+    // polyscope::registerSurfaceMesh("temp hull NEW with grads", tmp_solver->hullGeometry->inputVertexPositions,
+    //                                                 tmp_solver->hullMesh->getFaceVertexList());
+    // polyscope::show();
   }
     
 }
@@ -489,7 +495,9 @@ void myCallback() {
     test_approx_vs_ad_grads();
   }
   if (ImGui::Button("test static dice pipeline")) {
-    // test_static_dice_pipeline();
+    test_static_dice_pipeline();
+  }
+  if (ImGui::Button("optimize dice energy")) {
     dice_energy_optimization();
   }
 }

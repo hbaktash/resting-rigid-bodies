@@ -759,9 +759,13 @@ double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver &fwd_so
   int j;
   for (int j = 0; j < max_iters; j++) {
       // update stuff
-      // printf(" ^^ at line search iter: %d  s = %f\n", j, s);
+      printf(" ^^ at line search iter: %d  s = %f\n", j, s);
+    //   auto tmpmesh = polyscope::registerSurfaceMesh("temp hull LINE SEARCH", initial_hull_poses + s * grad,
+    //                                                 fwd_solver.hullMesh->getFaceVertexList());
+    //   tmpmesh->setSurfaceColor({0.6,0,0.5});
+    //   polyscope::show();
       auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(initial_hull_poses + s * grad); // changes tmp folver's "hull" mesh ..
-      tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, tmp_solver->get_G(), false);
+      tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, fwd_solver.get_G(), false);
       if (!frozen_G)
         tmp_solver->set_uniform_G();
       tmp_solver->updated = false;
@@ -770,7 +774,8 @@ double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver &fwd_so
       tmp_builder->build_boundary_normals();
       
       tmp_fair_dice_energy = tmp_builder->get_fair_dice_energy(dice_side_count);
-      // printf("  *** temp fair dice energy %d: %f\n", j, tmp_fair_dice_energy);
+      printf("  *** temp fair dice energy %d: %f\n", j, tmp_fair_dice_energy);
+
       if (tmp_fair_dice_energy <= s_min_dice_energy){
         found_smth_optimal = true;
         break; //  x new is good
