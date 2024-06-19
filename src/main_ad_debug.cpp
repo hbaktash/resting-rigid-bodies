@@ -394,15 +394,6 @@ void dice_energy_optimization(size_t max_iters = 100){
   // vectorize hull positions and G
   Vector3 GG = tmp_solver->get_G();
   Eigen::Vector3<double> G_vec({GG.x, GG.y, GG.z});
-  
-  // VertexData<Vector3> positions = tmp_solver->hullGeometry->inputVertexPositions;
-  // Eigen::MatrixX3<double> mat(positions.getMesh()->nVertices(), 3);
-  // for (geometrycentral::surface::Vertex v: positions.getMesh()->vertices()){
-  //     geometrycentral::Vector3 p = positions[v];
-  //     mat(v.getIndex(),0) = p.x;
-  //     mat(v.getIndex(),1) = p.y;
-  //     mat(v.getIndex(),2) = p.z;
-  // }
 
   for (size_t iter = 0; iter < max_iters; iter++){
     Eigen::MatrixXd mat = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
@@ -431,6 +422,7 @@ void dice_energy_optimization(size_t max_iters = 100){
     Eigen::Map<Eigen::MatrixXd> dfdV(dfdU_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
 
     // if(do_sobolev_dice_grads){
+    printf("diffusing grads\n");
     Eigen::MatrixXd diffused_dfdV = sobolev_diffuse_gradients(dfdV, *tmp_solver->hullMesh, sobolev_lambda, sobolev_p);
     // }
 
@@ -442,9 +434,11 @@ void dice_energy_optimization(size_t max_iters = 100){
     hullpsmesh->addVertexVectorQuantity("stan grads", dfdV)->setEnabled(true);
     hullpsmesh->addVertexVectorQuantity("stan diffused grads", diffused_dfdV)->setEnabled(true);
     polyscope::show();
+    polyscope::screenshot(false);
 
     // line search
-    VertexData<Vector3> grad = vertex_matrix_to_data(dfdV, *tmp_solver->hullMesh);
+    // VertexData<Vector3> grad = vertex_matrix_to_data(dfdV, *tmp_solver->hullMesh);
+    VertexData<Vector3> grad = vertex_matrix_to_data(diffused_dfdV, *tmp_solver->hullMesh);
     double step_size0 = 0.01, decay = 0.95;
     grad = -1. * grad;
     double s = hull_update_line_search(grad, *tmp_solver, fair_sides_count, step_size0, decay, frozen_G, 400, 1e-6);

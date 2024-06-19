@@ -24,7 +24,7 @@
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
 #include "polyscope/point_cloud.h"
-#include "args/args.hxx"
+#include "args.hxx"
 #include "imgui.h"
 
 #include "coloring.h"
@@ -175,9 +175,7 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false,
     tmp_solver->initialize_pre_computes();
   // std::vector<Vector3> boundary_normals;
   if (draw_boundary_patches){
-    auto net_pair = build_and_draw_stable_patches_on_gauss_map(bnd_builder, dummy_psMesh_for_regions,
-                                               vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
-                                               on_height_surface);
+    auto net_pair = build_and_draw_stable_patches_on_gauss_map(bnd_builder, vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, on_height_surface);
     if (test_guess)
       vis_utils.draw_guess_pc(net_pair.first, net_pair.second);
     else {
@@ -298,7 +296,12 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
 void color_faces(Forward3DSolver *fwd_solver){
   if (recolor_faces){
     // printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
-    face_colors = generate_random_colors(fwd_solver->hullMesh);
+    std::vector<Face> stable_faces;
+    for (Face f: fwd_solver->hullMesh->faces()){
+      if (fwd_solver->face_is_stable(f))
+        stable_faces.push_back(f);
+    }
+    face_colors = generate_random_colors(fwd_solver->hullMesh, stable_faces);
     for (Face f: fwd_solver->hullMesh->faces()){
       if (!fwd_solver->face_is_stable(f))
         face_colors[f] = default_face_color;
@@ -317,11 +320,11 @@ void update_solver_and_boundaries(){
   // boundary_builder->build_boundary_normals();
   printf("  \n ************************************************ no AD \n");
   boundary_builder->build_boundary_normals();
-  printf("  \n ************************************************  AD  \n");
+  // printf("  \n ************************************************  AD  \n");
   // autodiff::MatrixX3var poses_ad = vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions);
   // autodiff::Vector3var G_ad = vec32vec(forwardSolver->get_G());
-  boundary_builder = new BoundaryBuilder(forwardSolver);
-  boundary_builder->build_boundary_normals_for_autodiff(true); // ( poses_ad, G_ad, ) autodiff; generate_gradients = true
+  // boundary_builder = new BoundaryBuilder(forwardSolver);
+  // boundary_builder->build_boundary_normals_for_autodiff(true); // ( poses_ad, G_ad, ) autodiff; generate_gradients = true
   // for (Face f: forwardSolver->hullMesh->faces()){
   //   if (forwardSolver->face_last_face[f] == f){
   //     polyscope::getSurfaceMesh("init hull mesh")->addVertexVectorQuantity("ad grads", boundary_builder->df_dv_grads_ad[f])->setEnabled(true);
@@ -485,7 +488,8 @@ void version2_dice_pipeline(size_t step_count = 1){
       current_fill_iter = iter;
       energies[1][iter] = tinyAD_flatten(vertex_data_to_matrix(dice_energy_grads)).norm();
       current_sobolev_lambda *= sobolev_lambda_decay;
-      dice_energy_grads = tmp_inv_solver->sobolev_diffuse_gradients(dice_energy_grads, current_sobolev_lambda, sobolev_p);
+      dice_energy_grads = sobolev_diffuse_gradients(dice_energy_grads, *tmp_solver->hullMesh, current_sobolev_lambda, sobolev_p);
+      // dice_energy_grads = tmp_inv_solver->sobolev_diffuse_gradients(dice_energy_grads, current_sobolev_lambda, sobolev_p);
       
       energies[0][iter] = tinyAD_flatten(vertex_data_to_matrix(dice_energy_grads)).norm();
       energies[2][iter] = energies[0][iter] / energies[1][iter];
@@ -499,7 +503,7 @@ void version2_dice_pipeline(size_t step_count = 1){
     polyscope::frameTick();
     // polyscope::show();
 
-    double opt_step_size = hull_update_line_search(dice_energy_grads, *tmp_solver, frozen_G);
+    double opt_step_size = hull_update_line_search(dice_energy_grads, *tmp_solver, fair_sides_count, step_size3, dice_search_decay, frozen_G);
     std::cout << ANSI_FG_RED << "opt step size: " << opt_step_size << ANSI_RESET << "\n";
     auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(tmp_solver->hullGeometry->inputVertexPositions + opt_step_size * dice_energy_grads);
     tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, tmp_solver->get_G(), false); 
@@ -629,7 +633,7 @@ void myCallback() {
   if (ImGui::Checkbox("dynamic remesh", &dynamic_remesh));
   if (ImGui::SliderFloat("growth p", &internal_p, 0., 1.));
   if (ImGui::SliderFloat("refinement CP threshold ", &refinement_CP_threshold, 0., 1.));
-  if(ImGui::Checkbox("enforce snapping at threshold", &enforce_snapping));
+  if (ImGui::Checkbox("enforce snapping at threshold", &enforce_snapping));
   if (ImGui::SliderFloat("split rubostness threshold ", &split_robustness_threshold, 0., 1.));
   if (ImGui::InputFloat2("init/final bending log ", bending_lambda_exps)
     || ImGui::InputFloat2("init/final membrane log ", membrane_lambda_exps)

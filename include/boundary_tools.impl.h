@@ -58,6 +58,9 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         // for visuals
         Eigen::Vector3<Scalar> ff1_normal  = face_normals[ff1], // static
                                ff2_normal  = face_normals[ff2]; // static
+        Eigen::Vector3<Scalar> adj_f1_normal  = face_normals[f1], // static
+                               adj_f2_normal  = face_normals[f2]; // static
+        
         for (Vertex v: {e.firstVertex(), e.secondVertex()}){ // two ways to go from a saddle edge
             
             Eigen::Vector3<Scalar> tmp_normal  = edge_bnd_normal;   // changes in the while loop
@@ -66,9 +69,15 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             // polyscope::registerPointCloud("current V", std::vector<Vector3>{vec_to_GC_vec3(tmp_normal) +Vector3({0,2,0})});
             // polyscope::show();
 
-            // ** DONT COVERT these to template**
+            // ** DONT CONVERT these to template**
             double ff1_area_sign = ff1_normal.dot(tmp_normal.cross(v_normal)) >= 0 ? 1. : -1.; // ff1 on rhs of bndN->vN; static
             double ff2_area_sign = ff2_normal.dot(tmp_normal.cross(v_normal)) >= 0 ? 1. : -1.; // ff2 on rhs of bndN->vN; static
+            double adj_f1_area_sign = adj_f1_normal.dot(tmp_normal.cross(v_normal)) >= 0 ? 1. : -1.; // ff1 on rhs of bndN->vN; static
+            double adj_f2_area_sign = adj_f2_normal.dot(tmp_normal.cross(v_normal)) >= 0 ? 1. : -1.; // ff2 on rhs of bndN->vN; static
+            
+            ff1_area_sign *= adj_f1_area_sign == ff1_area_sign ? 1. : -1.;
+            ff2_area_sign *= adj_f2_area_sign == ff2_area_sign ? 1. : -1.;
+
             Eigen::Vector3<Scalar> next_normal;                     // changes in the while loop
             while (true) {
                 if (vertex_is_stabilizable[current_v]){
@@ -113,13 +122,16 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         }
     }
     // sort for dice energy
+    Scalar total_area = 0.;
     std::vector<std::pair<Face, Scalar>> probs;
     for (Face f: tmp_solver.hullMesh->faces()){
         if (face_region_area[f] > 0){
             // face_region_area[f] /= (4.*PI);
             probs.push_back({f, face_region_area[f]});
+            total_area += face_region_area[f];
         }
     }
+    std::cout << "sum over probabilities: " << total_area/(4.*PI) << std::endl;
     std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
     printf(" static sorted probs: \n");
     Scalar energy = 0.;
@@ -142,17 +154,6 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
     // return probs[0].second; // DEBUG: max prob
     
     return energy; 
-    
-    // DEBUG with total area = 4 PI
-    // Scalar total_area = 0.;
-    // for (Face f: tmp_solver.hullMesh->faces()){
-    //     if (face_last_face[f] == f){
-    //         total_area += face_region_area[f];
-    //         // printf("  -- face %zu: %f\n", f.getIndex(), face_region_area[f]/(4.*PI));
-    //     }
-    // }
-    // printf("total face areas: %f\n", total_area);
-    // return total_area;
 }
 
 template <typename Scalar>

@@ -263,6 +263,11 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
     face_region_area[bnd_normal->f1] += f1_sign_change * abs(triangle_patch_area_on_sphere(f1_normal, bnd_normal->normal, next_normal));
     face_region_area[bnd_normal->f2] += f2_sign_change * abs(triangle_patch_area_on_sphere(f2_normal, bnd_normal->normal, next_normal));
     
+    if ((bnd_normal->f1.getIndex() == 50 || bnd_normal->f2.getIndex() == 50) && (f1_sign_change != f2_sign_change)){
+        printf("at face 50\n");
+        printf("  - initial signs      %f, %f\n", f1_area_sign, -f1_area_sign);
+        printf("  - alignments %f, %f\n", curr_f1_alignment, curr_f2_alignment);
+    }
     // printf(" -ret- ");
     return true;
     // TODO: take care of when f1,f2 on the same side when starting from saddle 
@@ -624,7 +629,10 @@ void BoundaryBuilder::evaluate_boundary_patch_area_and_grads_ad(BoundaryNormal* 
     face_region_area[bnd_normal1->f1] += f1_sign_change * f1_side_patch; // TODO : removing abs with new sign
     face_region_area[bnd_normal1->f2] += f2_sign_change * f2_side_patch;
     // printf(" getting AD patches ..\n");
+    // DEBUG
+    
     // TESTING speed up
+
     if (complex_accum){
         autodiff::Vector2var f1_side_patch_ad_complex = solid_angle_complex_ad(face_normals_ad[bnd_normal1->f1], bnd_normal1_ad, bnd_normal2_ad),
                              f2_side_patch_ad_complex = solid_angle_complex_ad(face_normals_ad[bnd_normal1->f2], bnd_normal1_ad, bnd_normal2_ad);
@@ -760,10 +768,10 @@ double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver &fwd_so
   for (int j = 0; j < max_iters; j++) {
       // update stuff
       printf(" ^^ at line search iter: %d  s = %f\n", j, s);
-    //   auto tmpmesh = polyscope::registerSurfaceMesh("temp hull LINE SEARCH", initial_hull_poses + s * grad,
-    //                                                 fwd_solver.hullMesh->getFaceVertexList());
-    //   tmpmesh->setSurfaceColor({0.6,0,0.5});
-    //   polyscope::show();
+      auto tmpmesh = polyscope::registerSurfaceMesh("temp hull LINE SEARCH", initial_hull_poses + s * grad,
+                                                    fwd_solver.hullMesh->getFaceVertexList());
+      tmpmesh->setSurfaceColor({0.6,0,0.5});
+      polyscope::show();
       auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(initial_hull_poses + s * grad); // changes tmp folver's "hull" mesh ..
       tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, fwd_solver.get_G(), false);
       if (!frozen_G)
@@ -774,7 +782,7 @@ double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver &fwd_so
       tmp_builder->build_boundary_normals();
       
       tmp_fair_dice_energy = tmp_builder->get_fair_dice_energy(dice_side_count);
-      printf("  *** temp fair dice energy %d: %f\n", j, tmp_fair_dice_energy);
+    //   printf("  *** temp fair dice energy %d: %f\n", j, tmp_fair_dice_energy);
 
       if (tmp_fair_dice_energy <= s_min_dice_energy){
         found_smth_optimal = true;

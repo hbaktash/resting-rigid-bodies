@@ -11,8 +11,10 @@ include(geometry-central)
 include(polyscope)
 include(autodiff)
 include(qhull)
+include(tinyAD)
 include(args)
 include(stan)
+include(osqp-cpp)
 
 # Library source files
 set(SRC_FILES
@@ -28,8 +30,8 @@ set(SRC_FILES
     src/boundary_tools.cpp
     src/inv_design.cpp
     src/convex_hull.cpp
-    # src/deformation.cpp
-    # src/optimization.cpp
+    src/deformation.cpp
+    src/optimization.cpp
     src/remesh_tools.cpp
 )
 
@@ -42,6 +44,8 @@ geometry-central::geometry-central
 polyscope::polyscope
 autodiff::autodiff
 qhull::qhull
+tinyad::tinyad
+osqp-cpp::osqp-cpp
 )
 add_library(rolling_dragons::rolling_dragons ALIAS rolling_dragons)
 
@@ -56,4 +60,14 @@ stan::stan
 )
 set_property(TARGET adDebug PROPERTY CXX_STANDARD 20)
 
+# Add executables
+
+add_executable(convexFill src/main_convex_fill.cpp)
+target_link_libraries(convexFill
+PRIVATE
+rolling_dragons::rolling_dragons
+taywee::args
+stan::stan
+)
+set_property(TARGET convexFill PROPERTY CXX_STANDARD 20)
 
