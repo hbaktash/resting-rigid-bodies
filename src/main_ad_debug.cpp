@@ -115,7 +115,7 @@ bool compute_global_G_effect = true,
      with_hull_projection = false,
      first_time = false,
      curvature_weighted_CP = false;
-bool do_remesh = true;
+bool do_remesh = false;
 float scale_for_remesh = 1.003;
 polyscope::PointCloud *test_pc;
 
@@ -289,7 +289,41 @@ void update_visuals_with_G(Forward3DSolver *tmp_solver = nullptr, BoundaryBuilde
     draw_stable_patches_on_gauss_map(gm_is_drawn, bnd_builder);
 }
 
-void test_approx_vs_ad_grads(){
+void test_approx_grads(){
+    // forwardSolver->set_uniform_G();
+    Forward3DSolver *tmp_solver = new Forward3DSolver(mesh, geometry, G, true);
+    tmp_solver->set_uniform_G();
+    tmp_solver->updated = false;
+    // printf("initalize precomputes\n");
+    tmp_solver->initialize_pre_computes();
+    tmp_solver->build_face_last_faces();
+
+    BoundaryBuilder *tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
+    tmp_bnd_builder->build_boundary_normals(); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true
+    InverseSolver *tmp_inv_solver = new InverseSolver(tmp_bnd_builder);
+
+    printf("finding vertex derivatives\n");
+    // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
+    std::cout << ANSI_FG_YELLOW << " fair dice energy: " << tmp_bnd_builder->get_fair_dice_energy(fair_sides_count) << ANSI_RESET << "\n";
+
+    auto pip2psmesh = polyscope::registerSurfaceMesh("hull for approx grads", tmp_solver->hullGeometry->inputVertexPositions,
+                                                      tmp_solver->hullMesh->getFaceVertexList());
+    pip2psmesh->setEnabled(true);
+    pip2psmesh->setTransparency(0.7);
+
+    // dice energy policy
+    tmp_inv_solver->flow_structure = tmp_solver->face_last_face; // face last face is built in build_boundary_normals...
+    stable_normal_update_thresh = -1.;
+    // fetching approx grad vs real grads
+    printf("here\n");
+    tmp_inv_solver->find_uni_mass_d_pf_dv(false, frozen_G);
+    VertexData<Vector3> approx_dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
+                                                                                                    structured_opt, stable_normal_update_thresh);
+    pip2psmesh->addVertexVectorQuantity("approx total grads", approx_dice_energy_grads)->setEnabled(true);
+    // polyscope::frameTick();
+}
+
+void test_ad_grads(){
     // forwardSolver->set_uniform_G();
     Forward3DSolver *tmp_solver = new Forward3DSolver(mesh, geometry, G, true);
     tmp_solver->set_uniform_G();
@@ -308,24 +342,16 @@ void test_approx_vs_ad_grads(){
     // update_visuals_with_G(tmp_solver, tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << " fair dice energy: " << tmp_bnd_builder->get_fair_dice_energy(fair_sides_count) << ANSI_RESET << "\n";
 
-    auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->hullGeometry->inputVertexPositions,
-                                                  tmp_solver->hullMesh->getFaceVertexList());
+    auto pip2psmesh = polyscope::registerSurfaceMesh("hull for ad grads", tmp_solver->hullGeometry->inputVertexPositions,
+                                                     tmp_solver->hullMesh->getFaceVertexList());
     pip2psmesh->setEnabled(true);
     pip2psmesh->setTransparency(0.7);
 
     // dice energy policy
-    if (first_time || always_update_structure){
-      tmp_inv_solver->flow_structure = tmp_solver->face_last_face; // face last face is built in build_boundary_normals...
-      if (first_time) stable_normal_update_thresh = -1.;
-      else stable_normal_update_thresh = 0.1;
-      first_time = false;
-    }
-
+    tmp_inv_solver->flow_structure = tmp_solver->face_last_face; // face last face is built in build_boundary_normals...
+    if (first_time) stable_normal_update_thresh = -1.;
+    
     // fetching approx grad vs real grads
-    printf("here\n");
-    tmp_inv_solver->find_uni_mass_d_pf_dv(false, frozen_G);
-    VertexData<Vector3> approx_dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
-                                                                                                    structured_opt, stable_normal_update_thresh);
     printf("here2\n");
     tmp_inv_solver->find_uni_mass_d_pf_dv(true, frozen_G);
     VertexData<Vector3> dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
@@ -335,9 +361,7 @@ void test_approx_vs_ad_grads(){
     //   std::cout << "approx grad: " << approx_dice_energy_grads[v] << "  \nreal grad: " << dice_energy_grads[v] << "\n";
     
     pip2psmesh->addVertexVectorQuantity("ad total grads", dice_energy_grads)->setEnabled(true);
-    pip2psmesh->addVertexVectorQuantity("approx total grads", approx_dice_energy_grads)->setEnabled(true);
     printf("registered\n");
-    // polyscope::frameTick();
 }
 
 
@@ -379,7 +403,7 @@ void test_static_dice_pipeline(){
   Eigen::Map<Eigen::MatrixXd> dfdV(dfdU_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
     
   // visualize grad vectors
-  auto hullpsmesh = polyscope::registerSurfaceMesh("stan grads hull", tmp_solver->hullGeometry->inputVertexPositions,
+  auto hullpsmesh = polyscope::registerSurfaceMesh("hull for stan grads", tmp_solver->hullGeometry->inputVertexPositions,
                                                   tmp_solver->hullMesh->getFaceVertexList());
   hullpsmesh->setEnabled(true);
   hullpsmesh->setTransparency(0.7);
@@ -427,7 +451,7 @@ void dice_energy_optimization(size_t max_iters = 100){
     // }
 
     // visualize grad vectors
-    auto hullpsmesh = polyscope::registerSurfaceMesh("temp hull with grads", tmp_solver->hullGeometry->inputVertexPositions,
+    auto hullpsmesh = polyscope::registerSurfaceMesh("stan grads hull", tmp_solver->hullGeometry->inputVertexPositions,
                                                     tmp_solver->hullMesh->getFaceVertexList());
     hullpsmesh->setEnabled(true);
     hullpsmesh->setTransparency(0.7);
@@ -485,8 +509,11 @@ void myCallback() {
       }
       ImGui::EndCombo();
   }
-  if (ImGui::Button("test ad grads vs approx grads")) {
-    test_approx_vs_ad_grads();
+  if (ImGui::Button("test ad grads")) {
+    test_ad_grads();
+  }
+  if (ImGui::Button("test approx grads")) {
+    test_approx_grads();
   }
   if (ImGui::Button("test static dice pipeline")) {
     test_static_dice_pipeline();

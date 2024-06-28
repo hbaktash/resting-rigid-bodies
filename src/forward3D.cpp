@@ -640,11 +640,13 @@ void Forward3DSolver::compute_vertex_stabilizablity(){
 void Forward3DSolver::build_face_next_faces(){
     face_next_face = FaceData<Face>(*hullMesh);
 
+    bool verbose = true; //f.getIndex() == 812 || f.getIndex() == 105; //
+    if (verbose)
+        printf("building face next faces\n");
     for (Face f: hullMesh->faces()){
-        // printf("at face %d\n", f.getIndex());
+        if (verbose) printf("at face %d\n", f.getIndex());
         initialize_state(Vertex(), Edge(), f, hullGeometry->faceNormal(f)); // assuming outward normals
-        bool verbose = false; //f.getIndex() == 812 || f.getIndex() == 105; //
-        next_state(verbose); // could roll to an edge
+        next_state(f.getIndex() == 97 ? verbose : false); // could roll to an edge
         size_t count = 0;
         while (curr_f.getIndex() == INVALID_IND){
             count++;
@@ -659,7 +661,7 @@ void Forward3DSolver::build_face_next_faces(){
             //     break;
             //     // throw std::logic_error(" too many iters! \n");
             // }
-            next_state(verbose);
+            next_state(f.getIndex() == 97 ? verbose : false);
         } // terminates when it gets to the next face
         if (verbose)
             printf(" last stable face was %d\n", curr_f.getIndex());
@@ -673,7 +675,13 @@ void Forward3DSolver::build_face_last_faces(){
     if (!updated)
         build_face_next_faces();
     face_last_face = FaceData<Face>(*hullMesh, Face());
-    // printf(" building face-last-faces\n");
+    printf(" building face-last-faces\n");
+    printf(" stable faces\n");
+    for (Face f: hullMesh->faces()){
+        if (face_next_face[f] == f){
+            printf("  -st f %d\n", f.getIndex());
+        }
+    }
     for (Face f: hullMesh->faces()){
         if (face_last_face[f].getIndex() != INVALID_IND)
          continue;

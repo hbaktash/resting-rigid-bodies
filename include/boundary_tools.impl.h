@@ -17,12 +17,18 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
     VertexData<bool> vertex_is_stabilizable = tmp_solver.vertex_is_stabilizable; 
     EdgeData<Vertex> edge_next_vertex = tmp_solver.edge_next_vertex;
     std::vector<Edge> terminal_edges;
+    printf("  finding terminal edges \n");
+    size_t cnt = 0;
     for (Edge e: tmp_solver.hullMesh->edges()) {
         if (tmp_solver.edge_next_vertex[e].getIndex() == INVALID_IND){ // singular edge
             Face f1 = e.halfedge().face(),
-                f2 = e.halfedge().twin().face();
+                 f2 = e.halfedge().twin().face();
             if (tmp_solver.face_last_face[f1] != tmp_solver.face_last_face[f2]){ // saddle edge
                 terminal_edges.push_back(e);
+                printf("cnt %d: edge %d is terminal with faces %d, %d\n", cnt, e.getIndex(), f1.getIndex(), f2.getIndex());
+                printf("    --- face last faces: %d, %d\n", tmp_solver.face_last_face[f1].getIndex(), tmp_solver.face_last_face[f2].getIndex());
+                
+                cnt++;
             }
         }
     }
@@ -40,10 +46,11 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
 
     // morse complex areas; only non-zero for stable faces
     FaceData<Scalar> face_region_area(*tmp_solver.hullMesh, 0.);
-    printf("  back-flowing terminal edges %lu \n", terminal_edges.size());
+    // printf("  back-flowing terminal edges %lu \n", terminal_edges.size());
     int i = 1;
     for (Edge e: terminal_edges){
         // printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
+        // std::cout << "  -e" << e.getIndex() << " : " << e.firstVertex().getIndex() << " , " << e.secondVertex().getIndex() << " adj faces: "<< e.halfedge().face().getIndex() << " " << e.halfedge().twin().face().getIndex() << std::endl;
         // bnd_normal->normal_ad = point_to_segment_normal_ad(e);
         Eigen::Vector3<Scalar> edge_bnd_normal = point_to_segment_normal<Scalar>(G, hull_positions.row(e.firstVertex().getIndex()), hull_positions.row(e.secondVertex().getIndex()));
         // std::vector<std::pair<size_t, size_t>> vertex_pairs;
@@ -52,7 +59,12 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         Edge current_e = e;
         Face f1 = current_e.halfedge().face(),
              f2 = current_e.halfedge().twin().face();
-        // draw_arc_on_sphere_static(vec_to_GC_vec3(face_normals[f1]), vec_to_GC_vec3(face_normals[f2]), Vector3({0,2,0}), 1., 12, 1, 0.1, glm::vec3(1., 0., 1.), 0.5);
+        // Eigen::Vector3<Scalar> e0{1,0,0};
+        // double f10 = face_normals[f1].dot(),
+        //        f11 = face_normals[f1].dot(Eigen::Vector3<Scalar>{0,1,0}),
+        //        f12 = face_normals[f1].dot(Eigen::Vector3<Scalar>{0,1,0});
+        // auto f11 = face_normals[f1].coef(0);//, f12 = face_normals[f1](2), f20 = face_normals[f2](0), f21 = face_normals[f2](1), f22 = face_normals[f2](2);
+        // draw_arc_on_sphere_static(Vector3({f10, f11, f12}), Vector3({f20, f21, f22}), Vector3({0,2,0}), 1., 12, 1, 0.1, glm::vec3(1., 0., 1.), 0.5);
         Face ff1 = face_last_face[f1];
         Face ff2 = face_last_face[f2];
         // for visuals
@@ -60,7 +72,8 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
                                ff2_normal  = face_normals[ff2]; // static
         Eigen::Vector3<Scalar> adj_f1_normal  = face_normals[f1], // static
                                adj_f2_normal  = face_normals[f2]; // static
-        
+        // std::cout << " ff1: " << ff1.getIndex() << " ff2: " << ff2.getIndex() << std::endl;
+        // std::cout << " with normals: " << ff1_normal.transpose() << "  --  " << ff2_normal.transpose() << std::endl;
         for (Vertex v: {e.firstVertex(), e.secondVertex()}){ // two ways to go from a saddle edge
             
             Eigen::Vector3<Scalar> tmp_normal  = edge_bnd_normal;   // changes in the while loop
@@ -79,14 +92,21 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             ff2_area_sign *= adj_f2_area_sign == ff2_area_sign ? 1. : -1.;
 
             Eigen::Vector3<Scalar> next_normal;                     // changes in the while loop
+            int cnt = 0;
             while (true) {
+                cnt++;
+                // std::cout << "   - at vertex " << current_v.getIndex() << std::endl;
+                if (cnt > 50){
+                    // std::cout << "  - too many iterations\n";
+                    break;
+                }
                 if (vertex_is_stabilizable[current_v]){
                     next_normal = v_normal;
                     Scalar patch_area_ff1 = triangle_patch_signed_area_on_sphere<Scalar>(ff1_normal, tmp_normal, next_normal);
                     face_region_area[ff1] += ff1_area_sign * patch_area_ff1;
                     Scalar patch_area_ff2 = triangle_patch_signed_area_on_sphere<Scalar>(ff2_normal, tmp_normal, next_normal);
                     face_region_area[ff2] += ff2_area_sign * patch_area_ff2;
-                    // draw_arc_on_sphere_static(vec_to_GC_vec3(tmp_normal), vec_to_GC_vec3(next_normal), Vector3({0,2,0}), 1., 12, 0, 0.1, glm::vec3(1., 0., 1.), 0.5);
+                    // draw_arc_on_sphere_static(Vector3({tmp_normal(0),tmp_normal(1),tmp_normal(2)}), Vector3({next_normal(0),next_normal(1),next_normal(2)}), Vector3({0,2,0}), 1., 12, 0, 0.1, glm::vec3(1., 0., 1.), 0.5);
                     // polyscope::show();            
                     break; // Exit while; got to a maximum
                 }
@@ -137,11 +157,14 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
     Scalar energy = 0.;
     size_t tmp_side_cnt = 0;
     double goal_prob = 1. / (double)side_count;
-    for (auto pair: probs){
-        std::cout << "  -f" << pair.first.getIndex() << " : " << pair.second/(4. * PI) << std::endl;
-        
-        if (tmp_side_cnt < side_count){
+    for (auto pair: probs){ 
+        std::cout << "  -f" << pair.first.getIndex() << " : " << pair.second/(4. * PI) << std::endl; 
+        if (tmp_side_cnt < side_count){ // goal 1/n
             Scalar diff = face_region_area[pair.first] - goal_prob * 4. * PI;
+            energy += diff * diff;
+        }
+        else { // goal zero
+            Scalar diff = face_region_area[pair.first];
             energy += diff * diff;
         }
         tmp_side_cnt++;

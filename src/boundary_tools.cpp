@@ -83,7 +83,8 @@ BoundaryBuilder::BoundaryBuilder(Forward3DSolver *forward_solver_){
 std::vector<Edge> BoundaryBuilder::find_terminal_edges(){
     std::vector<Edge> terminal_edges;
     // printf("  buidling face-last-face\n");
-    // printf("  finding terminal edges \n");
+    printf("  finding terminal edges \n");
+    size_t cnt = 0;
     for (Edge e: forward_solver->hullMesh->edges()){
         if (forward_solver->edge_next_vertex[e].getIndex() == INVALID_IND){ // singular edge
             Face f1 = e.halfedge().face(),
@@ -91,9 +92,11 @@ std::vector<Edge> BoundaryBuilder::find_terminal_edges(){
             if (forward_solver->face_last_face[f1] != forward_solver->face_last_face[f2]){ // saddle edge
                 // proved: at least one singular edge like this must exist
                 // TODO: assert that stable normal falls inside the edge arc 
-                // printf("edge %d is terminal with faces %d, %d\n", e.getIndex(), f1.getIndex(), f2.getIndex());
                 // printf("    --- face last faces: %d, %d\n", forward_solver->face_last_face[f1].getIndex(), forward_solver->face_last_face[f2].getIndex());
                 terminal_edges.push_back(e);
+                printf("cnt %d: edge %d is terminal with faces %d, %d\n", cnt, e.getIndex(), f1.getIndex(), f2.getIndex());
+                printf("    --- face last faces: %d, %d\n", forward_solver->face_last_face[f1].getIndex(), forward_solver->face_last_face[f2].getIndex());
+                cnt++;
             }
         }
     }
@@ -262,12 +265,6 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
     double f2_sign_change = (-f1_area_sign == curr_f2_alignment) ? 1.: -1;
     face_region_area[bnd_normal->f1] += f1_sign_change * abs(triangle_patch_area_on_sphere(f1_normal, bnd_normal->normal, next_normal));
     face_region_area[bnd_normal->f2] += f2_sign_change * abs(triangle_patch_area_on_sphere(f2_normal, bnd_normal->normal, next_normal));
-    
-    if ((bnd_normal->f1.getIndex() == 50 || bnd_normal->f2.getIndex() == 50) && (f1_sign_change != f2_sign_change)){
-        printf("at face 50\n");
-        printf("  - initial signs      %f, %f\n", f1_area_sign, -f1_area_sign);
-        printf("  - alignments %f, %f\n", curr_f1_alignment, curr_f2_alignment);
-    }
     // printf(" -ret- ");
     return true;
     // TODO: take care of when f1,f2 on the same side when starting from saddle 
