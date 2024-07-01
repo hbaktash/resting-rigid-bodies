@@ -377,12 +377,14 @@ void Forward3DSolver::vertex_to_next(Vertex v){
 
 
 void Forward3DSolver::edge_to_next(Edge e){
-    // printf("doing edge to next\n");
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 p1 = hullGeometry->inputVertexPositions[v1], p2 = hullGeometry->inputVertexPositions[v2];
-    // std::cout << " p1: " << p1 << "\n p2:" << p2 << "\n";
-    // std::cout << "   G: "<<G << "\n";
-    // std::cout << "   G + currG: "<<G + curr_g_vec << "\n";
+    if (e.getIndex() == 177){
+        printf("doing edge to next\n");
+        std::cout << " p1: " << p1 << "\n p2:" << p2 << "\n";
+        std::cout << "   G: "<<G << "\n";
+        std::cout << "   G + currG: "<<G + curr_g_vec << "\n";
+    }
     if (dot(G - p1, p2-p1) < 0.){ // if the Gp1p2 angle is wide
         vertex_to_next(v1); // rolls to the v1 vertex
     }
@@ -410,11 +412,21 @@ void Forward3DSolver::edge_to_next(Edge e){
         Vector3 G_proj_proj = project_on_plane(G_proj, p1, rotation_plane_normal),
                 pa_proj = project_on_plane(pa, p1, rotation_plane_normal),
                 pb_proj = project_on_plane(pb, p1, rotation_plane_normal);
-        double pa_angle = acos(dot(pa_proj - p1, G_proj_proj - p1)/(norm(pa_proj - p1)*norm(G_proj_proj - p1))),
-               pb_angle = acos(dot(pb_proj - p1, G_proj_proj - p1)/(norm(pb_proj - p1)*norm(G_proj_proj - p1)));
+        double pa_angle_pre_acos = dot(pa_proj - p1, G_proj_proj - p1)/(norm(pa_proj - p1)*norm(G_proj_proj - p1)),
+               pb_angle_pre_acos = dot(pb_proj - p1, G_proj_proj - p1)/(norm(pb_proj - p1)*norm(G_proj_proj - p1));
+        double pa_angle = acos(pa_angle_pre_acos),
+               pb_angle = acos(pb_angle_pre_acos);
+        if (e.getIndex() == 177){
+            std::cout << "   DEBUG dot values: " << dot(pa_proj - p1, G_proj_proj - p1) << " " << dot(pb_proj - p1, G_proj_proj - p1) << "\n";
+            std::cout << "   norms a         : " << norm(pa_proj - p1) << " " << norm(G_proj_proj - p1) << "\n";
+            std::cout << "   norms b         : " << norm(pb_proj - p1) << " " << norm(G_proj_proj - p1) << "\n";
+            std::cout << "   DEBUG pre acos v: " << pa_angle_pre_acos << " " << pb_angle_pre_acos << "\n";
+            std::cout << "   acos debug: " << pa_angle << " " << pb_angle << "\n";
+        }
         Face next_face;
         // printf("found angles\n");
-        if (pa_angle <= pb_angle){ // face containing va is next
+        // if (pa_angle <= pb_angle){ // face containing va is next
+        if (pa_angle_pre_acos >= pb_angle_pre_acos){
             curr_f = he.face();
             curr_v = Vertex();
             curr_e = Edge();
@@ -529,7 +541,9 @@ void Forward3DSolver::next_state(bool verbose){
     else if (curr_e.getIndex() != INVALID_IND){
         if (verbose){
             printf(" STATUS: at edge %d: %d, %d\n", curr_e.getIndex(), curr_e.firstVertex().getIndex(), curr_e.secondVertex().getIndex());
-            std::cout << "         curr gvec " << curr_g_vec << "\n";
+            // std::cout << "         curr gvec " << curr_g_vec << "\n";
+            // std::cout << " edge vertex poses: " << hullGeometry->inputVertexPositions[curr_e.firstVertex()] << " -- " << hullGeometry->inputVertexPositions[curr_e.secondVertex()] << "\n ";
+            // std::cout << " center of mass pose: " << G << "\n";
         }
         Edge old_e = curr_e;
         edge_to_next(curr_e);
@@ -639,29 +653,18 @@ void Forward3DSolver::compute_vertex_stabilizablity(){
 // deterministically find the next rolling face 
 void Forward3DSolver::build_face_next_faces(){
     face_next_face = FaceData<Face>(*hullMesh);
-
-    bool verbose = true; //f.getIndex() == 812 || f.getIndex() == 105; //
-    if (verbose)
-        printf("building face next faces\n");
+    bool verbose = false; //f.getIndex() == 812 || f.getIndex() == 105; //
+    // if (verbose)
+    printf("building face next faces\n");
     for (Face f: hullMesh->faces()){
+        verbose = f.getIndex() == 97;
         if (verbose) printf("at face %d\n", f.getIndex());
         initialize_state(Vertex(), Edge(), f, hullGeometry->faceNormal(f)); // assuming outward normals
-        next_state(f.getIndex() == 97 ? verbose : false); // could roll to an edge
+        next_state(verbose); // could roll to an edge
         size_t count = 0;
         while (curr_f.getIndex() == INVALID_IND){
             count++;
-            // TODO; debug Gomboc case
-            // if (count > hullMesh->nVertices()){
-            //     printf("at face %d\n", f.getIndex());
-            //     FaceData<Vector3> dbface_colors(*hullMesh, Vector3({0.,0.,0.}));
-            //     dbface_colors[f.getIndex()] = hullGeometry->faceNormal(f) * 3;
-            //     polyscope::getSurfaceMesh("hull mesh")->addFaceVectorQuantity("debugg vis color "+std::to_string(f.getIndex()), dbface_colors)->setEnabled(true);
-            //     curr_f = f;
-            //     printf(" too many iters! \n");
-            //     break;
-            //     // throw std::logic_error(" too many iters! \n");
-            // }
-            next_state(f.getIndex() == 97 ? verbose : false);
+            next_state(verbose);
         } // terminates when it gets to the next face
         if (verbose)
             printf(" last stable face was %d\n", curr_f.getIndex());
