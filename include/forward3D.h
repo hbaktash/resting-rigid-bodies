@@ -69,7 +69,7 @@ class Forward3DSolver {
     Forward3DSolver() {}
     // TODO; make constructor for non_convex input
     Forward3DSolver(ManifoldSurfaceMesh* inputMesh, VertexPositionGeometry* inputGeo, Vector3 G, bool concave_input = true);
-
+    Forward3DSolver(Eigen::MatrixX3d point_cloud, Eigen::Vector3d G);
     // setter/getter for G
     void set_G(Vector3 new_G);
     void set_uniform_G();

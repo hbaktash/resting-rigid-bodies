@@ -531,7 +531,6 @@ void RollingMarkovModel::check_transition_matrix(){
     Vector<double> face_dist = next_dist.tail(mesh->nFaces());
     face_dist *= (1./(4.*PI));
     printf("   -sum: %f\n", face_dist.sum());
-    forward_solver->build_face_last_faces();
     for (Face f: mesh->faces()){
         if (forward_solver->face_next_face[f] != f){
             face_dist.coeffRef(forward_solver->face_last_face[f].getIndex()) += face_dist(f.getIndex());

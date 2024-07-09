@@ -9,15 +9,14 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
                                     Forward3DSolver &tmp_solver, size_t side_count
                                     ){
     // precomputes
-    tmp_solver.updated = false;
     // printf("initalize precomputes\n");
+    tmp_solver.updated = false;
     tmp_solver.initialize_pre_computes();
-    tmp_solver.build_face_last_faces();
     FaceData<Face> face_last_face = tmp_solver.face_last_face;
     VertexData<bool> vertex_is_stabilizable = tmp_solver.vertex_is_stabilizable; 
     EdgeData<Vertex> edge_next_vertex = tmp_solver.edge_next_vertex;
     std::vector<Edge> terminal_edges;
-    printf("  finding terminal edges \n");
+    // printf("  finding terminal edges \n");
     size_t cnt = 0;
     for (Edge e: tmp_solver.hullMesh->edges()) {
         if (tmp_solver.edge_next_vertex[e].getIndex() == INVALID_IND){ // singular edge
@@ -25,8 +24,8 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
                  f2 = e.halfedge().twin().face();
             if (tmp_solver.face_last_face[f1] != tmp_solver.face_last_face[f2]){ // saddle edge
                 terminal_edges.push_back(e);
-                printf("cnt %d: edge %d is terminal with faces %d, %d\n", cnt, e.getIndex(), f1.getIndex(), f2.getIndex());
-                printf("    --- face last faces: %d, %d\n", tmp_solver.face_last_face[f1].getIndex(), tmp_solver.face_last_face[f2].getIndex());
+                // printf("cnt %d: edge %d is terminal with faces %d, %d\n", cnt, e.getIndex(), f1.getIndex(), f2.getIndex());
+                // printf("    --- face last faces: %d, %d\n", tmp_solver.face_last_face[f1].getIndex(), tmp_solver.face_last_face[f2].getIndex());
                 
                 cnt++;
             }
@@ -46,7 +45,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
 
     // morse complex areas; only non-zero for stable faces
     FaceData<Scalar> face_region_area(*tmp_solver.hullMesh, 0.);
-    // printf("  back-flowing terminal edges %lu \n", terminal_edges.size());
+    printf("  back-flowing terminal edges %lu \n", terminal_edges.size());
     int i = 1;
     for (Edge e: terminal_edges){
         // printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
@@ -96,10 +95,10 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             while (true) {
                 cnt++;
                 // std::cout << "   - at vertex " << current_v.getIndex() << std::endl;
-                if (cnt > 50){
-                    // std::cout << "  - too many iterations\n";
-                    break;
-                }
+                // if (cnt > 50){
+                //     // std::cout << "  - too many iterations\n";
+                //     break;
+                // }
                 if (vertex_is_stabilizable[current_v]){
                     next_normal = v_normal;
                     Scalar patch_area_ff1 = triangle_patch_signed_area_on_sphere<Scalar>(ff1_normal, tmp_normal, next_normal);

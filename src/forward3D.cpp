@@ -36,6 +36,18 @@ Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPosition
     updated = false;
 }
 
+
+Forward3DSolver::Forward3DSolver(Eigen::MatrixX3d point_cloud, Eigen::Vector3d _G){
+    std::vector<std::vector<size_t>> hull_faces; 
+    std::vector<size_t> hull_vertex_mapping;
+    std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean
+    auto [inputMesh, inputGeometry] = get_convex_hull_mesh(point_cloud);
+    hullMesh = inputMesh;
+    hullGeometry = inputGeometry;
+    G = Vector3{_G[0], _G[1], _G[2]};
+    updated = false;
+}
+
 // initialize state holders
 void Forward3DSolver::initialize_state(Vertex curr_v_, Edge curr_e_, Face curr_f_, Vector3 curr_g_vec_){
     curr_v = curr_v_;
@@ -379,12 +391,12 @@ void Forward3DSolver::vertex_to_next(Vertex v){
 void Forward3DSolver::edge_to_next(Edge e){
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 p1 = hullGeometry->inputVertexPositions[v1], p2 = hullGeometry->inputVertexPositions[v2];
-    if (e.getIndex() == 177){
-        printf("doing edge to next\n");
-        std::cout << " p1: " << p1 << "\n p2:" << p2 << "\n";
-        std::cout << "   G: "<<G << "\n";
-        std::cout << "   G + currG: "<<G + curr_g_vec << "\n";
-    }
+    // if (e.getIndex() == 177){
+    //     printf("doing edge to next\n");
+    //     std::cout << " p1: " << p1 << "\n p2:" << p2 << "\n";
+    //     std::cout << "   G: "<<G << "\n";
+    //     std::cout << "   G + currG: "<<G + curr_g_vec << "\n";
+    // }
     if (dot(G - p1, p2-p1) < 0.){ // if the Gp1p2 angle is wide
         vertex_to_next(v1); // rolls to the v1 vertex
     }
@@ -416,13 +428,13 @@ void Forward3DSolver::edge_to_next(Edge e){
                pb_angle_pre_acos = dot(pb_proj - p1, G_proj_proj - p1)/(norm(pb_proj - p1)*norm(G_proj_proj - p1));
         double pa_angle = acos(pa_angle_pre_acos),
                pb_angle = acos(pb_angle_pre_acos);
-        if (e.getIndex() == 177){
-            std::cout << "   DEBUG dot values: " << dot(pa_proj - p1, G_proj_proj - p1) << " " << dot(pb_proj - p1, G_proj_proj - p1) << "\n";
-            std::cout << "   norms a         : " << norm(pa_proj - p1) << " " << norm(G_proj_proj - p1) << "\n";
-            std::cout << "   norms b         : " << norm(pb_proj - p1) << " " << norm(G_proj_proj - p1) << "\n";
-            std::cout << "   DEBUG pre acos v: " << pa_angle_pre_acos << " " << pb_angle_pre_acos << "\n";
-            std::cout << "   acos debug: " << pa_angle << " " << pb_angle << "\n";
-        }
+        // if (e.getIndex() == 177){
+        //     std::cout << "   DEBUG dot values: " << dot(pa_proj - p1, G_proj_proj - p1) << " " << dot(pb_proj - p1, G_proj_proj - p1) << "\n";
+        //     std::cout << "   norms a         : " << norm(pa_proj - p1) << " " << norm(G_proj_proj - p1) << "\n";
+        //     std::cout << "   norms b         : " << norm(pb_proj - p1) << " " << norm(G_proj_proj - p1) << "\n";
+        //     std::cout << "   DEBUG pre acos v: " << pa_angle_pre_acos << " " << pb_angle_pre_acos << "\n";
+        //     std::cout << "   acos debug: " << pa_angle << " " << pb_angle << "\n";
+        // }
         Face next_face;
         // printf("found angles\n");
         // if (pa_angle <= pb_angle){ // face containing va is next
@@ -655,9 +667,8 @@ void Forward3DSolver::build_face_next_faces(){
     face_next_face = FaceData<Face>(*hullMesh);
     bool verbose = false; //f.getIndex() == 812 || f.getIndex() == 105; //
     // if (verbose)
-    printf("building face next faces\n");
+    // printf("building face next faces\n");
     for (Face f: hullMesh->faces()){
-        verbose = f.getIndex() == 97;
         if (verbose) printf("at face %d\n", f.getIndex());
         initialize_state(Vertex(), Edge(), f, hullGeometry->faceNormal(f)); // assuming outward normals
         next_state(verbose); // could roll to an edge
@@ -678,13 +689,6 @@ void Forward3DSolver::build_face_last_faces(){
     if (!updated)
         build_face_next_faces();
     face_last_face = FaceData<Face>(*hullMesh, Face());
-    printf(" building face-last-faces\n");
-    printf(" stable faces\n");
-    for (Face f: hullMesh->faces()){
-        if (face_next_face[f] == f){
-            printf("  -st f %d\n", f.getIndex());
-        }
-    }
     for (Face f: hullMesh->faces()){
         if (face_last_face[f].getIndex() != INVALID_IND)
          continue;
@@ -715,6 +719,8 @@ void Forward3DSolver::initialize_pre_computes(){
     compute_edge_stable_normals();
     // printf("  building face next faces:\n");
     build_face_next_faces(); // 
+    // printf("  building face last faces:\n");
+    build_face_last_faces();
     // printf("precomputes done!\n");
     inputGeometry->refreshQuantities();
     hullGeometry->refreshQuantities();

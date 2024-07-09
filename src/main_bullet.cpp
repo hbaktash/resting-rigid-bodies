@@ -28,7 +28,7 @@
 // #include "polyscope/curve_network.h"
 #include "polyscope/point_cloud.h"
 // #include "bullet3/examples/BasicExample.h"
-#include "args/args.hxx"
+#include "args.hxx"
 #include "imgui.h"
 
 #include "coloring.h"
@@ -378,8 +378,7 @@ void build_raster_image(){
   printf(" ### total invalid faces: %d/%d\n", total_invalids, total_samples);
   std::vector<Vector3> raster_positions,
                        raster_colors;
-  
-  forwardSolver->build_face_last_faces();
+                       
   FaceData<double> accum_face_areas(*forwardSolver->hullMesh, 0.);
   printf("empirical probs:\n");
   size_t unstable_faces = 0;

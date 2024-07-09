@@ -296,7 +296,6 @@ void test_approx_grads(){
     tmp_solver->updated = false;
     // printf("initalize precomputes\n");
     tmp_solver->initialize_pre_computes();
-    tmp_solver->build_face_last_faces();
 
     BoundaryBuilder *tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
     tmp_bnd_builder->build_boundary_normals(); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true
@@ -330,7 +329,6 @@ void test_ad_grads(){
     tmp_solver->updated = false;
     // printf("initalize precomputes\n");
     tmp_solver->initialize_pre_computes();
-    tmp_solver->build_face_last_faces();
 
     BoundaryBuilder *tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
     tmp_bnd_builder->build_boundary_normals_for_autodiff(true); // (poses_ad, G_ad, ) // autodiff; generate_gradients = true

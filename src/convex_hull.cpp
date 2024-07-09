@@ -19,7 +19,32 @@
 #include "convex_hull.h"
 
 
-// std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
+std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>, std::vector<Vector3>>
+get_convex_hull(Eigen::MatrixX3d point_cloud){
+    size_t n = point_cloud.rows();
+    size_t dim = 3;
+    std::vector<Vector3> point_set;
+    for (size_t i = 0; i < n; i++){
+        Vector3 p{point_cloud(i, 0), point_cloud(i, 1), point_cloud(i, 2)};
+        point_set.push_back(p);
+    }
+    return get_convex_hull(point_set);
+}
+
+
+std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>
+get_convex_hull_mesh(Eigen::MatrixX3d point_cloud){
+    size_t n = point_cloud.rows();
+    size_t dim = 3;
+    std::vector<Vector3> point_set;
+    for (size_t i = 0; i < n; i++){
+        Vector3 p{point_cloud(i, 0), point_cloud(i, 1), point_cloud(i, 2)};
+        point_set.push_back(p);
+    }
+    return get_convex_hull_mesh(point_set);
+}
+
+
 std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>, std::vector<Vector3>>
 get_convex_hull(std::vector<Vector3> point_set){
     const size_t num_points = point_set.size();

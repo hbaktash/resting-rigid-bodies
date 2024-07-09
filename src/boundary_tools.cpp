@@ -92,10 +92,7 @@ std::vector<Edge> BoundaryBuilder::find_terminal_edges(){
             if (forward_solver->face_last_face[f1] != forward_solver->face_last_face[f2]){ // saddle edge
                 // proved: at least one singular edge like this must exist
                 // TODO: assert that stable normal falls inside the edge arc 
-                // printf("    --- face last faces: %d, %d\n", forward_solver->face_last_face[f1].getIndex(), forward_solver->face_last_face[f2].getIndex());
                 terminal_edges.push_back(e);
-                printf("cnt %d: edge %d is terminal with faces %d, %d\n", cnt, e.getIndex(), f1.getIndex(), f2.getIndex());
-                printf("    --- face last faces: %d, %d\n", forward_solver->face_last_face[f1].getIndex(), forward_solver->face_last_face[f2].getIndex());
                 cnt++;
             }
         }
@@ -110,7 +107,6 @@ void BoundaryBuilder::build_boundary_normals(){
     BoundaryNormal::counter = 0;
     // 
     // printf("  buidling face-last-face\n");
-    forward_solver->build_face_last_faces(); // calls face next face within
     // printf("  finding terminal edges \n");
     std::vector<Edge> terminal_edges = find_terminal_edges();
 
@@ -372,16 +368,10 @@ void BoundaryBuilder::build_boundary_normals_for_autodiff( // autodiff::MatrixX3
         Eigen::MatrixX3d zero_mat = Eigen::MatrixX3d::Zero(var_positions.rows(), 3);
         df_dv_grads_ad = FaceData<Eigen::MatrixX3d>(*forward_solver->hullMesh, zero_mat);
         Eigen::Vector3d zero_vec = Eigen::Vector3d::Zero();
-        // df_dv_grads_ad = FaceData<VertexData<Eigen::Vector3d>>(*forward_solver->hullMesh);
-        // for (Face f: forward_solver->hullMesh->faces()){
-        //     df_dv_grads_ad[f] = VertexData<Eigen::Vector3d>(*forward_solver->hullMesh, zero_vec);
-        // }
         df_dG_grads = FaceData<Eigen::Vector3d>(*forward_solver->hullMesh, zero_vec);
     }
     BoundaryNormal::counter = 0;
     // 
-    // printf("  buidling face-last-face\n");
-    forward_solver->build_face_last_faces(); // calls face next face within
     printf("  finding terminal edges \n");
 
     std::vector<Edge> terminal_edges;
