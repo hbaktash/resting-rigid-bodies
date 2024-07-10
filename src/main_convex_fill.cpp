@@ -405,8 +405,6 @@ void dice_energy_pipeline_stan(VertexData<Vector3> points, Vector3 _G,  size_t s
   if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);
   if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
   if (polyscope::hasSurfaceMesh("init input mesh")) polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
-  auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver.inputGeometry->inputVertexPositions,
-                                                                    tmp_solver.inputMesh->getFaceVertexList())->setEdgeWidth(2.);
   // polyscope::screenshot(false);
   BoundaryBuilder tmp_bnd_builder(&tmp_solver);
   
@@ -422,101 +420,97 @@ void dice_energy_pipeline_stan(VertexData<Vector3> points, Vector3 _G,  size_t s
     printf("finding vertex derivatives\n");
     tmp_bnd_builder.build_boundary_normals(); // face-last-face is called 
     
-
-    auto dice_energy_lambda = [&tmp_solver] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
+    auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
       // decompose flat vector to positions and center of mass; G is the last 3 elements
       Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
       size_t flat_n = hull_poses_G_append_vec.rows();
       Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-      return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, *tmp_solver, fair_sides_count);
+      return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, fair_sides_count);
     };
     Eigen::VectorXd hull_poses_vec = point_cloud.reshaped();
     Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
     hull_poses_and_G_vec << hull_poses_vec, G_vec;
-    // printf("dice energy lambda: %f\n", dice_energy_lambda(hull_poses_and_G_vec));
+    
     Eigen::VectorXd dfdU_vec;
     double dice_e;
     stan::math::gradient(dice_energy_lambda, hull_poses_and_G_vec, dice_e, dfdU_vec);
+    Eigen::Vector3d G_grad = dfdU_vec.tail(3);
+    size_t flat_n = dfdU_vec.rows();
+    Eigen::Map<Eigen::MatrixXd> dfdV(dfdU_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
   
-
     update_visuals_with_G(&tmp_solver, &tmp_bnd_builder);
-    std::cout << ANSI_FG_YELLOW << " fair dice energy iter "<< iter<< "  f: " << tmp_bnd_builder.get_fair_dice_energy(fair_sides_count) << ANSI_RESET << "\n";
+    std::cout << ANSI_FG_YELLOW << " fair dice energy iter "<< iter<< "  f: " << tmp_bnd_builder.get_fair_dice_energy(fair_sides_count) << " stan f: " << dice_e << ANSI_RESET << "\n";
 
-    auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver.inputGeometry->inputVertexPositions,
+    auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", 
+                                                  tmp_solver.inputGeometry->inputVertexPositions,
                                                   tmp_solver.inputMesh->getFaceVertexList());
+    curr_hull_psmesh->setEnabled(true);
+    curr_hull_psmesh->setTransparency(0.7);
 
-    auto old_tmp_geo = tmp_solver->inputGeometry->inputVertexPositions;
-    auto old_tmp_mesh = tmp_solver->inputMesh->getFaceVertexList();
+    auto old_tmp_geo = tmp_solver.inputGeometry->inputVertexPositions;
+    auto old_tmp_mesh = tmp_solver.inputMesh->getFaceVertexList();
     
-    pip2psmesh->setEnabled(true);
-    pip2psmesh->setTransparency(0.7);
-    // DEBUG
-    polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("ad total grads", dice_energy_grads)->setEnabled(true);
-    polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("approx total grads", approx_dice_energy_grads)->setEnabled(true);
-    polyscope::show();
-    // for (Face f: tmp_solver->hullMesh->faces()){
-    //   if (tmp_solver->face_last_face[f] == f){
-    //     polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("ad grads", tmp_bnd_builder->df_dv_grads_ad[f])->setEnabled(true);
-    //     polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("approx grads", approx_dpf_dv[f])->setEnabled(true);
-    //     polyscope::show();
-    //   }
-    // }
-
+    // show grads
+    polyscope::getSurfaceMesh("current hull")->addVertexVectorQuantity("ad total grads", dfdV)->setEnabled(true);
     if (do_sobolev_dice_grads){
       
       current_fill_iter = iter;
-      energies[1][iter] = tinyAD_flatten(vertex_data_to_matrix(dice_energy_grads)).norm();
+      energies[1][iter] = tinyAD_flatten(dfdV).norm(); // use eigen flaten
       current_sobolev_lambda *= sobolev_lambda_decay;
-      dice_energy_grads = sobolev_diffuse_gradients(dice_energy_grads, *tmp_solver->hullMesh, current_sobolev_lambda, sobolev_p);
-      // dice_energy_grads = tmp_inv_solver->sobolev_diffuse_gradients(dice_energy_grads, current_sobolev_lambda, sobolev_p);
+      Eigen::MatrixXd diffused_dfdV = sobolev_diffuse_gradients(dfdV, *tmp_solver.hullMesh, sobolev_lambda, sobolev_p);
       
-      energies[0][iter] = tinyAD_flatten(vertex_data_to_matrix(dice_energy_grads)).norm();
+      energies[0][iter] = tinyAD_flatten(diffused_dfdV).norm();
       energies[2][iter] = energies[0][iter] / energies[1][iter];
       // std::cout << "energies: " << energies[0][iter] << " " << energies[1][iter] << " " << energies[2][iter] << "\n";
-      pip2psmesh->addVertexVectorQuantity(" sobolev diffused dice grads", dice_energy_grads)->setEnabled(true);
+      curr_hull_psmesh->addVertexVectorQuantity(" sobolev diffused grads", diffused_dfdV)->setEnabled(true);
+      dfdV = diffused_dfdV;
     }
+    //DEBUG
+    polyscope::show();
 
-    pip2psmesh->setSurfaceColor({0.1,0.9,0.1});
-    pip2psmesh->setEdgeWidth(2.);
+    curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1});
+    curr_hull_psmesh->setEdgeWidth(2.);
     polyscope::screenshot(false);
     polyscope::frameTick();
     // polyscope::show();
-
-    double opt_step_size = hull_update_line_search(dice_energy_grads, *tmp_solver, fair_sides_count, step_size3, dice_search_decay, frozen_G);
+    double opt_step_size = hull_update_line_search(vertex_matrix_to_data(dfdV, *tmp_solver.hullMesh), tmp_solver, fair_sides_count, step_size3, dice_search_decay, frozen_G);
     std::cout << ANSI_FG_RED << "opt step size: " << opt_step_size << ANSI_RESET << "\n";
-    auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(tmp_solver->hullGeometry->inputVertexPositions + opt_step_size * dice_energy_grads);
-    tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, tmp_solver->get_G(), false); 
-    // TODO: is this ok?
+    auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(point_cloud + opt_step_size * dfdV);
+    tmp_solver = Forward3DSolver(new_hull_mesh, new_hull_geo, tmp_solver.get_G(), false); 
   
     // visuals
     if (!frozen_G){
-      tmp_solver->set_uniform_G();
+      tmp_solver.set_uniform_G();
+      Vector3 GG = tmp_solver.get_G();
+      G_vec = {GG.x, GG.y, GG.z};
     }
-    tmp_solver->updated = false;
-    tmp_solver->initialize_pre_computes();
-    tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
-    tmp_inv_solver = new InverseSolver(tmp_bnd_builder);
+    tmp_solver.updated = false;
+    tmp_solver.initialize_pre_computes();
+    tmp_bnd_builder = BoundaryBuilder(&tmp_solver);
+
+    // update vertorized positions
+    point_cloud = vertex_data_to_matrix(tmp_solver.inputGeometry->inputVertexPositions);
   }
-  tmp_bnd_builder->build_boundary_normals();
-  update_visuals_with_G(tmp_solver, tmp_bnd_builder);
-  tmp_bnd_builder->print_area_of_boundary_loops();
+  tmp_bnd_builder.build_boundary_normals();
+  update_visuals_with_G(&tmp_solver, &tmp_bnd_builder);
+  tmp_bnd_builder.print_area_of_boundary_loops();
 
   //DEBUG
   if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(true);
 
   polyscope::removeAllStructures();
   polyscope::SurfaceMesh *psHullFillMesh = polyscope::registerSurfaceMesh(
-    "fillable hull", tmp_solver->inputGeometry->inputVertexPositions, tmp_solver->inputMesh->getFaceVertexList());
+    "fillable hull", tmp_solver.inputGeometry->inputVertexPositions, tmp_solver.inputMesh->getFaceVertexList());
   psHullFillMesh->setTransparency(0.45);
   psHullFillMesh->setEdgeWidth(2.);
   psHullFillMesh->setEnabled(true);
   gm_is_drawn = false;
-  convex_to_fill_mesh = tmp_solver->inputMesh;
-  convex_to_fill_geometry = tmp_solver->inputGeometry;
+  convex_to_fill_mesh = tmp_solver.inputMesh;
+  convex_to_fill_geometry = tmp_solver.inputGeometry;
   load_hull_from_file = false;
   
-  pre_deform_G = tmp_solver->get_G();
-  std::cout << "pre-deform G:" << tmp_solver->get_G() << "\n";
+  pre_deform_G = tmp_solver.get_G();
+  std::cout << "pre-deform G:" << tmp_solver.get_G() << "\n";
 }
 
 void version2_dice_pipeline(size_t step_count = 1){
@@ -558,25 +552,15 @@ void version2_dice_pipeline(size_t step_count = 1){
   double current_sobolev_lambda = sobolev_lambda;
   for (size_t iter = 0; iter < step_count; iter++){
 
-    // tmp_bnd_builder->build_boundary_normals();
-    // update_visuals_with_G();
-    // printf(" vertex derivatives found!\n");
     printf("finding vertex derivatives\n");
-    if (!use_autodiff_for_dice_grad)
-      tmp_bnd_builder->build_boundary_normals(); // face-last-face is called 
-    else {
-      // autodiff::MatrixX3var poses_ad = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
-      // autodiff::Vector3var G_ad = vec32vec(tmp_solver->get_G());
-      printf("building normals bounds with AD\n");
-      tmp_bnd_builder->build_boundary_normals_for_autodiff(true); // (poses_ad, G_ad, ) autodiff; generate_gradients = true
-    }
+    tmp_bnd_builder->build_boundary_normals(); // face-last-face is called 
+    
     update_visuals_with_G(tmp_solver, tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << " fair dice energy iter "<< iter<< "  f: " << tmp_bnd_builder->get_fair_dice_energy(fair_sides_count) << ANSI_RESET << "\n";
 
     auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
                                                   tmp_solver->inputMesh->getFaceVertexList());
 
-    // boundary_builder->print_area_of_boundary_loops();
     if (first_time || always_update_structure){
       tmp_inv_solver->flow_structure = tmp_solver->face_last_face; // face last face is built in build_boundary_normals...
       if (first_time) stable_normal_update_thresh = -1.;
@@ -589,38 +573,29 @@ void version2_dice_pipeline(size_t step_count = 1){
     VertexData<Vector3> approx_dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
                                                                                                structured_opt, stable_normal_update_thresh);
     
-    tmp_inv_solver->find_uni_mass_d_pf_dv(use_autodiff_for_dice_grad, frozen_G);
-    VertexData<Vector3> dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
-                                                                                        structured_opt, stable_normal_update_thresh);
+    // tmp_inv_solver->find_uni_mass_d_pf_dv(use_autodiff_for_dice_grad, frozen_G);
+    // VertexData<Vector3> dice_energy_grads = tmp_inv_solver->find_uni_mass_total_vertex_grads(fair_sides_count,
+    //                                                                                     structured_opt, stable_normal_update_thresh);
     auto old_tmp_geo = tmp_solver->inputGeometry->inputVertexPositions;
     auto old_tmp_mesh = tmp_solver->inputMesh->getFaceVertexList();
     
     pip2psmesh->setEnabled(true);
     pip2psmesh->setTransparency(0.7);
     // DEBUG
-    polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("ad total grads", dice_energy_grads)->setEnabled(true);
     polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("approx total grads", approx_dice_energy_grads)->setEnabled(true);
     polyscope::show();
-    // for (Face f: tmp_solver->hullMesh->faces()){
-    //   if (tmp_solver->face_last_face[f] == f){
-    //     polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("ad grads", tmp_bnd_builder->df_dv_grads_ad[f])->setEnabled(true);
-    //     polyscope::getSurfaceMesh("pipe2 tmp sol")->addVertexVectorQuantity("approx grads", approx_dpf_dv[f])->setEnabled(true);
-    //     polyscope::show();
-    //   }
-    // }
 
     if (do_sobolev_dice_grads){
-      
       current_fill_iter = iter;
-      energies[1][iter] = tinyAD_flatten(vertex_data_to_matrix(dice_energy_grads)).norm();
+      energies[1][iter] = tinyAD_flatten(vertex_data_to_matrix(approx_dice_energy_grads)).norm();
       current_sobolev_lambda *= sobolev_lambda_decay;
-      dice_energy_grads = sobolev_diffuse_gradients(dice_energy_grads, *tmp_solver->hullMesh, current_sobolev_lambda, sobolev_p);
+      approx_dice_energy_grads = sobolev_diffuse_gradients(approx_dice_energy_grads, *tmp_solver->hullMesh, current_sobolev_lambda, sobolev_p);
       // dice_energy_grads = tmp_inv_solver->sobolev_diffuse_gradients(dice_energy_grads, current_sobolev_lambda, sobolev_p);
       
-      energies[0][iter] = tinyAD_flatten(vertex_data_to_matrix(dice_energy_grads)).norm();
+      energies[0][iter] = tinyAD_flatten(vertex_data_to_matrix(approx_dice_energy_grads)).norm();
       energies[2][iter] = energies[0][iter] / energies[1][iter];
       // std::cout << "energies: " << energies[0][iter] << " " << energies[1][iter] << " " << energies[2][iter] << "\n";
-      pip2psmesh->addVertexVectorQuantity(" sobolev diffused dice grads", dice_energy_grads)->setEnabled(true);
+      pip2psmesh->addVertexVectorQuantity(" sobolev diffused dice grads", approx_dice_energy_grads)->setEnabled(true);
     }
 
     pip2psmesh->setSurfaceColor({0.1,0.9,0.1});
@@ -629,9 +604,9 @@ void version2_dice_pipeline(size_t step_count = 1){
     polyscope::frameTick();
     // polyscope::show();
 
-    double opt_step_size = hull_update_line_search(dice_energy_grads, *tmp_solver, fair_sides_count, step_size3, dice_search_decay, frozen_G);
+    double opt_step_size = hull_update_line_search(approx_dice_energy_grads, *tmp_solver, fair_sides_count, step_size3, dice_search_decay, frozen_G);
     std::cout << ANSI_FG_RED << "opt step size: " << opt_step_size << ANSI_RESET << "\n";
-    auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(tmp_solver->hullGeometry->inputVertexPositions + opt_step_size * dice_energy_grads);
+    auto [new_hull_mesh, new_hull_geo] = get_convex_hull_mesh(tmp_solver->hullGeometry->inputVertexPositions + opt_step_size * approx_dice_energy_grads);
     tmp_solver = new Forward3DSolver(new_hull_mesh, new_hull_geo, tmp_solver->get_G(), false); 
     // TODO: is this ok?
   
@@ -818,6 +793,7 @@ void myCallback() {
     if (polyscope::hasSurfaceMesh("v2pipeline final mesh")) polyscope::removeSurfaceMesh("v2pipeline final mesh");
     if (polyscope::hasSurfaceMesh("v2pipeline final hull")) polyscope::removeSurfaceMesh("v2pipeline final hull");
   }
+  
 
   // Test stuff
   if ( ImGui::InputFloat3("row0", row0)
