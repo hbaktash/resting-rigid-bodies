@@ -45,7 +45,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
 
     // morse complex areas; only non-zero for stable faces
     FaceData<Scalar> face_region_area(*tmp_solver.hullMesh, 0.);
-    printf("  back-flowing terminal edges %lu \n", terminal_edges.size());
+    // printf("  back-flowing terminal edges %lu \n", terminal_edges.size());
     int i = 1;
     for (Edge e: terminal_edges){
         // printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
@@ -150,14 +150,14 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             total_area += face_region_area[f];
         }
     }
-    std::cout << "sum over probabilities: " << total_area/(4.*PI) << std::endl;
+    // std::cout << "sum over probabilities: " << total_area/(4.*PI) << std::endl;
     std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
-    printf(" static sorted probs: \n");
+    // printf(" static sorted probs: \n");
     Scalar energy = 0.;
     size_t tmp_side_cnt = 0;
     double goal_prob = 1. / (double)side_count;
     for (auto pair: probs){ 
-        std::cout << "  -f" << pair.first.getIndex() << " : " << pair.second/(4. * PI) << std::endl; 
+        // std::cout << "  -f" << pair.first.getIndex() << " : " << pair.second/(4. * PI) << std::endl; 
         if (tmp_side_cnt < side_count){ // goal 1/n
             Scalar diff = face_region_area[pair.first] - goal_prob * 4. * PI;
             energy += diff * diff;

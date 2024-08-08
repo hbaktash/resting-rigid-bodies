@@ -378,6 +378,7 @@ void test_static_dice_pipeline(){
   }
   // Eigen::MatrixX3<double> tmp_positions = vertex_data_to_matrix(tmp_solver->hullGeometry->inputVertexPositions);
   Eigen::Vector3<double> G_vec({GG.x, GG.y, GG.z});
+  std::cout << "initial G: " << G_vec << std::endl;
   auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
     // decompose flat vector to positions and center of mass
     // G is the last 3 elements

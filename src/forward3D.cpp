@@ -41,7 +41,9 @@ Forward3DSolver::Forward3DSolver(Eigen::MatrixX3d point_cloud, Eigen::Vector3d _
     std::vector<std::vector<size_t>> hull_faces; 
     std::vector<size_t> hull_vertex_mapping;
     std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean
-    auto [inputMesh, inputGeometry] = get_convex_hull_mesh(point_cloud);
+    auto [_inputMesh, _inputGeometry] = get_convex_hull_mesh(point_cloud);
+    inputMesh = _inputMesh;
+    inputGeometry = _inputGeometry;
     hullMesh = inputMesh;
     hullGeometry = inputGeometry;
     G = Vector3{_G[0], _G[1], _G[2]};
@@ -723,6 +725,8 @@ void Forward3DSolver::initialize_pre_computes(){
     build_face_last_faces();
     // printf("precomputes done!\n");
     inputGeometry->refreshQuantities();
+    // printf("heree\n");
     hullGeometry->refreshQuantities();
+    // printf("hereee\n");
     updated = true;
 }

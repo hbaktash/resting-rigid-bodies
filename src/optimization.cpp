@@ -61,6 +61,37 @@ Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorX
     return x_0;
 }
 
+
+Eigen::VectorXd solve_QP_with_ineq_OSQP(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
+                                        Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, 
+                                        Eigen::VectorX<bool> frozen_indices, Eigen::VectorXd frozen_x,
+                                        Eigen::MatrixX<bool> active_set = Eigen::MatrixX<bool>::Zero(0,0)){
+    Eigen::SparseMatrix<double> objective_matrix(N, N);
+    Eigen::VectorXd objective_vector(N);
+    SparseMatrix<double> constraint_matrix(N + 2 * s2_mesh.nEdges(), N);
+
+    osqp::OsqpInstance instance;
+    instance.objective_matrix = objective_matrix;
+    instance.objective_vector.resize(2);
+    instance.objective_vector << 1.0, 0.0;
+    instance.constraint_matrix = constraint_matrix;
+    instance.lower_bounds.resize(1);
+    instance.lower_bounds << 1.0;
+    instance.upper_bounds.resize(1);
+    instance.upper_bounds << kInfinity;
+
+    osqp::OsqpSolver solver;
+    osqp::OsqpSettings settings;
+    // Edit settings if appropriate.
+    auto status = solver.Init(instance, settings);
+    // Assuming status.ok().
+    osqp::OsqpExitCode exit_code = solver.Solve();
+    // Assuming exit_code == OsqpExitCode::kOptimal.
+    double optimal_objective = solver.objective_value();
+    Eigen::VectorXd optimal_solution = solver.primal_solution();
+}
+
+
 // ======================= Gurobi =======================
 
 
