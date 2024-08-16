@@ -419,12 +419,13 @@ void run_IPC_samples(std::string example_fname, int sample_count = 1, int max_it
                 printf("$$$ at sample %d\n", samples);
                 printf("avg time per sample: %f\n", (clock() - t1)/((double) samples * (double)CLOCKS_PER_SEC));          
                 for (Face f: forwardSolver->hullMesh->faces()){
-                    std::cout << "face " << f.getIndex() << " count: " << face_counts[f]/(double)valid_count << "\n";
+                    if (face_counts[f] != 0)
+                        std::cout << "face " << f.getIndex() << " count: " << face_counts[f]/(double)valid_count << "\n";
                 }
             }
             random_orientation = random_orientation.normalize();
-            Vector3 rotation_axis = cross(Vector3({0,-1,0}),random_orientation).normalize();
-            double rotation_angle = angle(Vector3({0,-1,0}), random_orientation); // WARNING: uses acos
+            Vector3 rotation_axis = cross(random_orientation, Vector3({0,-1,0})).normalize();
+            double rotation_angle = angle(random_orientation, Vector3({0,-1,0})); // WARNING: uses acos
 
             Eigen::AngleAxisd Rinput_aa(rotation_angle, Eigen::Vector3d(rotation_axis.x, rotation_axis.y, rotation_axis.z));    
             // Eigen::AngleAxisd Rinput_aa(1.1, Eigen::Vector3d(1,2,3).normalized());    
@@ -466,14 +467,8 @@ void run_IPC_samples(std::string example_fname, int sample_count = 1, int max_it
                             rn_vec(rn_aa[0], rn_aa[1], rn_aa[2]);
             Eigen::AngleAxisd R0_aa(r0_vec.norm(), r0_vec.normalized()),
                               Rn_aa(rn_vec.norm(), rn_vec.normalized());
-            // std::cout << "R0 aa angle axis: \n" << R0_aa.angle() << " " << R0_aa.axis().transpose() << "\n";
-            // std::cout << "Rn aa angle axus: \n" << Rn_aa.angle() << " " << Rn_aa.axis().transpose() << "\n";
             Eigen::AngleAxisd R_inert_aa(Rinput_aa.inverse().toRotationMatrix() * R0_aa.toRotationMatrix());
-            // std::cout << "inertial matrix: \n" << R_inert_aa.toRotationMatrix() << "\n";
             Eigen::AngleAxisd R_rest_aa(Rn_aa.toRotationMatrix() * R_inert_aa.inverse().toRotationMatrix()); 
-            // std::cout << " R rest matrix: \n" << R_rest_aa.toRotationMatrix() << "\n";
-            // Eigen::EulerAnglesZYXd R_rest_euler(R_rest_aa);
-            // std::cout << " R_rest_euler: " << R_rest_euler.angles().reverse() * 180/M_PI << "\n";
             VertexData<Vector3> rotated_poses(*forwardSolver->hullMesh);
             for (Vertex v: forwardSolver->hullMesh->vertices()){
                 rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
@@ -487,7 +482,6 @@ void run_IPC_samples(std::string example_fname, int sample_count = 1, int max_it
             bool valid = false;
             for (Face f: forwardSolver->hullMesh->faces()){
                 Vector3 rotated_face_normal = rotated_geo.faceNormal(f);
-                // std::cout << "rotated face normal: " << rotated_face_normal << "\n";
                 if (cross(rotated_face_normal, Vector3({0,-1,0})).norm() < 1e-3){
                     // std::cout << "stable face: " << f.getIndex() << "\n";
                     valid_count++;
@@ -568,7 +562,7 @@ void myCallback() {
     }
     if (ImGui::Checkbox("Save pos to file", &save_pos_to_file));
     if (ImGui::Button("run IPC simulation")){
-        run_IPC_samples("example.json", sample_count, 300);
+        run_IPC_samples("example.json", sample_count, 250);
         // Eigen::AngleAxisd Rinput_aa(1.1, Eigen::Vector3d(1,2,3).normalized());    
         // std::cout << " \n --------- ALOOOO --------- \n"; 
         // std::cout << Rinput_aa.axis().transpose() << " " << Rinput_aa.angle() << "\n";
