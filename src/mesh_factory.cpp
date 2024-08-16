@@ -60,6 +60,9 @@ generate_polyhedra(std::string poly_str){
                     spherical_to_xyz(1., phi0, theta1),
                     spherical_to_xyz(1., phi0, theta2),
                     spherical_to_xyz(1., phi1, theta3)};
+      for (Vector3 pos: positions){
+        std::cout << "pos: " << pos << "\n";
+      }
     }
     else if (std::strcmp(poly_str.c_str(), "tet2") == 0){
       n = 4;

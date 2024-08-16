@@ -1085,7 +1085,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
             // Eigen::VectorXd new_x = update_QP_objective_and_solve(QPmodel, total_H/2., total_g - total_H * old_x, old_x);
             Eigen::MatrixX<bool> active_set = get_active_set_matrix(unflat_tinyAD(x), active_set_threshold);
             // std::cout << ANSI_FG_GREEN << "total active consts: " << active_set.cast<int>().sum() << "/" << n*constraint_matrix.rows() << ANSI_RESET << std::endl; 
-            Eigen::VectorXd new_x = solve_QP_with_ineq(total_H/2., total_g - total_H * x, old_x, //
+            Eigen::VectorXd new_x = solve_QP_with_ineq_GRB(total_H/2., total_g - total_H * x, old_x, //
                                                        constraint_matrix, constraint_rhs, 
                                                        get_frozen_flags(), get_frozen_x(),
                                                        active_set);
