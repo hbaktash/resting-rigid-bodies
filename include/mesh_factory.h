@@ -35,3 +35,6 @@ generate_polyhedra(std::string poly_str);
 
 void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
                      bool triangulate = false, bool do_remesh = false, double remesh_edge_scale = 3.);
+
+// sphere tesselation generation
+std::vector<Vector3> generate_normals_icosahedral(int resolution);

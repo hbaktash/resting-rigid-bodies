@@ -337,3 +337,43 @@ void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry
   //     printf(" edge %d dihedral is large by %f\n", e.getIndex(), dihedangle - PI);
   // }
 }
+
+
+std::vector<Vector3> generate_normals_icosahedral(int resolution){
+    ManifoldSurfaceMesh* icos_mesh;
+    VertexPositionGeometry* icos_geometry;
+    std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
+    std::unique_ptr<VertexPositionGeometry> geometry_ptr;
+    std::tie(mesh_ptr, geometry_ptr) = readManifoldSurfaceMesh("../meshes/icosahedron.obj");
+    icos_mesh = mesh_ptr.release();
+    icos_geometry = geometry_ptr.release();
+
+    // Normals
+    std::vector<Vector3> normals;
+    for (Vertex v: icos_mesh->vertices()){ // vertices only
+        normals.push_back(icos_geometry->inputVertexPositions[v].normalize());
+    }
+    for (Edge e: icos_mesh->edges()){ // edge interiors only
+        for (int i = 0; i < resolution; i++){ // vertices already added
+            Vector3 p0 = icos_geometry->inputVertexPositions[e.firstVertex()],
+                    p1 = icos_geometry->inputVertexPositions[e.secondVertex()];
+            Vector3 interp = (1. - (i + 1) / (resolution + 1.)) * p0 + (i + 1) / (resolution + 1.) * p1;
+            normals.push_back(interp.normalize());
+        }
+    }
+    for (Face f: icos_mesh->faces()){ // face interiors only
+        for (int i = 0; i < resolution; i++){ // avoiding base edge
+            Vector3 p0 = icos_geometry->inputVertexPositions[f.halfedge().vertex()],
+                    p1 = icos_geometry->inputVertexPositions[f.halfedge().next().vertex()],
+                    p2 = icos_geometry->inputVertexPositions[f.halfedge().next().next().vertex()];
+            Vector3 interp1 = (1. - (i + 1) / (resolution + 1.)) * p0 + (i + 1) / (resolution + 1.) * p1,
+                    interp2 = (1. - (i + 1) / (resolution + 1.)) * p0 + (i + 1) / (resolution + 1.) * p2;
+            int row_count = i;
+            for (int j = 0; j < row_count; j++){ // avoiding points on edges
+                Vector3 interp = (1. - (j + 1) / (row_count + 1.)) * interp1 + (j + 1) / (row_count + 1.) * interp2;
+                normals.push_back(interp.normalize());
+            }
+        }
+    }
+    return normals;
+}

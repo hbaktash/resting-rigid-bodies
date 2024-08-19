@@ -72,7 +72,7 @@ Vector3 ground_box_shape({10,1,10});
 Vector3 default_face_color({240./256.,178/256.,44./256.});
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("tet0"),std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("baby_car"), std::string("rubberDuckie")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("tet0"),std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("worst_case"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("baby_car"), std::string("rubberDuckie")};
 std::string all_polygons_current_item = "tet0";
 
 // GC stuff
@@ -399,7 +399,7 @@ Eigen::Vector3d get_inetrial_rot(std::string example_fname, int max_iters = 200)
 
 
 
-void run_IPC_samples(std::string example_fname, int sample_count = 1, int max_iters = 200){
+void run_IPC_samples_MCMC(std::string example_fname, int sample_count = 1, int max_iters = 200){
     std::string jsons_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/fixtures/3D/examples";
     std::string exec_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/build/rigid_ipc_sim";
     Eigen::EulerAnglesXYZd R0_euler(0, 0, 0); // 0.5*M_PI
@@ -479,20 +479,37 @@ void run_IPC_samples(std::string example_fname, int sample_count = 1, int max_it
             //     "rotated mesh", rotated_poses, forwardSolver->hullMesh->getFaceVertexList());
             // psRotatedMesh->addFaceColorQuantity("face colors", face_colors)->setEnabled(true);
             
-            bool valid = false;
+            Face lowest_face;
+            double lowest_height = 1e9;
             for (Face f: forwardSolver->hullMesh->faces()){
                 Vector3 rotated_face_normal = rotated_geo.faceNormal(f);
-                if (cross(rotated_face_normal, Vector3({0,-1,0})).norm() < 1e-3){
-                    // std::cout << "stable face: " << f.getIndex() << "\n";
-                    valid_count++;
-                    face_counts[f]++;
-                    face_to_ori[f].push_back(random_orientation);
-                    valid = true;
+                double height = cross(rotated_face_normal, Vector3({0,-1,0})).norm();
+                if (height < lowest_height){
+                    lowest_face   = f;
+                    lowest_height = cross(rotated_face_normal, Vector3({0,-1,0})).norm();
                 }
             }
-            if (!valid)
+            if (lowest_height < 1e-3){
+                // std::cout << "stable face: " << f.getIndex() << "\n";
+                valid_count++;
+                face_counts[lowest_face]++;
+                face_to_ori[lowest_face].push_back(random_orientation);
+                if (forwardSolver->face_next_face[lowest_face] != lowest_face){
+                    std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
+                    std::cout << "with face: " << lowest_face.getIndex() << " ,  normal diff " << lowest_height << "\n";
+                }
+            }
+            else{
                 std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
+
+            }
         }
+    }
+    printf("total time: %f\n", (double)(clock() - t1)/(double)CLOCKS_PER_SEC);
+    printf("avg time per sample: %f\n", (clock() - t1)/((double) samples * (double)CLOCKS_PER_SEC));          
+    for (Face f: forwardSolver->hullMesh->faces()){
+        if (face_counts[f] != 0)
+            std::cout << "face " << f.getIndex() << " count: " << face_counts[f]/(double)valid_count << "\n";
     }
     std::vector<Vector3> raster_positions,
                        raster_colors;
@@ -509,6 +526,129 @@ void run_IPC_samples(std::string example_fname, int sample_count = 1, int max_it
     // json js = json::parse(str);
 }
 
+
+void run_IPC_samples_ICOS(std::string example_fname, int sample_count = 1, int max_iters = 200){
+    std::string jsons_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/fixtures/3D/examples";
+    std::string exec_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/build/rigid_ipc_sim";
+    Eigen::EulerAnglesXYZd R0_euler(0, 0, 0); // 0.5*M_PI
+
+    FaceData<std::vector<Vector3>> face_to_ori(*forwardSolver->hullMesh);
+    FaceData<size_t> face_counts(*forwardSolver->hullMesh);
+    FaceData<double> face_dual_sum_areas(*forwardSolver->hullMesh);
+
+    int samples = 0;
+    int resolution = (int)sqrt(sample_count/10);
+    size_t valid_count = 0;
+    auto t1 = clock();
+    ManifoldSurfaceMesh* icos_sphere_mesh;
+    VertexPositionGeometry* icos_sphere_geometry;
+    std::cout << "generating icosahedral sphere with resolution: " << resolution << "\n";
+    std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
+    std::cout << "starting sampling.." << icos_sphere_mesh->nVertices() << "\n";
+    for (Vertex sample_v: icos_sphere_mesh->vertices()){
+        Vector3 random_orientation = icos_sphere_geometry->inputVertexPositions[sample_v];
+        double dual_area = icos_sphere_geometry->vertexDualArea(sample_v);
+        random_orientation = random_orientation.normalize();
+        Vector3 rotation_axis = cross(random_orientation, Vector3({0,-1,0})).normalize();
+        double rotation_angle = angle(random_orientation, Vector3({0,-1,0})); // WARNING: uses acos
+
+        Eigen::AngleAxisd Rinput_aa(rotation_angle, Eigen::Vector3d(rotation_axis.x, rotation_axis.y, rotation_axis.z));    
+        Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
+        
+        // // read write for IPC
+        // write to fixture json
+        std::ifstream ifs(jsons_dir + "/" + example_fname);
+        nlohmann::json jf = nlohmann::json::parse(ifs);
+
+        jf["max_iterations"] = max_iters;
+        jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = "centered_COMs/" + all_polygons_current_item + ".obj";
+        jf["rigid_body_problem"]["rigid_bodies"][0]["rotation"] = {temp_R_euler.angles()[2] * 180. / M_PI, 
+                                                                    temp_R_euler.angles()[1] * 180. / M_PI, 
+                                                                    temp_R_euler.angles()[0] * 180. / M_PI};
+        jf["rigid_body_problem"]["rigid_bodies"][0]["position"] = {0, 1, 0};
+
+        std::ofstream ofs(jsons_dir + "/" + example_fname);
+        ofs << jf;
+        ofs.close();
+        std::string cmd = exec_dir + 
+                        " --chkpt 1001 --ngui " + 
+                        jsons_dir + "/" + example_fname + " " + 
+                        jsons_dir + "/temp_out";
+        int out = system((cmd + "> /dev/null").c_str());
+        
+        // read output
+        std::ifstream ifs_out(jsons_dir + "/temp_out/sim.json");
+        nlohmann::json jf_out = nlohmann::json::parse(ifs_out);
+
+        auto r0_aa = jf_out["animation"]["state_sequence"][0]["rigid_bodies"][0]["rotation"],
+                rn_aa = jf_out["animation"]["state_sequence"][max_iters - 1]["rigid_bodies"][0]["rotation"];
+        Eigen::Vector3d r0_vec(r0_aa[0], r0_aa[1], r0_aa[2]),
+                        rn_vec(rn_aa[0], rn_aa[1], rn_aa[2]);
+        Eigen::AngleAxisd R0_aa(r0_vec.norm(), r0_vec.normalized()),
+                            Rn_aa(rn_vec.norm(), rn_vec.normalized());
+        Eigen::AngleAxisd R_inert_aa(Rinput_aa.inverse().toRotationMatrix() * R0_aa.toRotationMatrix());
+        Eigen::AngleAxisd R_rest_aa(Rn_aa.toRotationMatrix() * R_inert_aa.inverse().toRotationMatrix()); 
+        VertexData<Vector3> rotated_poses(*forwardSolver->hullMesh);
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
+        }
+        VertexPositionGeometry rotated_geo(*forwardSolver->hullMesh, rotated_poses);
+        
+        Face lowest_face;
+        double lowest_height = 1e9;
+        for (Face f: forwardSolver->hullMesh->faces()){
+            Vector3 rotated_face_normal = rotated_geo.faceNormal(f);
+            double height = cross(rotated_face_normal, Vector3({0,-1,0})).norm();
+            if (height < lowest_height){
+                lowest_face   = f;
+                lowest_height = cross(rotated_face_normal, Vector3({0,-1,0})).norm();
+            }
+        }
+        if (lowest_height < 1e-3){
+            // std::cout << "stable face: " << f.getIndex() << "\n";
+            valid_count++;
+            face_counts[lowest_face]++;
+            face_dual_sum_areas[lowest_face] += dual_area;
+            face_to_ori[lowest_face].push_back(random_orientation);
+
+            if (forwardSolver->face_next_face[lowest_face] != lowest_face){
+                std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
+                std::cout << "with face: " << lowest_face.getIndex() << " ,  normal diff " << lowest_height << "\n";
+            }
+        }
+        else{
+            std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
+        }
+        samples++;
+        if (samples % 50 == 0){
+            printf("$$$ at sample %d\n", samples);
+            printf("avg time per sample: %f\n", (clock() - t1)/((double) samples * (double)CLOCKS_PER_SEC));          
+            for (Face f: forwardSolver->hullMesh->faces()){
+                if (face_counts[f] != 0)
+                    std::cout << "face " << f.getIndex() << " prob: " << face_dual_sum_areas[f]/(4.*M_PI) << "\n";
+            }
+        }
+    }
+    printf("total time: %f\n", (double)(clock() - t1)/(double)CLOCKS_PER_SEC);
+    printf("avg time per sample: %f\n", (clock() - t1)/((double) samples * (double)CLOCKS_PER_SEC));          
+    for (Face f: forwardSolver->hullMesh->faces()){
+        if (face_counts[f] != 0)
+            std::cout << "face " << f.getIndex() << " prob: " << face_dual_sum_areas[f]/(4.*M_PI) << "\n";
+    }
+    std::vector<Vector3> raster_positions,
+                       raster_colors;
+    for (Face f: forwardSolver->hullMesh->faces()){
+        for (Vector3 tmp_p: face_to_ori[f]){
+            raster_positions.push_back(tmp_p + shift);
+            raster_colors.push_back(face_colors[f]);
+        }
+    }
+    auto raster_pc = polyscope::registerPointCloud("raster pc IPC", raster_positions);
+    polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("stable face colors", raster_colors);
+    pc_col_quant->setEnabled(true);
+    std::cout << "valid count: " << valid_count << "/" << sample_count << "\n";
+    // json js = json::parse(str);
+}
 
 // polyscope callback
 void myCallback() {
@@ -562,14 +702,7 @@ void myCallback() {
     }
     if (ImGui::Checkbox("Save pos to file", &save_pos_to_file));
     if (ImGui::Button("run IPC simulation")){
-        run_IPC_samples("example.json", sample_count, 250);
-        // Eigen::AngleAxisd Rinput_aa(1.1, Eigen::Vector3d(1,2,3).normalized());    
-        // std::cout << " \n --------- ALOOOO --------- \n"; 
-        // std::cout << Rinput_aa.axis().transpose() << " " << Rinput_aa.angle() << "\n";
-        // std::cout << "R input matrix: \n" << Rinput_aa.toRotationMatrix() << "\n";
-        // Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
-        // std::cout << "R input euler: " << temp_R_euler.angles().reverse()* 180. / M_PI << "\n"; 
-            
+        run_IPC_samples_MCMC("example.json", sample_count, 500);
     }
 }
 
