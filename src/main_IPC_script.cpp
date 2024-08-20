@@ -84,8 +84,9 @@ VertexPositionGeometry* geometry;
 
 // raster image stuff
 FaceData<Vector3> face_colors;
-int sample_count = 1e4;
-
+int sample_count = 1e4, 
+    max_steps_IPC = 500;
+bool ICOS_sampling = true;
 
 // quasi static simulation stuff
 Forward3DSolver* forwardSolver;
@@ -397,13 +398,74 @@ Eigen::Vector3d get_inetrial_rot(std::string example_fname, int max_iters = 200)
     // json js = json::parse(str);
 }
 
+Eigen::AngleAxisd aa_from_init_ori(Vector3 init_ori){
+    Vector3 rotation_axis = cross(init_ori, Vector3({0,-1,0})).normalize();
+    double rotation_angle = angle(init_ori, Vector3({0,-1,0})); // WARNING: uses acos
+
+    Eigen::AngleAxisd Rinput_aa(rotation_angle, Eigen::Vector3d(rotation_axis.x, rotation_axis.y, rotation_axis.z));    
+    return Rinput_aa;
+}
+
+
+Eigen::EulerAnglesZYXd euler_from_init_ori(Vector3 init_ori){
+    Eigen::EulerAnglesZYXd temp_R_euler(aa_from_init_ori(init_ori).toRotationMatrix());
+    return temp_R_euler;
+}
+
+
+Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf, int max_iters, 
+                                    std::string exec_dir, std::string jsons_dir, std::string example_fname){
+  Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(init_ori);
+  Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
+    
+  // std::cout << " \n --------- new sample --------- \n"; 
+  // std::cout << "R input euler: " << temp_R_euler.angles().reverse() * 180. / M_PI << "\n"; 
+  // std::cout << "R input matrix: \n" << Rinput_aa.toRotationMatrix() << "\n";
+  // // read write for IPC
+  // write to fixture json
+
+  jf["max_iterations"] = max_iters;
+  jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = "centered_COMs/" + all_polygons_current_item + ".obj";
+  jf["rigid_body_problem"]["rigid_bodies"][0]["rotation"] = {temp_R_euler.angles()[2] * 180. / M_PI, 
+                                                              temp_R_euler.angles()[1] * 180. / M_PI, 
+                                                              temp_R_euler.angles()[0] * 180. / M_PI};
+  jf["rigid_body_problem"]["rigid_bodies"][0]["position"] = {0, 1, 0};
+
+  std::ofstream ofs(jsons_dir + "/" + example_fname);
+  ofs << jf;
+  ofs.close();
+  std::string cmd = exec_dir + 
+                  " --chkpt 1001 --ngui " + 
+                  jsons_dir + "/" + example_fname + " " + 
+                  jsons_dir + "/temp_out";
+  // std::cout << "\nrunning: ...\n" ;//<< cmd << "\n";
+  int out = system((cmd + "> /dev/null").c_str());
+  // std::cout << "result:" <<  out << "\n\n"; // suppress output
+
+  // read output
+  std::ifstream ifs_out(jsons_dir + "/temp_out/sim.json");
+  nlohmann::json jf_out = nlohmann::json::parse(ifs_out);
+
+  auto r0_aa = jf_out["animation"]["state_sequence"][0]["rigid_bodies"][0]["rotation"],
+        rn_aa = jf_out["animation"]["state_sequence"][max_iters - 1]["rigid_bodies"][0]["rotation"];
+  Eigen::Vector3d r0_vec(r0_aa[0], r0_aa[1], r0_aa[2]),
+                  rn_vec(rn_aa[0], rn_aa[1], rn_aa[2]);
+  Eigen::AngleAxisd R0_aa(r0_vec.norm(), r0_vec.normalized()),
+                    Rn_aa(rn_vec.norm(), rn_vec.normalized());
+  Eigen::AngleAxisd R_inert_aa(Rinput_aa.inverse().toRotationMatrix() * R0_aa.toRotationMatrix());
+  Eigen::AngleAxisd R_rest_aa(Rn_aa.toRotationMatrix() * R_inert_aa.inverse().toRotationMatrix()); 
+  return R_rest_aa;
+}
 
 
 void run_IPC_samples_MCMC(std::string example_fname, int sample_count = 1, int max_iters = 200){
     std::string jsons_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/fixtures/3D/examples";
     std::string exec_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/build/rigid_ipc_sim";
-    Eigen::EulerAnglesXYZd R0_euler(0, 0, 0); // 0.5*M_PI
+    std::ifstream ifs(jsons_dir + "/" + example_fname);
+    nlohmann::json jf = nlohmann::json::parse(ifs);
+    ifs.close();
 
+    Eigen::EulerAnglesXYZd R0_euler(0, 0, 0); // 0.5*M_PI
     FaceData<std::vector<Vector3>> face_to_ori(*forwardSolver->hullMesh);
     FaceData<size_t> face_counts(*forwardSolver->hullMesh);
 
@@ -424,61 +486,15 @@ void run_IPC_samples_MCMC(std::string example_fname, int sample_count = 1, int m
                 }
             }
             random_orientation = random_orientation.normalize();
-            Vector3 rotation_axis = cross(random_orientation, Vector3({0,-1,0})).normalize();
-            double rotation_angle = angle(random_orientation, Vector3({0,-1,0})); // WARNING: uses acos
-
-            Eigen::AngleAxisd Rinput_aa(rotation_angle, Eigen::Vector3d(rotation_axis.x, rotation_axis.y, rotation_axis.z));    
-            // Eigen::AngleAxisd Rinput_aa(1.1, Eigen::Vector3d(1,2,3).normalized());    
-            Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
             
-            // std::cout << " \n --------- new sample --------- \n"; 
-            // std::cout << "R input euler: " << temp_R_euler.angles().reverse() * 180. / M_PI << "\n"; 
-            // std::cout << "R input matrix: \n" << Rinput_aa.toRotationMatrix() << "\n";
-            // // read write for IPC
-            // write to fixture json
-            std::ifstream ifs(jsons_dir + "/" + example_fname);
-            nlohmann::json jf = nlohmann::json::parse(ifs);
-
-            jf["max_iterations"] = max_iters;
-            jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = "centered_COMs/" + all_polygons_current_item + ".obj";
-            jf["rigid_body_problem"]["rigid_bodies"][0]["rotation"] = {temp_R_euler.angles()[2] * 180. / M_PI, 
-                                                                       temp_R_euler.angles()[1] * 180. / M_PI, 
-                                                                       temp_R_euler.angles()[0] * 180. / M_PI};
-            jf["rigid_body_problem"]["rigid_bodies"][0]["position"] = {0, 1, 0};
-
-            std::ofstream ofs(jsons_dir + "/" + example_fname);
-            ofs << jf;
-            ofs.close();
-            std::string cmd = exec_dir + 
-                            " --chkpt 1001 --ngui " + 
-                            jsons_dir + "/" + example_fname + " " + 
-                            jsons_dir + "/temp_out";
-            // std::cout << "\nrunning: ...\n" ;//<< cmd << "\n";
-            int out = system((cmd + "> /dev/null").c_str());
-            // std::cout << "result:" <<  out << "\n\n"; // suppress output
-
-            // read output
-            std::ifstream ifs_out(jsons_dir + "/temp_out/sim.json");
-            nlohmann::json jf_out = nlohmann::json::parse(ifs_out);
-
-            auto r0_aa = jf_out["animation"]["state_sequence"][0]["rigid_bodies"][0]["rotation"],
-                 rn_aa = jf_out["animation"]["state_sequence"][max_iters - 1]["rigid_bodies"][0]["rotation"];
-            Eigen::Vector3d r0_vec(r0_aa[0], r0_aa[1], r0_aa[2]),
-                            rn_vec(rn_aa[0], rn_aa[1], rn_aa[2]);
-            Eigen::AngleAxisd R0_aa(r0_vec.norm(), r0_vec.normalized()),
-                              Rn_aa(rn_vec.norm(), rn_vec.normalized());
-            Eigen::AngleAxisd R_inert_aa(Rinput_aa.inverse().toRotationMatrix() * R0_aa.toRotationMatrix());
-            Eigen::AngleAxisd R_rest_aa(Rn_aa.toRotationMatrix() * R_inert_aa.inverse().toRotationMatrix()); 
+            // run the sim
+            Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(random_orientation, jf, max_iters, exec_dir, jsons_dir, example_fname);
             VertexData<Vector3> rotated_poses(*forwardSolver->hullMesh);
             for (Vertex v: forwardSolver->hullMesh->vertices()){
                 rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
             }
             VertexPositionGeometry rotated_geo(*forwardSolver->hullMesh, rotated_poses);
 
-            // auto psRotatedMesh = polyscope::registerSurfaceMesh(
-            //     "rotated mesh", rotated_poses, forwardSolver->hullMesh->getFaceVertexList());
-            // psRotatedMesh->addFaceColorQuantity("face colors", face_colors)->setEnabled(true);
-            
             Face lowest_face;
             double lowest_height = 1e9;
             for (Face f: forwardSolver->hullMesh->faces()){
@@ -489,11 +505,13 @@ void run_IPC_samples_MCMC(std::string example_fname, int sample_count = 1, int m
                     lowest_height = cross(rotated_face_normal, Vector3({0,-1,0})).norm();
                 }
             }
+            // for debugging
+            Eigen::EulerAnglesZYXd temp_R_euler = euler_from_init_ori(random_orientation);
             if (lowest_height < 1e-3){
-                // std::cout << "stable face: " << f.getIndex() << "\n";
                 valid_count++;
                 face_counts[lowest_face]++;
                 face_to_ori[lowest_face].push_back(random_orientation);
+                
                 if (forwardSolver->face_next_face[lowest_face] != lowest_face){
                     std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
                     std::cout << "with face: " << lowest_face.getIndex() << " ,  normal diff " << lowest_height << "\n";
@@ -501,7 +519,6 @@ void run_IPC_samples_MCMC(std::string example_fname, int sample_count = 1, int m
             }
             else{
                 std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
-
             }
         }
     }
@@ -530,8 +547,11 @@ void run_IPC_samples_MCMC(std::string example_fname, int sample_count = 1, int m
 void run_IPC_samples_ICOS(std::string example_fname, int sample_count = 1, int max_iters = 200){
     std::string jsons_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/fixtures/3D/examples";
     std::string exec_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/build/rigid_ipc_sim";
-    Eigen::EulerAnglesXYZd R0_euler(0, 0, 0); // 0.5*M_PI
+    std::ifstream ifs(jsons_dir + "/" + example_fname);
+    nlohmann::json jf = nlohmann::json::parse(ifs);
+    ifs.close();
 
+    Eigen::EulerAnglesXYZd R0_euler(0, 0, 0); // 0.5*M_PI
     FaceData<std::vector<Vector3>> face_to_ori(*forwardSolver->hullMesh);
     FaceData<size_t> face_counts(*forwardSolver->hullMesh);
     FaceData<double> face_dual_sum_areas(*forwardSolver->hullMesh);
@@ -544,50 +564,17 @@ void run_IPC_samples_ICOS(std::string example_fname, int sample_count = 1, int m
     VertexPositionGeometry* icos_sphere_geometry;
     std::cout << "generating icosahedral sphere with resolution: " << resolution << "\n";
     std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
-    std::cout << "starting sampling.." << icos_sphere_mesh->nVertices() << "\n";
+    double total_area = 0;
+    for (Face f: icos_sphere_mesh->faces())
+        total_area += icos_sphere_geometry->faceArea(f);
+    std::cout << "start sampling... N = " << icos_sphere_mesh->nVertices() << "\n";
     for (Vertex sample_v: icos_sphere_mesh->vertices()){
         Vector3 random_orientation = icos_sphere_geometry->inputVertexPositions[sample_v];
         double dual_area = icos_sphere_geometry->vertexDualArea(sample_v);
         random_orientation = random_orientation.normalize();
-        Vector3 rotation_axis = cross(random_orientation, Vector3({0,-1,0})).normalize();
-        double rotation_angle = angle(random_orientation, Vector3({0,-1,0})); // WARNING: uses acos
-
-        Eigen::AngleAxisd Rinput_aa(rotation_angle, Eigen::Vector3d(rotation_axis.x, rotation_axis.y, rotation_axis.z));    
-        Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
         
-        // // read write for IPC
-        // write to fixture json
-        std::ifstream ifs(jsons_dir + "/" + example_fname);
-        nlohmann::json jf = nlohmann::json::parse(ifs);
-
-        jf["max_iterations"] = max_iters;
-        jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = "centered_COMs/" + all_polygons_current_item + ".obj";
-        jf["rigid_body_problem"]["rigid_bodies"][0]["rotation"] = {temp_R_euler.angles()[2] * 180. / M_PI, 
-                                                                    temp_R_euler.angles()[1] * 180. / M_PI, 
-                                                                    temp_R_euler.angles()[0] * 180. / M_PI};
-        jf["rigid_body_problem"]["rigid_bodies"][0]["position"] = {0, 1, 0};
-
-        std::ofstream ofs(jsons_dir + "/" + example_fname);
-        ofs << jf;
-        ofs.close();
-        std::string cmd = exec_dir + 
-                        " --chkpt 1001 --ngui " + 
-                        jsons_dir + "/" + example_fname + " " + 
-                        jsons_dir + "/temp_out";
-        int out = system((cmd + "> /dev/null").c_str());
-        
-        // read output
-        std::ifstream ifs_out(jsons_dir + "/temp_out/sim.json");
-        nlohmann::json jf_out = nlohmann::json::parse(ifs_out);
-
-        auto r0_aa = jf_out["animation"]["state_sequence"][0]["rigid_bodies"][0]["rotation"],
-                rn_aa = jf_out["animation"]["state_sequence"][max_iters - 1]["rigid_bodies"][0]["rotation"];
-        Eigen::Vector3d r0_vec(r0_aa[0], r0_aa[1], r0_aa[2]),
-                        rn_vec(rn_aa[0], rn_aa[1], rn_aa[2]);
-        Eigen::AngleAxisd R0_aa(r0_vec.norm(), r0_vec.normalized()),
-                            Rn_aa(rn_vec.norm(), rn_vec.normalized());
-        Eigen::AngleAxisd R_inert_aa(Rinput_aa.inverse().toRotationMatrix() * R0_aa.toRotationMatrix());
-        Eigen::AngleAxisd R_rest_aa(Rn_aa.toRotationMatrix() * R_inert_aa.inverse().toRotationMatrix()); 
+        // run the sim
+        Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(random_orientation, jf, max_iters, exec_dir, jsons_dir, example_fname);
         VertexData<Vector3> rotated_poses(*forwardSolver->hullMesh);
         for (Vertex v: forwardSolver->hullMesh->vertices()){
             rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
@@ -604,6 +591,8 @@ void run_IPC_samples_ICOS(std::string example_fname, int sample_count = 1, int m
                 lowest_height = cross(rotated_face_normal, Vector3({0,-1,0})).norm();
             }
         }
+        // for debugging
+        Eigen::EulerAnglesZYXd temp_R_euler = euler_from_init_ori(random_orientation);    
         if (lowest_height < 1e-3){
             // std::cout << "stable face: " << f.getIndex() << "\n";
             valid_count++;
@@ -620,20 +609,14 @@ void run_IPC_samples_ICOS(std::string example_fname, int sample_count = 1, int m
             std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
         }
         samples++;
-        if (samples % 50 == 0){
-            printf("$$$ at sample %d\n", samples);
-            printf("avg time per sample: %f\n", (clock() - t1)/((double) samples * (double)CLOCKS_PER_SEC));          
-            for (Face f: forwardSolver->hullMesh->faces()){
-                if (face_counts[f] != 0)
-                    std::cout << "face " << f.getIndex() << " prob: " << face_dual_sum_areas[f]/(4.*M_PI) << "\n";
-            }
-        }
+        if (samples % 50 == 0)
+          std::cout << "at sample: " << samples << "\n";
     }
     printf("total time: %f\n", (double)(clock() - t1)/(double)CLOCKS_PER_SEC);
     printf("avg time per sample: %f\n", (clock() - t1)/((double) samples * (double)CLOCKS_PER_SEC));          
     for (Face f: forwardSolver->hullMesh->faces()){
         if (face_counts[f] != 0)
-            std::cout << "face " << f.getIndex() << " prob: " << face_dual_sum_areas[f]/(4.*M_PI) << "\n";
+            std::cout << "face " << f.getIndex() << " prob: " << face_dual_sum_areas[f]/total_area << "\n";
     }
     std::vector<Vector3> raster_positions,
                        raster_colors;
@@ -701,8 +684,13 @@ void myCallback() {
       draw_stable_patches_on_gauss_map();
     }
     if (ImGui::Checkbox("Save pos to file", &save_pos_to_file));
+    if (ImGui::Checkbox("sampling ICOS", &ICOS_sampling));
+    if (ImGui::InputInt("max steps IPC", &max_steps_IPC));
     if (ImGui::Button("run IPC simulation")){
-        run_IPC_samples_MCMC("example.json", sample_count, 500);
+      if (ICOS_sampling)
+        run_IPC_samples_ICOS("example.json", sample_count, max_steps_IPC);
+      else
+        run_IPC_samples_MCMC("example.json", sample_count, max_steps_IPC);
     }
 }
 
