@@ -414,7 +414,7 @@ Eigen::EulerAnglesZYXd euler_from_init_ori(Vector3 init_ori){
 
 
 Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf, int max_iters, 
-                                    std::string exec_dir, std::string jsons_dir, std::string example_fname){
+                                    std::string exec_dir, std::string jsons_dir, std::string example_fname, std::string type){
   Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(init_ori);
   Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
     
@@ -431,12 +431,13 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf, int max
                                                               temp_R_euler.angles()[0] * 180. / M_PI};
   jf["rigid_body_problem"]["rigid_bodies"][0]["position"] = {0, 1, 0};
 
-  std::ofstream ofs(jsons_dir + "/" + example_fname);
+  std::string input_name = type + "_" + example_fname;
+  std::ofstream ofs(jsons_dir + "/" + input_name);
   ofs << jf;
   ofs.close();
   std::string cmd = exec_dir + 
                   " --chkpt 1001 --ngui " + 
-                  jsons_dir + "/" + example_fname + " " + 
+                  jsons_dir + "/" + input_name + " " + 
                   jsons_dir + "/temp_out";
   // std::cout << "\nrunning: ...\n" ;//<< cmd << "\n";
   int out = system((cmd + "> /dev/null").c_str());
@@ -488,7 +489,7 @@ void run_IPC_samples_MCMC(std::string example_fname, int sample_count = 1, int m
             random_orientation = random_orientation.normalize();
             
             // run the sim
-            Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(random_orientation, jf, max_iters, exec_dir, jsons_dir, example_fname);
+            Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(random_orientation, jf, max_iters, exec_dir, jsons_dir, example_fname, "MC");
             VertexData<Vector3> rotated_poses(*forwardSolver->hullMesh);
             for (Vertex v: forwardSolver->hullMesh->vertices()){
                 rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
@@ -564,6 +565,20 @@ void run_IPC_samples_ICOS(std::string example_fname, int sample_count = 1, int m
     VertexPositionGeometry* icos_sphere_geometry;
     std::cout << "generating icosahedral sphere with resolution: " << resolution << "\n";
     std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
+    
+    // tilt the sphere randomly
+    while (true){
+        Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
+        if (random_orientation.norm() <= 1){
+            random_orientation = random_orientation.normalize();
+            Eigen::AngleAxisd R = aa_from_init_ori(random_orientation);
+            for (Vertex v: icos_sphere_mesh->vertices())
+                icos_sphere_geometry->inputVertexPositions[v] = vec2vec3(R.toRotationMatrix() * vec32vec(icos_sphere_geometry->inputVertexPositions[v]));
+            break;
+        }
+    }
+    
+    // iterate over the sphere
     double total_area = 0;
     for (Face f: icos_sphere_mesh->faces())
         total_area += icos_sphere_geometry->faceArea(f);
@@ -574,7 +589,7 @@ void run_IPC_samples_ICOS(std::string example_fname, int sample_count = 1, int m
         random_orientation = random_orientation.normalize();
         
         // run the sim
-        Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(random_orientation, jf, max_iters, exec_dir, jsons_dir, example_fname);
+        Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(random_orientation, jf, max_iters, exec_dir, jsons_dir, example_fname, "ICOS");
         VertexData<Vector3> rotated_poses(*forwardSolver->hullMesh);
         for (Vertex v: forwardSolver->hullMesh->vertices()){
             rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
@@ -718,6 +733,5 @@ int main(int argc, char* argv[])
   polyscope::show();
 
   
-  return EXIT_SUCCESS;
-	
+  return EXIT_SUCCESS;	
 }
