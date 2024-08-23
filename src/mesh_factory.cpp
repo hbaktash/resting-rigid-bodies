@@ -19,6 +19,8 @@
 #include "mesh_factory.h"
 #include "geometrycentral/surface/meshio.h"
 
+
+
 Vector3 spherical_to_xyz(double r, double phi, double theta){
   return Vector3({r*cos(phi)*sin(theta), r*cos(phi)*cos(theta), r*sin(phi)});
 }
