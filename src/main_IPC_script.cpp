@@ -73,7 +73,7 @@ Vector3 default_face_color({240./256.,178/256.,44./256.});
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("tet0"),std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("worst_case"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("baby_car"), std::string("rubberDuckie")};
-std::string all_polygons_current_item = "tet0";
+std::string all_polygons_current_item = "bunny";
 
 // GC stuff
 std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
