@@ -84,7 +84,7 @@ VertexPositionGeometry* geometry;
 
 // raster image stuff
 FaceData<Vector3> face_colors;
-int sample_count = 1e4, 
+int total_samples = 1e4, 
     max_steps_IPC = 500;
 bool ICOS_sampling = true;
 
@@ -150,7 +150,7 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
   std::cout << "center of mass after shift: " << G << "\n";
   std::cout << "max dist from center: " << max_dist << "\n";
   
-  writeSurfaceMesh(*mesh, *geometry, "../../alec_ipc/rigid-ipc/meshes/centered_COMs/" + all_polygons_current_item + ".obj");
+  writeSurfaceMesh(*mesh, *geometry, "../../rigid-ipc/meshes/centered_COMs/" + all_polygons_current_item + ".obj");
 }
 
 
@@ -270,7 +270,7 @@ void build_raster_image(){
   int total_invalids = 0, total_samples = 0;
   auto t1 = clock();
   double avg_time = 0.;
-  for (int i = 0; i < sample_count; i++){
+  for (int i = 0; i < total_samples; i++){
     Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
     if (random_orientation.norm() <= 1){
       auto t2 = clock();
@@ -362,42 +362,6 @@ void draw_trail_on_gm(std::vector<Vector3> trail, glm::vec3 color, std::string n
 }
 
 
-Eigen::Vector3d get_inetrial_rot(std::string example_fname, int max_iters = 200){
-    std::string jsons_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/fixtures/3D/examples";
-    std::string exec_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/build/rigid_ipc_sim";
-    Eigen::EulerAnglesXYZd R0_euler(0, 0, 0);//0.5*M_PI
-
-
-    // write to fixture json
-    std::ifstream ifs(jsons_dir + "/" + example_fname);
-    nlohmann::json jf = nlohmann::json::parse(ifs);
-
-    jf["max_iterations"] = max_iters;
-    jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = "centered_COMs/" + all_polygons_current_item + ".obj";
-    jf["rigid_body_problem"]["rigid_bodies"][0]["rotation"] = {0,0,0};
-    jf["rigid_body_problem"]["rigid_bodies"][0]["position"] = {0, 1, 0};
-
-    std::ofstream ofs(jsons_dir + "/" + example_fname);
-    ofs << jf;
-    ofs.close();
-    std::string cmd = exec_dir + 
-                      " --chkpt 1001 --ngui " + 
-                      jsons_dir + "/" + example_fname + " " + 
-                      jsons_dir + "/temp_out";
-    std::cout << "running: " << cmd << "\n";
-    std::cout << "result:" << system((cmd + "> /dev/null").c_str()) << "\n";
-
-    // // read output
-    std::ifstream ifs_out(jsons_dir + "/temp_out/sim.json");
-    nlohmann::json jf_out = nlohmann::json::parse(ifs_out);
-
-    auto r0_angleAxis = jf_out["animation"]["state_sequence"][0]["rigid_bodies"][0]["rotation"];
-    std::cout << "raw r0" << r0_angleAxis << "\n";
-    Eigen::Vector3d r0_vec(r0_angleAxis[0], r0_angleAxis[1], r0_angleAxis[2]);
-    return r0_vec;
-    // json js = json::parse(str);
-}
-
 Eigen::AngleAxisd aa_from_init_ori(Vector3 init_ori){
     Vector3 rotation_axis = cross(init_ori, Vector3({0,-1,0})).normalize();
     double rotation_angle = angle(init_ori, Vector3({0,-1,0})); // WARNING: uses acos
@@ -459,9 +423,9 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf, int max
 }
 
 
-void run_IPC_samples_MCMC(std::string example_fname, int sample_count = 1, int max_iters = 200){
-    std::string jsons_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/fixtures/3D/examples";
-    std::string exec_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/build/rigid_ipc_sim";
+void run_IPC_samples_MCMC(std::string example_fname, int total_samples = 1, int max_iters = 200){
+    std::string jsons_dir = "/Users/hbaktash/Desktop/projects/rigid-ipc/fixtures/3D/examples";
+    std::string exec_dir = "/Users/hbaktash/Desktop/projects/rigid-ipc/build/rigid_ipc_sim";
     std::ifstream ifs(jsons_dir + "/" + example_fname);
     nlohmann::json jf = nlohmann::json::parse(ifs);
     ifs.close();
@@ -473,7 +437,7 @@ void run_IPC_samples_MCMC(std::string example_fname, int sample_count = 1, int m
     int samples = 0;
     size_t valid_count = 0;
     auto t1 = clock();
-    while (samples < sample_count){
+    while (samples < total_samples){
         Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
         if (random_orientation.norm() <= 1){
             // sample random orientation -> euler rotation
@@ -540,14 +504,14 @@ void run_IPC_samples_MCMC(std::string example_fname, int sample_count = 1, int m
     auto raster_pc = polyscope::registerPointCloud("raster pc IPC", raster_positions);
     polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("stable face colors", raster_colors);
     pc_col_quant->setEnabled(true);
-    std::cout << "valid count: " << valid_count << "/" << sample_count << "\n";
+    std::cout << "valid count: " << valid_count << "/" << total_samples << "\n";
     // json js = json::parse(str);
 }
 
 
-void run_IPC_samples_ICOS(std::string example_fname, int sample_count = 1, int max_iters = 200){
-    std::string jsons_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/fixtures/3D/examples";
-    std::string exec_dir = "/Users/hbaktash/Desktop/projects/alec_ipc/rigid-ipc/build/rigid_ipc_sim";
+void run_IPC_samples_ICOS(std::string example_fname, int total_samples = 1, int max_iters = 200){
+    std::string jsons_dir = "/Users/hbaktash/Desktop/projects/rigid-ipc/fixtures/3D/examples";
+    std::string exec_dir = "/Users/hbaktash/Desktop/projects/rigid-ipc/build/rigid_ipc_sim";
     std::ifstream ifs(jsons_dir + "/" + example_fname);
     nlohmann::json jf = nlohmann::json::parse(ifs);
     ifs.close();
@@ -558,7 +522,7 @@ void run_IPC_samples_ICOS(std::string example_fname, int sample_count = 1, int m
     FaceData<double> face_dual_sum_areas(*forwardSolver->hullMesh);
 
     int samples = 0;
-    int resolution = (int)sqrt(sample_count/10);
+    int resolution = (int)sqrt(total_samples/10);
     size_t valid_count = 0;
     auto t1 = clock();
     ManifoldSurfaceMesh* icos_sphere_mesh;
@@ -644,9 +608,94 @@ void run_IPC_samples_ICOS(std::string example_fname, int sample_count = 1, int m
     auto raster_pc = polyscope::registerPointCloud("raster pc IPC", raster_positions);
     polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("stable face colors", raster_colors);
     pc_col_quant->setEnabled(true);
-    std::cout << "valid count: " << valid_count << "/" << sample_count << "\n";
+    std::cout << "valid count: " << valid_count << "/" << total_samples << "\n";
     // json js = json::parse(str);
 }
+
+
+void compare_quasi_sample_convergence(){
+  
+  // ICOS
+  int resolution = (int)sqrt(total_samples/10);
+  FaceData<double> ICOS_probs(*forwardSolver->hullMesh, 0.);
+  int total_invalids = 0;
+  size_t valid_count = 0;
+  auto t1 = clock();
+  ManifoldSurfaceMesh* icos_sphere_mesh;
+  VertexPositionGeometry* icos_sphere_geometry;
+  std::cout << "generating icosahedral sphere with resolution: " << resolution << "\n";
+  std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
+  // tilt the ICOS sphere randomly
+  while (true){
+      Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
+      if (random_orientation.norm() <= 1){
+          random_orientation = random_orientation.normalize();
+          Eigen::AngleAxisd R = aa_from_init_ori(random_orientation);
+          for (Vertex v: icos_sphere_mesh->vertices())
+              icos_sphere_geometry->inputVertexPositions[v] = vec2vec3(R.toRotationMatrix() * vec32vec(icos_sphere_geometry->inputVertexPositions[v]));
+          break;
+      }
+  }
+  // iterate over the ICOS sphere
+  double total_area = 0;
+  for (Face f: icos_sphere_mesh->faces()) total_area += icos_sphere_geometry->faceArea(f);
+  std::cout << "start sampling... N = " << icos_sphere_mesh->nVertices() << "\n";
+  total_samples = icos_sphere_mesh->nVertices();
+  for (Vertex sample_v: icos_sphere_mesh->vertices()){
+      Vector3 random_orientation = icos_sphere_geometry->inputVertexPositions[sample_v];
+      double dual_area = icos_sphere_geometry->vertexDualArea(sample_v);
+      random_orientation = random_orientation.normalize(); // redundant
+      
+      // run the quasi dyno
+      Face touching_face = forwardSolver->final_touching_face(random_orientation);
+      if (touching_face.getIndex() == INVALID_IND){
+        total_invalids++;
+        printf(" ----- WTFF invalid ICOS ----- !!\n");
+        continue;
+      }
+      ICOS_probs[touching_face] += dual_area;
+  }
+
+  // ----------  Uniform rejection ----------  //
+
+  FaceData<double> uniform_probs(*forwardSolver->hullMesh, 0.);
+  int tmp_count = 0;
+  total_invalids = 0;
+  while (true){
+    Vector3 random_g_vec = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
+    if (random_g_vec.norm() <= 1.){
+      tmp_count++;
+      if (tmp_count >= total_samples + 1)
+        break;
+      random_g_vec /= norm(random_g_vec);
+      Face touching_face = forwardSolver->final_touching_face(random_g_vec);
+      if (touching_face.getIndex() == INVALID_IND){
+        total_invalids++;
+        printf(" ----- WTFF invalid uniform ----- !!\n");
+        continue;
+      }
+      uniform_probs[touching_face] += 1.;
+    }
+  }
+  double uni_diff_squared = 0., ICOS_diff_squared = 0.;
+  for (Face f: forwardSolver->hullMesh->faces()){
+    if (uniform_probs[f] != 0. || ICOS_probs[f] != 0.){
+      double uniform_prob = uniform_probs[f] / (double)total_samples;
+      double ICOS_prob = ICOS_probs[f]/total_area;
+      double analytic_prob = boundary_builder->face_region_area[f]/(4.*PI);
+      printf("f %d  anl: %f\n", f.getIndex(), analytic_prob);
+      printf("      uniform: %f\n", uniform_prob);
+      printf("          dif: %f\n", abs(uniform_prob - analytic_prob));
+      printf("      ICOS: %f\n", ICOS_prob);
+      printf("          dif: %f\n", abs(ICOS_prob - analytic_prob));
+      uni_diff_squared += (uniform_prob - analytic_prob) * (uniform_prob - analytic_prob);
+      ICOS_diff_squared += (ICOS_prob - analytic_prob) * (ICOS_prob - analytic_prob);
+    }
+  }
+  printf("uniform diff squared: %f\n", sqrt(uni_diff_squared));
+  printf("ICOS diff squared: %f\n", sqrt(ICOS_diff_squared));
+}
+
 
 // polyscope callback
 void myCallback() {
@@ -688,7 +737,7 @@ void myCallback() {
     if (ImGui::Button("refresh")){
         old_g_vec = refresh_orientation;
     }
-    if (ImGui::InputInt("sample count", &sample_count));
+    if (ImGui::InputInt("sample count", &total_samples));
     if (ImGui::Button("build the raster image")){
       // draw the default polyhedra
       visualize_colored_polyhedra();
@@ -703,9 +752,12 @@ void myCallback() {
     if (ImGui::InputInt("max steps IPC", &max_steps_IPC));
     if (ImGui::Button("run IPC simulation")){
       if (ICOS_sampling)
-        run_IPC_samples_ICOS("example.json", sample_count, max_steps_IPC);
+        run_IPC_samples_ICOS("example.json", total_samples, max_steps_IPC);
       else
-        run_IPC_samples_MCMC("example.json", sample_count, max_steps_IPC);
+        run_IPC_samples_MCMC("example.json", total_samples, max_steps_IPC);
+    }
+    if (ImGui::Button("compare convergences")){
+      compare_quasi_sample_convergence();
     }
 }
 
