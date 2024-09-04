@@ -395,7 +395,7 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf, int max
                                                               temp_R_euler.angles()[0] * 180. / M_PI};
   jf["rigid_body_problem"]["rigid_bodies"][0]["position"] = {0, 1, 0};
 
-  std::string input_name = type + "_" + example_fname;
+  std::string input_name = type + "_" + all_polygons_current_item + ".json";
   std::ofstream ofs(jsons_dir + "/" + input_name);
   ofs << jf;
   ofs.close();
@@ -424,8 +424,8 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf, int max
 
 
 void run_IPC_samples_MCMC(std::string example_fname, int total_samples = 1, int max_iters = 200){
-    std::string jsons_dir = "/Users/hbaktash/Desktop/projects/rigid-ipc/fixtures/3D/examples";
-    std::string exec_dir = "/Users/hbaktash/Desktop/projects/rigid-ipc/build/rigid_ipc_sim";
+    std::string jsons_dir = "/Users/hbakt/Desktop/code/rigid-ipc/fixtures/3D/examples";
+    std::string exec_dir = "/Users/hbakt/Desktop/code/rigid-ipc/build/rigid_ipc_sim";
     std::ifstream ifs(jsons_dir + "/" + example_fname);
     nlohmann::json jf = nlohmann::json::parse(ifs);
     ifs.close();
@@ -510,12 +510,11 @@ void run_IPC_samples_MCMC(std::string example_fname, int total_samples = 1, int 
 
 
 void run_IPC_samples_ICOS(std::string example_fname, int total_samples = 1, int max_iters = 200){
-    std::string jsons_dir = "/Users/hbaktash/Desktop/projects/rigid-ipc/fixtures/3D/examples";
-    std::string exec_dir = "/Users/hbaktash/Desktop/projects/rigid-ipc/build/rigid_ipc_sim";
+    std::string jsons_dir = "/Users/hbakt/Desktop/code/rigid-ipc/fixtures/3D/examples";
+    std::string exec_dir = "/Users/hbakt/Desktop/code/rigid-ipc/build/rigid_ipc_sim";
     std::ifstream ifs(jsons_dir + "/" + example_fname);
     nlohmann::json jf = nlohmann::json::parse(ifs);
     ifs.close();
-
     Eigen::EulerAnglesXYZd R0_euler(0, 0, 0); // 0.5*M_PI
     FaceData<std::vector<Vector3>> face_to_ori(*forwardSolver->hullMesh);
     FaceData<size_t> face_counts(*forwardSolver->hullMesh);
@@ -529,7 +528,7 @@ void run_IPC_samples_ICOS(std::string example_fname, int total_samples = 1, int 
     VertexPositionGeometry* icos_sphere_geometry;
     std::cout << "generating icosahedral sphere with resolution: " << resolution << "\n";
     std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
-    
+
     // tilt the sphere randomly
     while (true){
         Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
@@ -554,6 +553,7 @@ void run_IPC_samples_ICOS(std::string example_fname, int total_samples = 1, int 
         
         // run the sim
         Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(random_orientation, jf, max_iters, exec_dir, jsons_dir, example_fname, "ICOS");
+        // get the bottom face
         VertexData<Vector3> rotated_poses(*forwardSolver->hullMesh);
         for (Vertex v: forwardSolver->hullMesh->vertices()){
             rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
@@ -677,6 +677,8 @@ void compare_quasi_sample_convergence(){
       uniform_probs[touching_face] += 1.;
     }
   }
+  printf(" total samples uniform: %d\n", tmp_count);
+  printf(" ICOS total samples uniform: %d\n", total_samples);
   double uni_diff_squared = 0., ICOS_diff_squared = 0.;
   for (Face f: forwardSolver->hullMesh->faces()){
     if (uniform_probs[f] != 0. || ICOS_probs[f] != 0.){
@@ -755,9 +757,6 @@ void myCallback() {
         run_IPC_samples_ICOS("example.json", total_samples, max_steps_IPC);
       else
         run_IPC_samples_MCMC("example.json", total_samples, max_steps_IPC);
-    }
-    if (ImGui::Button("compare convergences")){
-      compare_quasi_sample_convergence();
     }
 }
 

@@ -64,14 +64,14 @@ set_property(TARGET adDebug PROPERTY CXX_STANDARD 20)
 
 # Add executables
 
-# add_executable(convexFill src/main_convex_fill.cpp)
-# target_link_libraries(convexFill
-# PRIVATE
-# rolling_dragons::rolling_dragons
-# taywee::args
-# stan::stan
-# )
-# set_property(TARGET convexFill PROPERTY CXX_STANDARD 20)
+add_executable(convexFill src/main_convex_fill.cpp)
+target_link_libraries(convexFill
+PRIVATE
+rolling_dragons::rolling_dragons
+taywee::args
+stan::stan
+)
+set_property(TARGET convexFill PROPERTY CXX_STANDARD 20)
 
 # Add executables
 include(json)

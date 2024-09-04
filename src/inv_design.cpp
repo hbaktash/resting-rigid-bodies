@@ -50,7 +50,7 @@ void InverseSolver::set_fair_distribution_for_sink_faces(size_t goal_stable_coun
     size_t count = goal_stable_count;
     goal_prob = FaceData<double>(*forwardSolver->hullMesh, 0.);
     for (Face f: forwardSolver->hullMesh->faces()){
-        if (flow_structure[f] == f) { // f is sink
+        if (boundaryBuilder->forward_solver->face_last_face[f] == f) { // f is sink
             face_areas.push_back(boundaryBuilder->face_region_area[f]);
         }
     }
@@ -59,7 +59,7 @@ void InverseSolver::set_fair_distribution_for_sink_faces(size_t goal_stable_coun
     double nth_largest_area = face_areas[face_areas.size() - std::min(goal_stable_count, face_areas.size()) ];
     for (Face f: forwardSolver->hullMesh->faces()){
         Vector3 face_normal = forwardSolver->hullGeometry->faceNormal(f);
-        if (flow_structure[f] == f && boundaryBuilder->face_region_area[f] >= nth_largest_area){
+        if (boundaryBuilder->forward_solver->face_last_face[f] == f && boundaryBuilder->face_region_area[f] >= nth_largest_area){
             goal_prob[f] = 1./(double)count;
             old_stable_normals.push_back(face_normal);
             // printf(" face %d goal area: %f \n", f.getIndex(), goal_prob[f]);
@@ -74,7 +74,7 @@ void InverseSolver::update_fair_distribution(double normal_threshold){
     size_t old_count = old_stable_normals.size();
     std::vector<Face> new_stable_faces, all_stable_faces;
     for (Face f: forwardSolver->hullMesh->faces()){
-        if (flow_structure[f] == f){
+        if (boundaryBuilder->forward_solver->face_last_face[f] == f){
             all_stable_faces.push_back(f);
         }
     }
@@ -366,22 +366,15 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool use_autodiff, bool frozen_G, bool
 
 // 
 VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(size_t goal_stable_count,
-                                                                    bool with_flow_structure,                        
                                                                     double stable_normal_update_thres){
     Vector3 zvec = Vector3::zero();
     VertexData<Vector3> total_vertex_grads(*forwardSolver->hullMesh, zvec);
-    // if (with_flow_structure && stable_normal_update_thres < 0){
-    //     set_fair_distribution_for_sink_faces(); // 
-    // }
-    // else if (stable_normal_update_thres > 0)
-    //     update_fair_distribution(stable_normal_update_thres);
+
     set_fair_distribution_for_sink_faces(goal_stable_count); // top k faces are set
 
     for (Face f: forwardSolver->hullMesh->faces()){ 
-        Face last_sink_face;
-        double goal_multiplier = with_flow_structure ? 
-                        (goal_prob[flow_structure[f]]* 4.*PI - boundaryBuilder->face_region_area[flow_structure[f]]):
-                        (goal_prob[f]* 4.*PI - boundaryBuilder->face_region_area[f]);
+        Face sink_face = boundaryBuilder->forward_solver->face_last_face[f];
+        double goal_multiplier = (goal_prob[sink_face]* 4.*PI - boundaryBuilder->face_region_area[sink_face]);
         for (Vertex v: forwardSolver->hullMesh->vertices()){
             // printf("at face %d , vertex %d\n", f.getIndex(), v.getIndex());
             // std::cout << " df_dv: " << uni_mass_d_pf_dv[f][v] << "\n";

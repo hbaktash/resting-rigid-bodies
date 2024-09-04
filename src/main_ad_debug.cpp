@@ -311,7 +311,6 @@ void test_approx_grads(){
     pip2psmesh->setTransparency(0.7);
 
     // dice energy policy
-    tmp_inv_solver->flow_structure = tmp_solver->face_last_face; // face last face is built in build_boundary_normals...
     stable_normal_update_thresh = -1.;
     // fetching approx grad vs real grads
     printf("here\n");
@@ -346,7 +345,6 @@ void test_ad_grads(){
     pip2psmesh->setTransparency(0.7);
 
     // dice energy policy
-    tmp_inv_solver->flow_structure = tmp_solver->face_last_face; // face last face is built in build_boundary_normals...
     if (first_time) stable_normal_update_thresh = -1.;
     
     // fetching approx grad vs real grads

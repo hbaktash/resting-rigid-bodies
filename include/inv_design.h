@@ -78,9 +78,7 @@ class InverseSolver{
         // after chain and product rule
         void find_uni_mass_d_pf_dv(bool use_autodiff, bool frozen_G = false, bool check_FD = false);
         // accumulate over all faces
-        FaceData<Face> flow_structure;
         VertexData<Vector3> find_uni_mass_total_vertex_grads(size_t goal_stable_count,
-                                                             bool with_flow_structure = false,
                                                              double stable_normal_update_thres = -1.);
         
         // pre-step for updates 

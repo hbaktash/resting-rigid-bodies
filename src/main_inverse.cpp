@@ -355,7 +355,6 @@ void take_uni_mass_opt_vertices_step(){
     boundary_builder->build_boundary_normals();
     boundary_builder->print_area_of_boundary_loops();
     if (first_time || always_update_structure){
-      inverseSolver->flow_structure = forwardSolver->face_last_face;
       if (first_time) stable_normal_update_thresh = -1.;
       else stable_normal_update_thresh = 0.1;
       first_time = false;

@@ -46,7 +46,7 @@ Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Ei
 }
 
 
-Eigen::VectorXd solve_QP_with_ineq(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
+Eigen::VectorXd solve_QP_with_ineq_GRB(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
                                    Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, 
                                    Eigen::VectorX<bool> frozen_flags, Eigen::VectorXd frozen_x,
                                    Eigen::MatrixX<bool> active_set){

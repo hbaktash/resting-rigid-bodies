@@ -381,7 +381,7 @@ void animate_G_diff_deformation(Vector3 ideal_G){
   animate_G_deform = true;
 }
 
-void dice_energy_pipeline_stan(size_t step_count = 1){
+void dice_energy_opt_stan(size_t step_count = 1){
   // forwardSolver->set_uniform_G();
   // Eigen::MatrixX3d point_cloud = vertex_data_to_matrix(points);
   Forward3DSolver tmp_solver(mesh, geometry, G, true);
@@ -503,34 +503,27 @@ void dice_energy_pipeline_stan(size_t step_count = 1){
   // std::cout << "pre-deform G:" << tmp_solver.get_G() << "\n";
 }
 
-void version2_dice_pipeline(size_t step_count = 1){
+void dice_energy_opt_proxy(size_t step_count = 1){
   // forwardSolver->set_uniform_G();
-  ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(forwardSolver->hullMesh->getFaceVertexList());
-  VertexPositionGeometry *hull_geo = new VertexPositionGeometry(*hull_mesh, vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions));
-  Forward3DSolver *tmp_solver = new Forward3DSolver(hull_mesh, hull_geo, G, false);
-  if (frozen_G){
-    auto GV_pair = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry);
-    tmp_solver->set_G(GV_pair.first);
-    tmp_solver->volume = GV_pair.second;
-  }
-  else {
-    tmp_solver->set_uniform_G(); // frozen G matters here or not ???
-  }
-  printf("initalize precomputes\n");
-  tmp_solver->initialize_pre_computes();
+  Forward3DSolver tmp_solver(mesh, geometry, G, true);
+  tmp_solver.set_uniform_G();
+  G = tmp_solver.get_G();
+  Eigen::Vector3d G_vec{G.x, G.y, G.z};
+  Eigen::MatrixX3d point_cloud = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
+  std::cout << "initial G: " << G_vec << "\n";
+  tmp_solver.initialize_pre_computes();
+  BoundaryBuilder tmp_bnd_builder(&tmp_solver);
   
-  if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(false);
-  if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);
-  if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
-  if (polyscope::hasSurfaceMesh("init input mesh")) polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
-  auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
-                                                  tmp_solver->inputMesh->getFaceVertexList());
-  pip2psmesh->setEdgeWidth(2.);
-  polyscope::screenshot(false);
-  BoundaryBuilder *tmp_bnd_builder;
-  InverseSolver *tmp_inv_solver;
-  tmp_bnd_builder = new BoundaryBuilder(tmp_solver);
-  tmp_inv_solver = new InverseSolver(tmp_bnd_builder);
+  // if (polyscope::hasSurfaceMesh("fillable hull")) polyscope::getSurfaceMesh("fillable hull")->setEnabled(false);
+  // if (polyscope::hasSurfaceMesh("temp sol")) polyscope::getSurfaceMesh("temp sol")->setEnabled(false);
+  // if (polyscope::hasSurfaceMesh("init hull mesh")) polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
+  // if (polyscope::hasSurfaceMesh("init input mesh")) polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
+  // auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
+  //                                                 tmp_solver->inputMesh->getFaceVertexList());
+  // pip2psmesh->setEdgeWidth(2.);
+  // polyscope::screenshot(false);
+  BoundaryBuilder tmp_bnd_builder(&tmp_solver);
+  InverseSolver tmp_inv_solver(&tmp_bnd_builder);
 
   max_energy = 0.;
   // cur = 2
@@ -543,9 +536,9 @@ void version2_dice_pipeline(size_t step_count = 1){
   for (size_t iter = 0; iter < step_count; iter++){
 
     printf("finding vertex derivatives\n");
-    tmp_bnd_builder->build_boundary_normals(); // face-last-face is called 
+    tmp_bnd_builder.build_boundary_normals(); // face-last-face is called 
     
-    update_visuals_with_G(tmp_solver, tmp_bnd_builder);
+    update_visuals_with_G(&tmp_solver, &tmp_bnd_builder); // TODO
     std::cout << ANSI_FG_YELLOW << " fair dice energy iter "<< iter<< "  f: " << tmp_bnd_builder->get_fair_dice_energy(fair_sides_count) << ANSI_RESET << "\n";
 
     auto pip2psmesh = polyscope::registerSurfaceMesh("pipe2 tmp sol", tmp_solver->inputGeometry->inputVertexPositions,
@@ -931,10 +924,10 @@ int main(int argc, char **argv) {
       // polyscope::removeAllStructures();
       if (use_autodiff_for_dice_grad){
         forwardSolver->set_uniform_G();
-        dice_energy_pipeline_stan(hull_opt_steps);
+        dice_energy_opt_stan(hull_opt_steps);
       }
       else
-        version2_dice_pipeline(hull_opt_steps);
+        dice_energy_opt_proxy(hull_opt_steps);
       v2_dice_animate = false;
     }
     polyscope::frameTick();
