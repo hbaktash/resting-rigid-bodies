@@ -146,6 +146,6 @@ class BoundaryBuilder {
 
 double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver &fwd_solver, 
                                size_t dice_side_count, double step_size, double decay, bool frozen_G, 
-                               size_t max_iter = 400, double tol = 1e-6);
+                               size_t max_iter = 200, double tol = 1e-6);
 
 #include "boundary_tools.impl.h"
