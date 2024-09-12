@@ -12,11 +12,13 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
     // printf("initalize precomputes\n");
     tmp_solver.updated = false;
     tmp_solver.initialize_pre_computes();
+    printf("stan: initialized solver\n");
     FaceData<Face> face_last_face = tmp_solver.face_last_face;
     VertexData<bool> vertex_is_stabilizable = tmp_solver.vertex_is_stabilizable; 
     EdgeData<Vertex> edge_next_vertex = tmp_solver.edge_next_vertex;
+    // tmp_solver.print_precomputes();
     std::vector<Edge> terminal_edges;
-    // printf("  finding terminal edges \n");
+    printf("  finding terminal edges \n");
     size_t cnt = 0;
     for (Edge e: tmp_solver.hullMesh->edges()) {
         if (tmp_solver.edge_next_vertex[e].getIndex() == INVALID_IND){ // singular edge
@@ -24,8 +26,8 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
                  f2 = e.halfedge().twin().face();
             if (tmp_solver.face_last_face[f1] != tmp_solver.face_last_face[f2]){ // saddle edge
                 terminal_edges.push_back(e);
-                // printf("cnt %d: edge %d is terminal with faces %d, %d\n", cnt, e.getIndex(), f1.getIndex(), f2.getIndex());
-                // printf("    --- face last faces: %d, %d\n", tmp_solver.face_last_face[f1].getIndex(), tmp_solver.face_last_face[f2].getIndex());
+                printf("cnt %d: edge %d is terminal with faces %d, %d\n", cnt, e.getIndex(), f1.getIndex(), f2.getIndex());
+                printf("    --- face last faces: %d, %d\n", tmp_solver.face_last_face[f1].getIndex(), tmp_solver.face_last_face[f2].getIndex());
                 
                 cnt++;
             }
@@ -45,10 +47,10 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
 
     // morse complex areas; only non-zero for stable faces
     FaceData<Scalar> face_region_area(*tmp_solver.hullMesh, 0.);
-    // printf("  back-flowing terminal edges %lu \n", terminal_edges.size());
+    printf("  stan: back-flowing terminal edges %lu \n", terminal_edges.size());
     int i = 1;
     for (Edge e: terminal_edges){
-        // printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
+        printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
         // std::cout << "  -e" << e.getIndex() << " : " << e.firstVertex().getIndex() << " , " << e.secondVertex().getIndex() << " adj faces: "<< e.halfedge().face().getIndex() << " " << e.halfedge().twin().face().getIndex() << std::endl;
         // bnd_normal->normal_ad = point_to_segment_normal_ad(e);
         Eigen::Vector3<Scalar> edge_bnd_normal = point_to_segment_normal<Scalar>(G, hull_positions.row(e.firstVertex().getIndex()), hull_positions.row(e.secondVertex().getIndex()));
@@ -94,7 +96,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             int cnt = 0;
             while (true) {
                 cnt++;
-                // std::cout << "   - at vertex " << current_v.getIndex() << std::endl;
+                std::cout << "   - at vertex " << current_v.getIndex() << std::endl;
                 // if (cnt > 50){
                 //     // std::cout << "  - too many iterations\n";
                 //     break;

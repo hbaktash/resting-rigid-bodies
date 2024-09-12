@@ -312,7 +312,7 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool use_autodiff, bool frozen_G, bool
     for (Face f: forwardSolver->hullMesh->faces()){
         uni_mass_d_pf_dv[f] = VertexData<Vector3>(*forwardSolver->hullMesh, zvec);
         for (Vertex v: forwardSolver->hullMesh->vertices()){
-            if (!frozen_G){ // && compute_global_G_effectl; wtf was i thinking with that?
+            if (!frozen_G){ // && compute_global_G_effectl
                 // center of mass term
                 Vertex org_vertex = forwardSolver->inputMesh->vertex(forwardSolver->org_hull_indices[v]);
                 Vector<double> term2 = dG_dv[org_vertex].transpose() * vec32vec(d_pf_d_G[f]);
@@ -374,7 +374,7 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(size_t goal_
 
     for (Face f: forwardSolver->hullMesh->faces()){ 
         Face sink_face = boundaryBuilder->forward_solver->face_last_face[f];
-        double goal_multiplier = (goal_prob[sink_face]* 4.*PI - boundaryBuilder->face_region_area[sink_face]);
+        double goal_multiplier = -1.*(goal_prob[sink_face]* 4.*PI - boundaryBuilder->face_region_area[sink_face]);
         for (Vertex v: forwardSolver->hullMesh->vertices()){
             // printf("at face %d , vertex %d\n", f.getIndex(), v.getIndex());
             // std::cout << " df_dv: " << uni_mass_d_pf_dv[f][v] << "\n";

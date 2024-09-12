@@ -144,8 +144,8 @@ class BoundaryBuilder {
         static Scalar triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B, Eigen::Vector3<Scalar> C);
 };
 
-double hull_update_line_search(VertexData<Vector3> grad, Forward3DSolver &fwd_solver, 
+double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec,
                                size_t dice_side_count, double step_size, double decay, bool frozen_G, 
-                               size_t max_iter = 200, double tol = 1e-6);
+                               size_t max_iter);
 
 #include "boundary_tools.impl.h"

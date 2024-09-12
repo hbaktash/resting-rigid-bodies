@@ -712,6 +712,8 @@ void Forward3DSolver::build_face_last_faces(){
 
 // just call all the pre-compute initializations; not face-last-face
 void Forward3DSolver::initialize_pre_computes(){
+    if (updated)
+        return;
     // printf("precomputes:\n");
     // printf("  vertex stability:\n");
     compute_vertex_stabilizablity();
@@ -729,4 +731,20 @@ void Forward3DSolver::initialize_pre_computes(){
     hullGeometry->refreshQuantities();
     // printf("hereee\n");
     updated = true;
+}
+
+
+void Forward3DSolver::print_precomputes(){
+    printf( " --------- face last faces --------- \n");
+    for (Face f: hullMesh->faces()){
+        printf("face %d -> %d\n", f.getIndex(), face_last_face[f].getIndex());
+    }
+    printf( " --------- vertex stability --------- \n");
+    for (Vertex v: hullMesh->vertices()){
+        printf("vertex %d -> %d\n", v.getIndex(), vertex_is_stabilizable[v]);
+    }
+    printf( " --------- edge next vertex --------- \n");
+    for (Edge e: hullMesh->edges()){
+        printf("edge %d -> %d\n", e.getIndex(), edge_next_vertex[e].getIndex());
+    }
 }

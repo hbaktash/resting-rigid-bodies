@@ -127,7 +127,7 @@ class Forward3DSolver {
 
     // just calls basic precomputes
     void initialize_pre_computes();    
-
+    void print_precomputes();
     // Rigid Simulation stuff
     Edge vertex_to_edge(Vertex v);
     void vertex_to_next(Vertex v);
