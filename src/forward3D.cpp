@@ -38,15 +38,10 @@ Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPosition
 
 
 Forward3DSolver::Forward3DSolver(Eigen::MatrixX3d point_cloud, Eigen::Vector3d _G){
-    std::vector<std::vector<size_t>> hull_faces; 
-    std::vector<size_t> hull_vertex_mapping;
-    std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean
-    auto [_inputMesh, _inputGeometry] = get_convex_hull_mesh(point_cloud);
-    inputMesh = _inputMesh;
-    inputGeometry = _inputGeometry;
+    std::tie(inputMesh, inputGeometry) = get_convex_hull_mesh(point_cloud);
     hullMesh = inputMesh;
     hullGeometry = inputGeometry;
-    G = Vector3{_G[0], _G[1], _G[2]};
+    G = vec2vec3(_G);
     updated = false;
 }
 

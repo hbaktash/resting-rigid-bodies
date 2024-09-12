@@ -534,6 +534,16 @@ void myCallback() {
               // recolor_faces = true;
               // color_faces();
 
+              Forward3DSolver tmp_solver(mesh, geometry, G, true);
+              tmp_solver.set_uniform_G();
+              G = tmp_solver.get_G();
+              tmp_solver.initialize_pre_computes();
+              Eigen::Vector3d G_vec{G.x, G.y, G.z};
+              Eigen::MatrixX3d hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
+              tmp_solver = Forward3DSolver(hull_positions, G_vec);
+              tmp_solver.initialize_pre_computes();
+              double min_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions, G_vec, tmp_solver, 6);
+
               // //
               visualize_gauss_map();//
               G = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;

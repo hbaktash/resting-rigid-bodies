@@ -732,9 +732,7 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   
   Forward3DSolver tmp_solver(hull_positions, G_vec);
   tmp_solver.initialize_pre_computes();
-  BoundaryBuilder tmp_builder(&tmp_solver);
-  tmp_builder.build_boundary_normals();
-
+  
   double min_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions, G_vec, tmp_solver, dice_side_count);
 //   printf(" current fair dice energy: %f\n", s_min_dice_energy);
   double s = step_size; //
