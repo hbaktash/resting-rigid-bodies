@@ -466,15 +466,9 @@ void VisualUtils::draw_guess_pc(std::vector<std::pair<size_t, size_t>> neigh_ind
 // visualize center of mass
 void VisualUtils::draw_G() {
   std::vector<Vector3> G_position = {forwardSolver->get_G()};
-  if (polyscope::hasPointCloud("Center of Mass")){
-    psG->updatePointPositions(G_position);
-  }
-  else 
-    psG = polyscope::registerPointCloud("Center of Mass", G_position);
-  // set some options
+  psG = polyscope::registerPointCloud("Center of Mass", G_position);
   psG->setPointColor({0., 0., 0.});
   psG->setPointRadius(G_radi, false);
-  psG->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 }
 
 

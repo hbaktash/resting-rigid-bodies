@@ -181,8 +181,7 @@ Vector3 InverseSolver::find_total_g_grad() {
 
 // vertex grads
 void InverseSolver::find_d_pf_dvs(bool use_autodiff, bool check_FD) {
-    if (!forwardSolver->updated)
-        forwardSolver->initialize_pre_computes();
+    forwardSolver->initialize_pre_computes();
     Vector3 zvec = Vector3::zero();
     Vector3 G = forwardSolver->get_G();
     d_pf_dv = FaceData<VertexData<Vector3>>(*forwardSolver->hullMesh);
@@ -225,7 +224,6 @@ void InverseSolver::find_d_pf_dvs(bool use_autodiff, bool check_FD) {
             for (Vector3 dp: {e_x, e_y, e_z}){
                 Vector3 tmp_p = old_p + dp * step;
                 forwardSolver->hullGeometry->inputVertexPositions[v] = tmp_p;
-                forwardSolver->updated = false;
                 forwardSolver->initialize_pre_computes();
                 boundaryBuilder->build_boundary_normals();
                 Vector<double> new_face_areas = boundaryBuilder->face_region_area.toVector();
@@ -241,7 +239,6 @@ void InverseSolver::find_d_pf_dvs(bool use_autodiff, bool check_FD) {
                 // break;
             }
             forwardSolver->hullGeometry->inputVertexPositions[v] = old_p;
-            forwardSolver->updated = false;
             forwardSolver->initialize_pre_computes();   
             // break; 
         }
@@ -266,8 +263,7 @@ VertexData<Vector3> InverseSolver::find_total_vertex_grads() {
 // populating VertexData<DenseMatrix<double>> dv_d_G;
 void InverseSolver::find_dG_dvs(){
     // TODO; generalize for polygonal faces
-    if (!forwardSolver->updated)
-        forwardSolver->initialize_pre_computes();
+    forwardSolver->initialize_pre_computes();
     Vector3 G = forwardSolver->get_G();
     DenseMatrix<double> zmat = DenseMatrix<double>::Zero(3,3);
     dG_dv = VertexData<DenseMatrix<double>>(*forwardSolver->inputMesh, zmat);
@@ -357,7 +353,6 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool use_autodiff, bool frozen_G, bool
                 // break;
             }
             forwardSolver->hullGeometry->inputVertexPositions[v] = old_p;
-            forwardSolver->updated = false;
             forwardSolver->initialize_pre_computes();   
             // break; 
         }

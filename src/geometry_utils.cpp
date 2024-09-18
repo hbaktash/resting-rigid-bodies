@@ -127,7 +127,6 @@ double polygonal_face_area(Face f, VertexPositionGeometry &geometry){
 
 // check if G is inside the polyehdra (positive mass)
 bool G_is_inside(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry, Vector3 G){
-    return true;
     for (Face f : mesh.faces()){
         // assuming planar faces
         Vertex v = f.halfedge().vertex();

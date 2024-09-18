@@ -20,45 +20,6 @@
 #include "boundary_tools.h"
 
 
-void draw_arc_on_sphere_static(Vector3 p1, Vector3 p2, Vector3 center, double radius, 
-                        size_t seg_count, size_t edge_ind, 
-                        double radi_scale, glm::vec3 color, 
-                        float arc_curve_radi){
-// p1, p2 just represent normal vectors
-  if (norm(p1) > 1.01)
-    polyscope::warning("p1 norm larger than 1!");
-  if (norm(p2) > 1.01)
-    polyscope::warning("p2 norm larger than 1!");
-
-  std::vector<std::array<size_t, 2>> edgeInds;
-  std::vector<Vector3> positions;
-  double sqrt_radi = sqrt(radius);
-  // walk on p1-p2 segment
-  Vector3 curr_point = p1,
-          forward_vec = (p2-p1)/(double)seg_count;
-  Vector3 next_point = curr_point + forward_vec;
-  Vector3 curr_point_on_sphere = normalize(curr_point) * sqrt_radi + center ,
-          next_point_on_sphere = normalize(next_point) * sqrt_radi + center;
-  positions.push_back(curr_point_on_sphere);
-  for (size_t i = 0; i < seg_count; i++){
-    // add to positions list
-    curr_point_on_sphere = normalize(curr_point) * sqrt_radi + center ,
-    next_point_on_sphere = normalize(next_point) * sqrt_radi + center;
-    positions.push_back(next_point_on_sphere);
-    // add segment indices
-    edgeInds.push_back({i, i+1});
-
-    // update points
-    curr_point = next_point;
-    next_point += forward_vec;
-  }
-  auto psArcCurveNet = polyscope::registerCurveNetwork("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
-  psArcCurveNet->setRadius(arc_curve_radi * radi_scale, false);
-  psArcCurveNet->setColor(color);
-  psArcCurveNet->setEnabled(true);
-}
-
-
 size_t BoundaryNormal::counter = 0;
 
 // constructor
@@ -732,9 +693,8 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   
   Forward3DSolver tmp_solver(hull_positions, G_vec);
   tmp_solver.initialize_pre_computes();
-  
-  double min_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions, G_vec, tmp_solver, dice_side_count);
-//   printf(" current fair dice energy: %f\n", s_min_dice_energy);
+  Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
+  double min_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec, tmp_solver, dice_side_count);
   double s = step_size; //
 
   bool found_smth_optimal = false;
@@ -747,27 +707,28 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
     //                                                 fwd_solver.hullMesh->getFaceVertexList());
     //   tmpmesh->setSurfaceColor({0.6,0,0.5});
     //   polyscope::show();
-        tmp_solver = Forward3DSolver(hull_positions + s * dfdv, G_vec);
+        tmp_solver = Forward3DSolver(hull_positions - s * dfdv, G_vec);
         if (!G_is_inside(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, tmp_solver.get_G())){
             printf("  - G outside! \n");
             s *= decay;
             continue;
         }
         tmp_solver.initialize_pre_computes();
-        tmp_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions + s * dfdv,
-                             G_vec, tmp_solver, dice_side_count);
+        Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
+        tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, 
+                                                               G_vec, tmp_solver, dice_side_count);
     //   printf("  *** temp fair dice energy %d: %f\n", j, tmp_fair_dice_energy);
 
-      if (tmp_dice_energy < min_dice_energy){
-        found_smth_optimal = true;
-        break; //  x new is good
-      }
-      else
-          s *= decay;
+        if (tmp_dice_energy < min_dice_energy){
+            found_smth_optimal = true;
+            break; //  x new is good
+        }
+        else
+            s *= decay;
   }
   s = found_smth_optimal ? s : 0.;
 //   printf("line search for dice ended at iter %d, s: %.10f, \n \t\t\t\t\t fnew: %f \n", j, s, tmp_fair_dice_energy);
-  printf("\t\t - line ended at iter %d/%d\n", j, max_iter);
+printf("\t\t - line ended at iter %d/%d with s: %f \n", j, max_iter, s);
   return s;
 }
 

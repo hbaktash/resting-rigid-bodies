@@ -33,16 +33,28 @@ Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPosition
     // hullMesh = inputMesh_;
     // hullGeometry = inputGeo_;
     G = inputG_;
-    updated = false;
 }
 
 
 Forward3DSolver::Forward3DSolver(Eigen::MatrixX3d point_cloud, Eigen::Vector3d _G){
-    std::tie(inputMesh, inputGeometry) = get_convex_hull_mesh(point_cloud);
-    hullMesh = inputMesh;
-    hullGeometry = inputGeometry;
     G = vec2vec3(_G);
-    updated = false;
+    std::vector<std::vector<size_t>> hull_faces; 
+    std::vector<size_t> hull_vertex_mapping;
+    std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean
+    std::tie(hull_faces, hull_vertex_mapping, hull_poses) = get_convex_hull(point_cloud);
+    hullMesh = new ManifoldSurfaceMesh(hull_faces);
+    hullGeometry = new VertexPositionGeometry(*hullMesh);
+    org_hull_indices = VertexData<size_t>(*hullMesh);
+    for (Vertex hull_v: hullMesh->vertices()){
+        hullGeometry->inputVertexPositions[hull_v] = hull_poses[hull_v.getIndex()];
+        org_hull_indices[hull_v] = hull_vertex_mapping[hull_v.getIndex()];
+    }
+    inputMesh = hullMesh;
+    inputGeometry = hullGeometry;
+    // initialize_pre_computes();
+    // std::tie(inputMesh, inputGeometry) = get_convex_hull_mesh(point_cloud);
+    // G = vec2vec3(_G);
+    // updated = false;
 }
 
 // initialize state holders
@@ -58,7 +70,6 @@ void Forward3DSolver::initialize_state(Vertex curr_v_, Edge curr_e_, Face curr_f
 //
 void Forward3DSolver::set_G(Vector3 new_G){
     this->G = new_G;
-    updated = false;
 }
 
 void Forward3DSolver::set_uniform_G(){
@@ -264,8 +275,6 @@ void Forward3DSolver::compute_vertex_probabilities(){
 // stabilizable := the normal from G can touch the ground
 // stable := the normal from G falls withing the element
 bool Forward3DSolver::vertex_is_stablizable(Vertex v){
-    if (updated)
-        return vertex_is_stabilizable[v];
     Vector3 Gp = hullGeometry->inputVertexPositions[v] - G;
     double gp_norm = dot(Gp, Gp);
     for (Vertex other_v: hullMesh->vertices()){
@@ -280,8 +289,6 @@ bool Forward3DSolver::vertex_is_stablizable(Vertex v){
 
 
 Vertex Forward3DSolver::next_rolling_vertex(Edge e){
-    if (updated)
-        return edge_next_vertex[e];
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 p1 = hullGeometry->inputVertexPositions[v1], 
             p2 = hullGeometry->inputVertexPositions[v2];
@@ -291,8 +298,6 @@ Vertex Forward3DSolver::next_rolling_vertex(Edge e){
 }
 
 bool Forward3DSolver::edge_is_stable(Edge e){
-    if (updated)
-        return edge_next_vertex[e].getIndex() == INVALID_IND;
     return next_rolling_vertex(e).getIndex() == INVALID_IND;
 }
 
@@ -323,8 +328,6 @@ bool Forward3DSolver::edge_is_stablizable(Edge e){
 bool Forward3DSolver::face_is_stable(Face f){
     if (f.getIndex() == INVALID_IND)
         return false;
-    if (updated)
-        return face_next_face[f] == f;
     // need to check all the wideness of dihedral angles made on each edge
     // iterate over all edges of the face and check the dihedral angle
     Halfedge curr_he = f.halfedge(),
@@ -683,8 +686,6 @@ void Forward3DSolver::build_face_next_faces(){
 
 void Forward3DSolver::build_face_last_faces(){
     ///
-    if (!updated)
-        build_face_next_faces();
     face_last_face = FaceData<Face>(*hullMesh, Face());
     for (Face f: hullMesh->faces()){
         if (face_last_face[f].getIndex() != INVALID_IND)
@@ -707,8 +708,6 @@ void Forward3DSolver::build_face_last_faces(){
 
 // just call all the pre-compute initializations; not face-last-face
 void Forward3DSolver::initialize_pre_computes(){
-    if (updated)
-        return;
     // printf("precomputes:\n");
     // printf("  vertex stability:\n");
     compute_vertex_stabilizablity();
@@ -725,21 +724,21 @@ void Forward3DSolver::initialize_pre_computes(){
     // printf("heree\n");
     hullGeometry->refreshQuantities();
     // printf("hereee\n");
-    updated = true;
 }
 
 
 void Forward3DSolver::print_precomputes(){
-    printf( " --------- face last faces --------- \n");
+    printf( " --------- face last faces %d --------- \n", hullMesh->nFaces());
     for (Face f: hullMesh->faces()){
         printf("face %d -> %d\n", f.getIndex(), face_last_face[f].getIndex());
-    }
-    printf( " --------- vertex stability --------- \n");
-    for (Vertex v: hullMesh->vertices()){
-        printf("vertex %d -> %d\n", v.getIndex(), vertex_is_stabilizable[v]);
     }
     printf( " --------- edge next vertex --------- \n");
     for (Edge e: hullMesh->edges()){
         printf("edge %d -> %d\n", e.getIndex(), edge_next_vertex[e].getIndex());
+    }
+    printf( " --------- vertex stability --------- \n");
+    for (Vertex v: hullMesh->vertices()){
+        if (vertex_is_stablizable(v))
+            printf("vertex %d -> %d\n", v.getIndex(), vertex_is_stabilizable[v]);
     }
 }

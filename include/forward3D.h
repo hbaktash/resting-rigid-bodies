@@ -37,7 +37,6 @@ class Forward3DSolver {
   private:
     Vector3 G;
   public:
-    bool updated;
 
     double volume;
     // input goemetry
