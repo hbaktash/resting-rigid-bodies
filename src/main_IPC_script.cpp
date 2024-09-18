@@ -42,6 +42,7 @@
 // #include "bullet_sim.h"
 #include "visual_utils.h"
 
+#include "ipc/ipc.hpp"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -253,8 +254,7 @@ void update_solver_and_boundaries(){
 
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
-  if (!forwardSolver->updated)
-    forwardSolver->initialize_pre_computes();
+  forwardSolver->initialize_pre_computes();
   // std::vector<Vector3> boundary_normals;
   auto net_pair = build_and_draw_stable_patches_on_gauss_map(boundary_builder,
                                                               vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 

@@ -728,7 +728,7 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   }
   s = found_smth_optimal ? s : 0.;
 //   printf("line search for dice ended at iter %d, s: %.10f, \n \t\t\t\t\t fnew: %f \n", j, s, tmp_fair_dice_energy);
-printf("\t\t - line ended at iter %d/%d with s: %f \n", j, max_iter, s);
+  printf("\t\t - line ended at iter %d/%d with s: %f \n", j, max_iter, s);
   return s;
 }
 

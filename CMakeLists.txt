@@ -15,6 +15,7 @@ include(tinyAD)
 include(args)
 include(stan)
 include(osqp-cpp)
+include(ipc-toolkit)
 # include(bullet3)
 
 # Library source files
@@ -53,14 +54,14 @@ add_library(rolling_dragons::rolling_dragons ALIAS rolling_dragons)
 
 # Add executables
 
-add_executable(adDebug src/main_ad_debug.cpp)
-target_link_libraries(adDebug
-PRIVATE
-rolling_dragons::rolling_dragons
-taywee::args
-stan::stan
-)
-set_property(TARGET adDebug PROPERTY CXX_STANDARD 20)
+# add_executable(adDebug src/main_ad_debug.cpp)
+# target_link_libraries(adDebug
+# PRIVATE
+# rolling_dragons::rolling_dragons
+# taywee::args
+# stan::stan
+# )
+# set_property(TARGET adDebug PROPERTY CXX_STANDARD 20)
 
 # Add executables
 
@@ -81,6 +82,7 @@ PRIVATE
 rolling_dragons::rolling_dragons
 taywee::args
 nlohmann::json
+ipc::toolkit
 )
 set_property(TARGET scriptIPC PROPERTY CXX_STANDARD 20)
 
