@@ -42,7 +42,12 @@
 // #include "bullet_sim.h"
 #include "visual_utils.h"
 
-#include "ipc/ipc.hpp"
+#include "chrono"
+// #include "ipc/ipc.hpp"
+
+namespace chrono = std::chrono;
+using clock_type = chrono::high_resolution_clock;
+using seconds_fp = chrono::duration<double, chrono::seconds::period>;
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -86,7 +91,7 @@ VertexPositionGeometry* geometry;
 // raster image stuff
 FaceData<Vector3> face_colors;
 int total_samples = 1e4, 
-    max_steps_IPC = 500;
+    max_steps_IPC = 1000;
 bool ICOS_sampling = true;
 
 // quasi static simulation stuff
@@ -101,8 +106,8 @@ VertexPositionGeometry* sphere_geometry;
 bool gm_is_drawn = false;
 bool draw_snail_trail = true,
      animate = true;
-bool save_pos_to_file = false;
-Vector3 old_g_vec, new_g_vec;
+// bool save_pos_to_file = false;
+// Vector3 old_g_vec, new_g_vec;
 int snail_trail_dummy_counter = 0;
 
 
@@ -151,6 +156,7 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
   std::cout << "center of mass after shift: " << G << "\n";
   std::cout << "max dist from center: " << max_dist << "\n";
   
+  // write for IPC use
   writeSurfaceMesh(*mesh, *geometry, "../../rigid-ipc/meshes/centered_COMs/" + all_polygons_current_item + ".obj");
 }
 
@@ -218,6 +224,7 @@ void visualize_gauss_map(){
   vis_utils.sphere_mesh = sphere_mesh;
 
   vis_utils.draw_gauss_map();
+  polyscope::getSurfaceMesh("height surface_func")->setEnabled(false);
   gm_is_drawn = true;
 }
 
@@ -262,7 +269,7 @@ void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
 }
 
 
-// sample and raster
+// sample and raster with quasi static solver
 void build_raster_image(){
   FaceData<std::vector<Vector3>> face_samples(*forwardSolver->hullMesh);
   std::vector<Vector3> final_orientations;
@@ -379,15 +386,9 @@ Eigen::EulerAnglesZYXd euler_from_init_ori(Vector3 init_ori){
 
 Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf, int max_iters, 
                                     std::string exec_dir, std::string jsons_dir, std::string example_fname, std::string type){
+  
   Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(init_ori);
   Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
-    
-  // std::cout << " \n --------- new sample --------- \n"; 
-  // std::cout << "R input euler: " << temp_R_euler.angles().reverse() * 180. / M_PI << "\n"; 
-  // std::cout << "R input matrix: \n" << Rinput_aa.toRotationMatrix() << "\n";
-  // // read write for IPC
-  // write to fixture json
-
   jf["max_iterations"] = max_iters;
   jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = "centered_COMs/" + all_polygons_current_item + ".obj";
   jf["rigid_body_problem"]["rigid_bodies"][0]["rotation"] = {temp_R_euler.angles()[2] * 180. / M_PI, 
@@ -399,26 +400,31 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf, int max
   std::ofstream ofs(jsons_dir + "/" + input_name);
   ofs << jf;
   ofs.close();
+  // auto t1 = clock_type::now();
   std::string cmd = exec_dir + 
-                  " --chkpt 1001 --ngui " + 
+                  " --chkpt 10001 --ngui --nthreads 1 " + // threads = 1 for the non-deteministic behavior
                   jsons_dir + "/" + input_name + " " + 
                   jsons_dir + "/temp_out";
   // std::cout << "\nrunning: ...\n" ;//<< cmd << "\n";
-  int out = system((cmd + "> /dev/null").c_str());
+  int out = system((cmd + "> /dev/null").c_str()); //
   // std::cout << "result:" <<  out << "\n\n"; // suppress output
-
+  // auto t2 = clock_type::now();
+  // std::cout << "  &&& sample run time " << chrono::duration_cast<seconds_fp>(t2 - t1).count() << " seconds\n";
+  
   // read output
   std::ifstream ifs_out(jsons_dir + "/temp_out/sim.json");
   nlohmann::json jf_out = nlohmann::json::parse(ifs_out);
 
+  size_t num_states = jf_out["animation"]["state_sequence"].size();
   auto r0_aa = jf_out["animation"]["state_sequence"][0]["rigid_bodies"][0]["rotation"],
-        rn_aa = jf_out["animation"]["state_sequence"][max_iters - 1]["rigid_bodies"][0]["rotation"];
+        rn_aa = jf_out["animation"]["state_sequence"][num_states - 1]["rigid_bodies"][0]["rotation"];
   Eigen::Vector3d r0_vec(r0_aa[0], r0_aa[1], r0_aa[2]),
                   rn_vec(rn_aa[0], rn_aa[1], rn_aa[2]);
   Eigen::AngleAxisd R0_aa(r0_vec.norm(), r0_vec.normalized()),
                     Rn_aa(rn_vec.norm(), rn_vec.normalized());
   Eigen::AngleAxisd R_inert_aa(Rinput_aa.inverse().toRotationMatrix() * R0_aa.toRotationMatrix());
   Eigen::AngleAxisd R_rest_aa(Rn_aa.toRotationMatrix() * R_inert_aa.inverse().toRotationMatrix()); 
+
   return R_rest_aa;
 }
 
@@ -521,7 +527,7 @@ void run_IPC_samples_ICOS(std::string example_fname, int total_samples = 1, int 
     FaceData<double> face_dual_sum_areas(*forwardSolver->hullMesh);
 
     int samples = 0;
-    int resolution = (int)sqrt(total_samples/10);
+    int resolution = (int)sqrt(total_samples/10); // decent approximation
     size_t valid_count = 0;
     auto t1 = clock();
     ManifoldSurfaceMesh* icos_sphere_mesh;
@@ -541,17 +547,24 @@ void run_IPC_samples_ICOS(std::string example_fname, int total_samples = 1, int 
         }
     }
     
-    // iterate over the sphere
+    // compute the total area of the ICOsphere
     double total_area = 0;
-    for (Face f: icos_sphere_mesh->faces())
+    for (Face f: icos_sphere_mesh->faces()){
         total_area += icos_sphere_geometry->faceArea(f);
-    std::cout << "start sampling... N = " << icos_sphere_mesh->nVertices() << "\n";
+    }
+    // iterate over the sphere
+    int verbose_period = 50;
+    std::cout << "Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+    auto t0 = clock_type::now();
+    auto first = clock_type::now();
     for (Vertex sample_v: icos_sphere_mesh->vertices()){
         Vector3 random_orientation = icos_sphere_geometry->inputVertexPositions[sample_v];
         double dual_area = icos_sphere_geometry->vertexDualArea(sample_v);
         random_orientation = random_orientation.normalize();
         
+    
         // run the sim
+        auto t1 = clock_type::now();
         Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(random_orientation, jf, max_iters, exec_dir, jsons_dir, example_fname, "ICOS");
         // get the bottom face
         VertexData<Vector3> rotated_poses(*forwardSolver->hullMesh);
@@ -559,7 +572,9 @@ void run_IPC_samples_ICOS(std::string example_fname, int total_samples = 1, int 
             rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
         }
         VertexPositionGeometry rotated_geo(*forwardSolver->hullMesh, rotated_poses);
-        
+        std::cout << "      single instance time: " << chrono::duration_cast<seconds_fp>(clock_type::now() - t1).count() << " s\n";
+          
+
         Face lowest_face;
         double lowest_height = 1e9;
         for (Face f: forwardSolver->hullMesh->faces()){
@@ -588,17 +603,23 @@ void run_IPC_samples_ICOS(std::string example_fname, int total_samples = 1, int 
             std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
         }
         samples++;
-        if (samples % 50 == 0)
+        if (samples % verbose_period == 0){
           std::cout << "at sample: " << samples << "\n";
+          auto last = clock_type::now();
+
+          using seconds_fp = chrono::duration<double, chrono::seconds::period>;
+          std::cout << "  -- average time: " << chrono::duration_cast<seconds_fp>(last - first).count()/(double)verbose_period << " seconds\n";
+          first = last;
+        }
     }
-    printf("total time: %f\n", (double)(clock() - t1)/(double)CLOCKS_PER_SEC);
-    printf("avg time per sample: %f\n", (clock() - t1)/((double) samples * (double)CLOCKS_PER_SEC));          
+    std::cout << " ### TOTAL time: " << chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count() << " seconds\n";
+    std::cout << " ### average time per sample: " << chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count()/(double)icos_sphere_mesh->nVertices() << " seconds\n";
     for (Face f: forwardSolver->hullMesh->faces()){
         if (face_counts[f] != 0)
             std::cout << "face " << f.getIndex() << " prob: " << face_dual_sum_areas[f]/total_area << "\n";
     }
     std::vector<Vector3> raster_positions,
-                       raster_colors;
+                         raster_colors;
     for (Face f: forwardSolver->hullMesh->faces()){
         for (Vector3 tmp_p: face_to_ori[f]){
             raster_positions.push_back(tmp_p + shift);
@@ -608,11 +629,11 @@ void run_IPC_samples_ICOS(std::string example_fname, int total_samples = 1, int 
     auto raster_pc = polyscope::registerPointCloud("raster pc IPC", raster_positions);
     polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("stable face colors", raster_colors);
     pc_col_quant->setEnabled(true);
-    std::cout << "valid count: " << valid_count << "/" << total_samples << "\n";
+    std::cout << "valid count: " << valid_count << "/" << icos_sphere_mesh->nVertices() << "\n";
     // json js = json::parse(str);
 }
 
-
+// to delete
 void compare_quasi_sample_convergence(){
   
   // ICOS
@@ -725,33 +746,33 @@ void myCallback() {
       }
       ImGui::EndCombo();
     }
-    if (ImGui::SliderInt("sim step count", &step_count, 1, 20));
-    if (ImGui::SliderFloat("orientation_vec X", &refresh_x, -1, 1) ||
-        ImGui::SliderFloat("orientation_vec Y", &refresh_y, -1, 1) ||
-        ImGui::SliderFloat("orientation_vec Z", &refresh_z, -1, 1)){
-      refresh_orientation = Vector3({refresh_x, refresh_y, refresh_z}).normalize();
-      old_g_vec = refresh_orientation;
-      auto init_pc = polyscope::registerPointCloud("initial orientation", std::vector<Vector3>{refresh_orientation + vis_utils.center});
-      init_pc->setPointColor({0.1,0.1,0.1});
-      init_pc->setPointRadius(0.01, false);
-      init_pc->setEnabled(true);
-    }
-    if (ImGui::Button("refresh")){
-        old_g_vec = refresh_orientation;
-    }
+    // if (ImGui::SliderInt("sim step count", &step_count, 1, 20));
+    // if (ImGui::SliderFloat("orientation_vec X", &refresh_x, -1, 1) ||
+    //     ImGui::SliderFloat("orientation_vec Y", &refresh_y, -1, 1) ||
+    //     ImGui::SliderFloat("orientation_vec Z", &refresh_z, -1, 1)){
+    //   refresh_orientation = Vector3({refresh_x, refresh_y, refresh_z}).normalize();
+    //   old_g_vec = refresh_orientation;
+    //   auto init_pc = polyscope::registerPointCloud("initial orientation", std::vector<Vector3>{refresh_orientation + vis_utils.center});
+    //   init_pc->setPointColor({0.1,0.1,0.1});
+    //   init_pc->setPointRadius(0.01, false);
+    //   init_pc->setEnabled(true);
+    // }
+    // if (ImGui::Button("refresh")){
+    //     old_g_vec = refresh_orientation;
+    // }
     if (ImGui::InputInt("sample count", &total_samples));
-    if (ImGui::Button("build the raster image")){
-      // draw the default polyhedra
-      visualize_colored_polyhedra();
-      visualize_gauss_map();
-      build_raster_image();
-    }
+    // if (ImGui::Button("build the raster image")){
+    //   // draw the default polyhedra
+    //   visualize_colored_polyhedra();
+    //   visualize_gauss_map();
+    //   build_raster_image();
+    // }
     if (ImGui::Button("draw MS complex")){
       draw_stable_patches_on_gauss_map();
     }
-    if (ImGui::Checkbox("Save pos to file", &save_pos_to_file));
+    // if (ImGui::Checkbox("Save pos to file", &save_pos_to_file));
     if (ImGui::Checkbox("sampling ICOS", &ICOS_sampling));
-    if (ImGui::InputInt("max steps IPC", &max_steps_IPC));
+    // if (ImGui::InputInt("max steps IPC", &max_steps_IPC));
     if (ImGui::Button("run IPC simulation")){
       if (ICOS_sampling)
         run_IPC_samples_ICOS("example.json", total_samples, max_steps_IPC);

@@ -15,7 +15,7 @@ include(tinyAD)
 include(args)
 include(stan)
 include(osqp-cpp)
-include(ipc-toolkit)
+# include(ipc-toolkit)
 # include(bullet3)
 
 # Library source files
@@ -76,13 +76,14 @@ set_property(TARGET convexFill PROPERTY CXX_STANDARD 20)
 
 # Add executables
 include(json)
+# include(rigid-ipc)
 add_executable(scriptIPC src/main_IPC_script.cpp)
 target_link_libraries(scriptIPC
 PRIVATE
 rolling_dragons::rolling_dragons
 taywee::args
 nlohmann::json
-ipc::toolkit
+# ipc::toolkit
 )
 set_property(TARGET scriptIPC PROPERTY CXX_STANDARD 20)
 
