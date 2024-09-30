@@ -430,8 +430,8 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf, int max
 
 
 void run_IPC_samples_MCMC(std::string example_fname, int total_samples = 1, int max_iters = 200){
-    std::string jsons_dir = "/Users/hbakt/Desktop/code/rigid-ipc/fixtures/3D/examples";
-    std::string exec_dir = "/Users/hbakt/Desktop/code/rigid-ipc/build/rigid_ipc_sim";
+    std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
+    std::string exec_dir = "../../rigid-ipc/build/rigid_ipc_sim";
     std::ifstream ifs(jsons_dir + "/" + example_fname);
     nlohmann::json jf = nlohmann::json::parse(ifs);
     ifs.close();
@@ -516,8 +516,8 @@ void run_IPC_samples_MCMC(std::string example_fname, int total_samples = 1, int 
 
 
 void run_IPC_samples_ICOS(std::string example_fname, int total_samples = 1, int max_iters = 200){
-    std::string jsons_dir = "/Users/hbakt/Desktop/code/rigid-ipc/fixtures/3D/examples";
-    std::string exec_dir = "/Users/hbakt/Desktop/code/rigid-ipc/build/rigid_ipc_sim";
+    std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
+    std::string exec_dir = "../../rigid-ipc/build/rigid_ipc_sim";
     std::ifstream ifs(jsons_dir + "/" + example_fname);
     nlohmann::json jf = nlohmann::json::parse(ifs);
     ifs.close();
