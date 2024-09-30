@@ -720,6 +720,33 @@ void compare_quasi_sample_convergence(){
 }
 
 
+void run_parallel_for_each_shape(std::string shapes_dir){
+  // Load input data
+  std::string meshes_dir = "../../rigid-ipc/meshes/breaking-bad-selection/",
+              mode_name = "m0_p0"; // "m0_p0" "m2_p0" "m2_p1" "m2_p2"
+  
+  if (mesh_name) { // no GUI
+    std::string full_path = meshes_dir + args::get(mesh_name) + "/" + mode_name + ".obj";
+    std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
+    std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
+    std::tie(nm_mesh_ptr, geometry_ptr) = readSurfaceMesh(full_path);
+    SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
+    mesh_ptr = nm_mesh->toManifoldMesh();
+    mesh = mesh_ptr.release();
+    geometry = geometry_ptr.release();
+    preprocess_mesh(mesh, geometry, true);
+    // center G for assurance
+    G = find_center_of_mass(*mesh, *geometry).first;
+    for (Vertex v: mesh->vertices()){
+      geometry->inputVertexPositions[v] -= G;
+    }
+    G = find_center_of_mass(*mesh, *geometry).first;
+    
+    // write for IPC use
+    writeSurfaceMesh(*mesh, *geometry, "../../rigid-ipc/meshes/centered_COMs/" + all_polygons_current_item + ".obj");
+  }
+}
+
 // polyscope callback
 void myCallback() {
     if (ImGui::BeginCombo("##combo1", all_polygons_current_item.c_str())){ // The second parameter is the label previewed before opening the combo.
@@ -784,11 +811,12 @@ void myCallback() {
 
 int main(int argc, char* argv[])
 {
-#ifdef BT_USE_DOUBLE_PRECISION
-	printf("BT_USE_DOUBLE_PRECISION\n");
-#else
-  printf("Single precision\n");
-#endif
+// #ifdef BT_USE_DOUBLE_PRECISION
+// 	printf("BT_USE_DOUBLE_PRECISION\n");
+// #else
+//   printf("Single precision\n");
+// #endif
+  
   polyscope::init();
   vis_utils = VisualUtils();
   generate_polyhedron_example(all_polygons_current_item);
@@ -799,7 +827,6 @@ int main(int argc, char* argv[])
   // polyscope::view::upDir = polyscope::view::UpDir::YUp;
   // polyscope::options::groundPlaneHeightFactor = 1.; // adjust the plane height
   polyscope::state::userCallback = myCallback;
-
 
   // Give control to the polyscope gui
   polyscope::show();
