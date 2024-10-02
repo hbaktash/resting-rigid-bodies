@@ -794,9 +794,7 @@ void run_parallel_for_each_shape(std::string shapes_dir){
 
       // remove the in_progress file
       std::filesystem::remove(log_dir + "/" + part_name + "_inProgress.txt");
-      break;
     }
-    break;
   }
 }
 
