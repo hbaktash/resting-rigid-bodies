@@ -580,7 +580,6 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
             face_dual_sum_areas[lowest_face] += dual_area;
             face_to_ori[lowest_face].push_back(random_orientation);
             // find closest stable face
-            lowest_face = forwardSolver->face_last_face[lowest_face];
         }
         else{
             std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
@@ -866,6 +865,7 @@ int main(int argc, char* argv[])
   args::ArgumentParser parser("This is a test program.", "This goes after the options.");
   args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
   args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {'s', 'samples'}, 10);
+  args::ValueFlag<std::string> BB_selection_abs_path(parser, "absolute_mesh_path", "abs path to mesh folder", {'d', "mesh_dir"}, "../meshes/BB_selection");
 
   try
   {
@@ -892,7 +892,11 @@ int main(int argc, char* argv[])
   if(total_samples)
     ICOS_samples = args::get(total_samples);
 
-  run_parallel_for_each_shape("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection");
+  if (!BB_selection_abs_path){
+    std::cout << "provide absolute path to meshes folder\n";
+  }
+  std::string BB_selection_path = args::get(BB_selection_abs_path);
+  run_parallel_for_each_shape(BB_selection_path);
   // polyscope::init();
   // vis_utils = VisualUtils();
   // generate_polyhedron_example("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m2_p1.obj");
