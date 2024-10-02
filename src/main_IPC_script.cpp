@@ -150,18 +150,10 @@ void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = 
   //   max_dist = std::max(max_dist, geometry->inputVertexPositions[v].norm());
   // }
   // std::cout << "max dist from center: " << max_dist << "\n";
-  std::cout << "center of mass after shift: " << G << "\n";
+  // std::cout << "center of mass after shift: " << G << "\n";
   
   // re-write for IPC use
   writeSurfaceMesh(*mesh, *geometry, mesh_full_path);
-}
-
-
-
-void initialize_boundary_builder(){
-  boundary_builder = new BoundaryBuilder(forwardSolver);
-  boundary_builder->build_boundary_normals();
-  boundary_builder->print_area_of_boundary_loops();
 }
 
 
@@ -169,7 +161,8 @@ void update_solver(){
   //assuming convex input here
   forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
   forwardSolver->initialize_pre_computes();
-  initialize_boundary_builder();
+  boundary_builder = new BoundaryBuilder(forwardSolver);
+  boundary_builder->build_boundary_normals();
   vis_utils.forwardSolver = forwardSolver;
 }
 
@@ -385,13 +378,14 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
   
   Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(init_ori);
   Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
+  printf("hereer\n");
   jf["max_iterations"] = max_iters;
-  jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = "centered_COMs/" + all_polygons_current_item + ".obj";
+  jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = mesh_dir + "/" + mesh_name + ".obj";
   jf["rigid_body_problem"]["rigid_bodies"][0]["rotation"] = {temp_R_euler.angles()[2] * 180. / M_PI, 
                                                              temp_R_euler.angles()[1] * 180. / M_PI, 
                                                              temp_R_euler.angles()[0] * 180. / M_PI};
   jf["rigid_body_problem"]["rigid_bodies"][0]["position"] = {0, 1, 0};
-
+  printf("----- hereer\n");
   std::string scene_json_name = mesh_name + "_" + type + ".json";
   std::string scene_json_full_path = mesh_dir + "/" + scene_json_name;
   std::string output_dir = mesh_dir + "/" + mesh_name + "_out";
@@ -771,7 +765,7 @@ void run_parallel_for_each_shape(std::string shapes_dir){
               
         // run the IPC simulation
         auto t0 = clock_type::now();
-        FaceData<double> dual_face_areas = run_IPC_experiment(example_json, shapes_dir, part_name, max_steps_IPC);
+        FaceData<double> dual_face_areas = run_IPC_experiment(example_json, full_path, part_name, max_steps_IPC);
         double total_time = chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count();
 
         // write the results
