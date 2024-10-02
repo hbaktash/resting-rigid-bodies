@@ -1,20 +1,22 @@
-cmake_minimum_required(VERSION 3.14.0)
+cmake_minimum_required(VERSION 3.16.0)
 
 project(rolling_dragons)
+
+set(CMAKE_CXX_STANDARD 17) 
 
 # Add cmake recipe directory
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 # Dependencies
-include(autodiff)
 include(geometry-central)
 include(polyscope)
-include(autodiff)
 include(qhull)
 include(tinyAD)
 include(args)
 include(stan)
 include(osqp-cpp)
+# include(autodiff)
+# include(autodiff)
 # include(ipc-toolkit)
 # include(bullet3)
 
@@ -45,7 +47,7 @@ target_link_libraries(rolling_dragons
 PUBLIC
 geometry-central::geometry-central
 polyscope::polyscope
-autodiff::autodiff
+# autodiff::autodiff
 qhull::qhull
 tinyad::tinyad
 osqp-cpp::osqp-cpp
