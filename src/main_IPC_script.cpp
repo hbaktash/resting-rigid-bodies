@@ -94,7 +94,7 @@ VertexPositionGeometry* geometry;
 
 // raster image stuff
 FaceData<Vector3> face_colors;
-int total_samples = 10, 
+int ICOS_samples = 10, 
     max_steps_IPC = 1000;
 bool ICOS_sampling = true;
 
@@ -136,6 +136,7 @@ void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = 
   std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
   std::tie(nm_mesh_ptr, geometry_ptr) = readSurfaceMesh(mesh_full_path);
   SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
+  nm_mesh->greedilyOrientFaces();
   mesh_ptr = nm_mesh->toManifoldMesh();
   mesh = mesh_ptr.release();
   geometry = geometry_ptr.release();
@@ -261,14 +262,14 @@ void build_raster_image(){
   FaceData<std::vector<Vector3>> face_samples(*forwardSolver->hullMesh);
   std::vector<Vector3> final_orientations;
   std::vector<Vector3> falsh;
-  int total_invalids = 0, total_samples = 0;
+  int total_invalids = 0, ICOS_samples = 0;
   auto t1 = clock();
   double avg_time = 0.;
-  for (int i = 0; i < total_samples; i++){
+  for (int i = 0; i < ICOS_samples; i++){
     Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
     if (random_orientation.norm() <= 1){
       auto t2 = clock();
-      total_samples++;
+      ICOS_samples++;
       if (i % 2000 == 0)
         printf("$$$ at sample %d\n", i);
       random_orientation /= norm(random_orientation);
@@ -285,7 +286,7 @@ void build_raster_image(){
     }
   }
   printf(" --- sampling time: %f\n", (double)(clock() - t1));
-  printf(" ### total invalid faces: %d/%d\n", total_invalids, total_samples);
+  printf(" ### total invalid faces: %d/%d\n", total_invalids, ICOS_samples);
   std::vector<Vector3> raster_positions,
                        raster_colors;
                        
@@ -296,7 +297,7 @@ void build_raster_image(){
     if (forwardSolver->face_last_face[f]!= f)
       unstable_faces++;
     std::vector<Vector3> tmp_points = face_samples[f];
-    double prob = tmp_points.size()/(double)(total_samples - total_invalids);
+    double prob = tmp_points.size()/(double)(ICOS_samples - total_invalids);
     accum_face_areas[forwardSolver->face_last_face[f]] += prob;
     if(tmp_points.size() != 0) printf(" --- f %d: %f\n", f.getIndex(), prob);
     for (Vector3 tmp_p: tmp_points){
@@ -378,21 +379,20 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
   
   Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(init_ori);
   Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
-  printf("hereer\n");
   jf["max_iterations"] = max_iters;
   jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = mesh_dir + "/" + mesh_name + ".obj";
   jf["rigid_body_problem"]["rigid_bodies"][0]["rotation"] = {temp_R_euler.angles()[2] * 180. / M_PI, 
                                                              temp_R_euler.angles()[1] * 180. / M_PI, 
                                                              temp_R_euler.angles()[0] * 180. / M_PI};
   jf["rigid_body_problem"]["rigid_bodies"][0]["position"] = {0, 1, 0};
-  printf("----- hereer\n");
   std::string scene_json_name = mesh_name + "_" + type + ".json";
-  std::string scene_json_full_path = mesh_dir + "/" + scene_json_name;
-  std::string output_dir = mesh_dir + "/" + mesh_name + "_out";
+  std::string scene_json_full_path = mesh_dir + "/" + mesh_name + "_logs/" + scene_json_name;
+  std::string output_dir = mesh_dir + "/" + mesh_name + "_logs/" + mesh_name + "_out";
 
   std::ofstream ofs(scene_json_full_path);
   ofs << jf;
   ofs.close();
+  // std::cout << "scene json full path : " << scene_json_full_path << "\n";
   std::string cmd = exec_dir + 
                   " --chkpt 10001 --ngui --nthreads 1 " + // threads = 1 to avoid non-deteministic behavior
                   scene_json_full_path + " " + 
@@ -419,7 +419,7 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
 }
 
 
-// void run_IPC_samples_MCMC(std::string example_fname, int total_samples = 1, int max_iters = 200){
+// void run_IPC_samples_MCMC(std::string example_fname, int ICOS_samples = 1, int max_iters = 200){
 //     std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
 //     std::string exec_dir = "../../rigid-ipc/build/rigid_ipc_sim";
 //     std::ifstream ifs(jsons_dir + "/" + example_fname);
@@ -433,7 +433,7 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
 //     int samples = 0;
 //     size_t valid_count = 0;
 //     auto t1 = clock();
-//     while (samples < total_samples){
+//     while (samples < ICOS_samples){
 //         Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
 //         if (random_orientation.norm() <= 1){
 //             // sample random orientation -> euler rotation
@@ -500,7 +500,7 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
 //     auto raster_pc = polyscope::registerPointCloud("raster pc IPC", raster_positions);
 //     polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("stable face colors", raster_colors);
 //     pc_col_quant->setEnabled(true);
-//     std::cout << "valid count: " << valid_count << "/" << total_samples << "\n";
+//     std::cout << "valid count: " << valid_count << "/" << ICOS_samples << "\n";
 //     // json js = json::parse(str);
 // }
 
@@ -622,7 +622,7 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
 void compare_quasi_sample_convergence(){
   
   // ICOS
-  int resolution = (int)sqrt(total_samples/10);
+  int resolution = (int)sqrt(ICOS_samples/10);
   FaceData<double> ICOS_probs(*forwardSolver->hullMesh, 0.);
   int total_invalids = 0;
   size_t valid_count = 0;
@@ -646,7 +646,7 @@ void compare_quasi_sample_convergence(){
   double total_area = 0;
   for (Face f: icos_sphere_mesh->faces()) total_area += icos_sphere_geometry->faceArea(f);
   std::cout << "start sampling... N = " << icos_sphere_mesh->nVertices() << "\n";
-  total_samples = icos_sphere_mesh->nVertices();
+  ICOS_samples = icos_sphere_mesh->nVertices();
   for (Vertex sample_v: icos_sphere_mesh->vertices()){
       Vector3 random_orientation = icos_sphere_geometry->inputVertexPositions[sample_v];
       double dual_area = icos_sphere_geometry->vertexDualArea(sample_v);
@@ -671,7 +671,7 @@ void compare_quasi_sample_convergence(){
     Vector3 random_g_vec = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
     if (random_g_vec.norm() <= 1.){
       tmp_count++;
-      if (tmp_count >= total_samples + 1)
+      if (tmp_count >= ICOS_samples + 1)
         break;
       random_g_vec /= norm(random_g_vec);
       Face touching_face = forwardSolver->final_touching_face(random_g_vec);
@@ -684,11 +684,11 @@ void compare_quasi_sample_convergence(){
     }
   }
   printf(" total samples uniform: %d\n", tmp_count);
-  printf(" ICOS total samples uniform: %d\n", total_samples);
+  printf(" ICOS total samples uniform: %d\n", ICOS_samples);
   double uni_diff_squared = 0., ICOS_diff_squared = 0.;
   for (Face f: forwardSolver->hullMesh->faces()){
     if (uniform_probs[f] != 0. || ICOS_probs[f] != 0.){
-      double uniform_prob = uniform_probs[f] / (double)total_samples;
+      double uniform_prob = uniform_probs[f] / (double)ICOS_samples;
       double ICOS_prob = ICOS_probs[f]/total_area;
       double analytic_prob = boundary_builder->face_region_area[f]/(4.*PI);
       printf("f %d  anl: %f\n", f.getIndex(), analytic_prob);
@@ -708,7 +708,7 @@ void compare_quasi_sample_convergence(){
 void run_parallel_for_each_shape(std::string shapes_dir){
   
   // ICOSphere preparation
-  int resolution = (int)sqrt(total_samples/10); // decent approximation
+  int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
   std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
   std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
   double total_area = 0;
@@ -729,38 +729,39 @@ void run_parallel_for_each_shape(std::string shapes_dir){
     std::string full_path = entry.path().string();
     std::string file_id = full_path.substr(full_path.find_last_of("/")+1);
 
-    std::cout << " \n Full path: " << full_path << std::endl;
-    std::cout << "   file id: " << file_id << std::endl;
     if (file_id == ".DS_Store")
       continue;
+    std::cout << " \n Full path: " << full_path << std::endl;
+    std::cout << "   file id: " << file_id << std::endl;
     for (std::string part_name: part_names){ // iterate through parts
       std::string part_path = full_path + "/" + part_name;
       std::cout << "  -- part path: " << part_path << std::endl;
-      
-      // std::string part_id = part_path.substr(part_path.find_last_of("/")+1);
       
       if (!std::filesystem::exists(part_path + ".obj")){ 
         printf(" $$ part not found!\n");
         continue;
       }
-      else
-      if (std::filesystem::exists(part_path + "_inProgress.txt")){ // already done
+      if (!std::filesystem::exists(part_path + "_logs")){
+        std::filesystem::create_directory(part_path + "_logs");
+      }
+      std::string log_dir = part_path + "_logs";
+      if (std::filesystem::exists(log_dir + "/" + part_name + "_inProgress.txt")){ // already done
         printf(" $$ in progress..!\n");
         continue;
       }
-      if (std::filesystem::exists(part_path + "_IPC" + ".txt")){ // already done
+      if (std::filesystem::exists(log_dir + "/" + part_name + "_IPC" + ".txt")){ // already done
         printf(" $$ already done!\n");
         continue;
       }
       
       // create the in_progress log file
-      std::ofstream ofs(part_path + "_inProgress.txt");
+      std::ofstream ofs(log_dir + "/" + part_name + "_inProgress.txt");
       ofs.close();
 
       try {
-        std::string full_path = part_path + ".obj";
+        std::string mesh_full_path = part_path + ".obj";
         
-        generate_polyhedron_example(full_path, true);
+        generate_polyhedron_example(mesh_full_path, true);
         update_solver();
               
         // run the IPC simulation
@@ -769,18 +770,19 @@ void run_parallel_for_each_shape(std::string shapes_dir){
         double total_time = chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count();
 
         // write the results
-        std::ofstream outputFile(part_path + "_IPC" + ".txt");  // Open/create a file named "test.txt" for writing
+        std::ofstream outputFile(log_dir + "/" + part_name + "_IPC" + ".txt");  // Open/create a file named "test.txt" for writing
         if (outputFile.is_open()) {
           for (Face f: forwardSolver->hullMesh->faces()){
             if (dual_face_areas[f] != 0. && !forwardSolver->face_is_stable(f)){
-              std::cout << " $$$$^#$^&$%^#%#$ shit: --- f" << f.getIndex() << " IPC non zero fwd zero" << std::endl;
+              std::cout << " $$$$^#$^&$%^#%#$ shit: --- f" << f.getIndex() << " IPC non zero, fwd zero" << std::endl;
             }
             if (forwardSolver->face_is_stable(f)){
-              outputFile << " -- f" << f.getIndex() << " -> IPC_prob: " << dual_face_areas[f]/total_area << "\n";
+              outputFile << " -- f" << f.getIndex() << "\t -> IPC_prob: " << dual_face_areas[f]/total_area
+                                                    << "\t -> my_prob : " << boundary_builder->face_region_area[f]/(4.*PI) <<"\n";
             }
           }
-          outputFile << " --- mesh size: " << mesh->nVertices() << " --- hull size: " << forwardSolver->hullMesh->nVertices() << "\n";
-          outputFile << " --- time: " << total_time << "\n";
+          outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
+          outputFile << " --- time:\t" << total_time << "\n";
           outputFile.close();
         } else {
           std::cout << "Failed to create the file." << std::endl;
@@ -791,7 +793,7 @@ void run_parallel_for_each_shape(std::string shapes_dir){
       }
 
       // remove the in_progress file
-      std::filesystem::remove(part_path + "_inProgress.txt");
+      std::filesystem::remove(log_dir + "/" + part_name + "_inProgress.txt");
       break;
     }
     break;
@@ -826,6 +828,98 @@ void myCallback() {
       }
       ImGui::EndCombo();
     }
+    if (ImGui::InputInt("sample count", &ICOS_samples));
+    if (ImGui::Button("draw MS complex")){
+      draw_stable_patches_on_gauss_map();
+    }
+    if (ImGui::Checkbox("sampling ICOS", &ICOS_sampling));
+    if (ImGui::Button("run IPC simulation")){
+      // json template load
+      std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
+      std::ifstream ifs(jsons_dir + "/example.json");
+      nlohmann::json example_json = nlohmann::json::parse(ifs);
+      ifs.close();
+      
+      if (ICOS_sampling){
+        int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
+        std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
+        std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+        run_IPC_experiment(example_json, "../meshes", all_polygons_current_item, max_steps_IPC);
+      }
+      // else
+      //   run_IPC_samples_MCMC("example.json", ICOS_samples, max_steps_IPC);
+    }
+}
+
+
+int main(int argc, char* argv[])
+{
+  // #ifdef BT_USE_DOUBLE_PRECISION
+  // 	printf("BT_USE_DOUBLE_PRECISION\n");
+  // #else
+  //   printf("Single precision\n");
+  // #endif
+
+  args::ArgumentParser parser("This is a test program.", "This goes after the options.");
+  args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
+  args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {'s', 'samples'}, 10);
+
+  try
+  {
+    parser.ParseCLI(argc, argv);
+  }
+  catch (args::Help)
+  {
+    std::cout << parser;
+    return 0;
+  }
+  catch (args::ParseError e)
+  {
+    std::cerr << e.what() << std::endl;
+    std::cerr << parser;
+    return 1;
+  }
+  catch (args::ValidationError e)
+  {
+    std::cerr << e.what() << std::endl;
+    std::cerr << parser;
+    return 1;
+  }
+
+  if(total_samples)
+    ICOS_samples = args::get(total_samples);
+
+  run_parallel_for_each_shape("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection");
+  // polyscope::init();
+  // vis_utils = VisualUtils();
+  // generate_polyhedron_example(all_polygons_current_item);
+  // update_solver();
+  // init_visuals();
+  // polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
+  // // polyscope::view::upDir = polyscope::view::UpDir::YUp;
+  // // polyscope::options::groundPlaneHeightFactor = 1.; // adjust the plane height
+  // polyscope::state::userCallback = myCallback;
+
+  // Give control to the polyscope gui
+  // polyscope::show();
+  return EXIT_SUCCESS;	
+}
+
+
+
+// CallBack graveyard
+
+    // if (ImGui::Button("build the raster image")){
+    //   // draw the default polyhedra
+    //   visualize_colored_polyhedra();
+    //   visualize_gauss_map();
+    //   build_raster_image();
+    // }
+
+    // if (ImGui::Checkbox("Save pos to file", &save_pos_to_file));
+
+    // if (ImGui::InputInt("max steps IPC", &max_steps_IPC));
+
     // if (ImGui::SliderInt("sim step count", &step_count, 1, 20));
     // if (ImGui::SliderFloat("orientation_vec X", &refresh_x, -1, 1) ||
     //     ImGui::SliderFloat("orientation_vec Y", &refresh_y, -1, 1) ||
@@ -840,59 +934,3 @@ void myCallback() {
     // if (ImGui::Button("refresh")){
     //     old_g_vec = refresh_orientation;
     // }
-    if (ImGui::InputInt("sample count", &total_samples));
-    // if (ImGui::Button("build the raster image")){
-    //   // draw the default polyhedra
-    //   visualize_colored_polyhedra();
-    //   visualize_gauss_map();
-    //   build_raster_image();
-    // }
-    if (ImGui::Button("draw MS complex")){
-      draw_stable_patches_on_gauss_map();
-    }
-    // if (ImGui::Checkbox("Save pos to file", &save_pos_to_file));
-    if (ImGui::Checkbox("sampling ICOS", &ICOS_sampling));
-    // if (ImGui::InputInt("max steps IPC", &max_steps_IPC));
-    if (ImGui::Button("run IPC simulation")){
-      // json template load
-      std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
-      std::ifstream ifs(jsons_dir + "/example.json");
-      nlohmann::json example_json = nlohmann::json::parse(ifs);
-      ifs.close();
-      
-      if (ICOS_sampling){
-        int resolution = (int)sqrt(total_samples/10); // decent approximation
-        std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
-        std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
-        run_IPC_experiment(example_json, "../meshes", all_polygons_current_item, max_steps_IPC);
-      }
-      // else
-      //   run_IPC_samples_MCMC("example.json", total_samples, max_steps_IPC);
-    }
-}
-
-
-int main(int argc, char* argv[])
-{
-  // #ifdef BT_USE_DOUBLE_PRECISION
-  // 	printf("BT_USE_DOUBLE_PRECISION\n");
-  // #else
-  //   printf("Single precision\n");
-  // #endif
-  run_parallel_for_each_shape("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection");
-  // polyscope::init();
-  // vis_utils = VisualUtils();
-  // generate_polyhedron_example(all_polygons_current_item);
-  // update_solver();
-  // init_visuals();
-  // polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
-  // // polyscope::view::upDir = polyscope::view::UpDir::YUp;
-  // // polyscope::options::groundPlaneHeightFactor = 1.; // adjust the plane height
-  // polyscope::state::userCallback = myCallback;
-
-  // Give control to the polyscope gui
-  // polyscope::show();
-
-  
-  return EXIT_SUCCESS;	
-}
