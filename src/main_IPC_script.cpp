@@ -95,7 +95,7 @@ VertexPositionGeometry* geometry;
 // raster image stuff
 FaceData<Vector3> face_colors;
 int ICOS_samples = 10, 
-    max_steps_IPC = 1000;
+    max_steps_IPC = 2000;
 bool ICOS_sampling = true;
 
 // quasi static simulation stuff
@@ -406,6 +406,7 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
   nlohmann::json jf_out = nlohmann::json::parse(ifs_out);
 
   size_t num_states = jf_out["animation"]["state_sequence"].size();
+  std::cout << "num states: " << num_states << "\n";
   auto r0_aa = jf_out["animation"]["state_sequence"][0]["rigid_bodies"][0]["rotation"],
         rn_aa = jf_out["animation"]["state_sequence"][num_states - 1]["rigid_bodies"][0]["rotation"];
   Eigen::Vector3d r0_vec(r0_aa[0], r0_aa[1], r0_aa[2]),
@@ -542,7 +543,7 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
         random_orientation = random_orientation.normalize();
         
         // run the sim
-        // auto t1 = clock_type::now();
+        auto t1 = clock_type::now();
         Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(random_orientation, template_json, mesh_dir, mesh_name,
                                                         max_iters, exec_dir, "ICOS");
         // get the bottom face
@@ -551,7 +552,7 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
             rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
         }
         VertexPositionGeometry rotated_geo(*forwardSolver->hullMesh, rotated_poses);
-        // std::cout << "      single instance time: " << chrono::duration_cast<seconds_fp>(clock_type::now() - t1).count() << " s\n";
+        std::cout << "      single instance time: " << chrono::duration_cast<seconds_fp>(clock_type::now() - t1).count() << " s\n";
           
 
         Face lowest_face;
@@ -568,15 +569,18 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
         Eigen::EulerAnglesZYXd temp_R_euler = euler_from_init_ori(random_orientation);    
         if (lowest_height < 1e-3){
             // std::cout << "stable face: " << f.getIndex() << "\n";
+            if (forwardSolver->face_next_face[lowest_face] != lowest_face){
+              std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
+              std::cout << "with face: " << lowest_face.getIndex() << " ,  normal diff " << lowest_height << "\n";
+              std::cout << "mapping to a stable face\n";
+              lowest_face = forwardSolver->face_last_face[lowest_face];
+            }
             valid_count++;
             face_counts[lowest_face]++;
             face_dual_sum_areas[lowest_face] += dual_area;
             face_to_ori[lowest_face].push_back(random_orientation);
-
-            if (forwardSolver->face_next_face[lowest_face] != lowest_face){
-                std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
-                std::cout << "with face: " << lowest_face.getIndex() << " ,  normal diff " << lowest_height << "\n";
-            }
+            // find closest stable face
+            lowest_face = forwardSolver->face_last_face[lowest_face];
         }
         else{
             std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
@@ -813,7 +817,8 @@ void myCallback() {
                 preprocess_mesh(mesh, geometry, true, false, 1.);
               }
               else{
-                generate_polyhedron_example(all_polygons_current_item);
+                std::string mesh_full_path = "../meshes/" + all_polygons_current_item + ".obj";
+                generate_polyhedron_example(mesh_full_path);
               }
               update_solver();
               init_visuals();
@@ -890,15 +895,13 @@ int main(int argc, char* argv[])
   run_parallel_for_each_shape("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection");
   // polyscope::init();
   // vis_utils = VisualUtils();
-  // generate_polyhedron_example(all_polygons_current_item);
+  // generate_polyhedron_example("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m2_p1.obj");
   // update_solver();
   // init_visuals();
   // polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
   // // polyscope::view::upDir = polyscope::view::UpDir::YUp;
   // // polyscope::options::groundPlaneHeightFactor = 1.; // adjust the plane height
   // polyscope::state::userCallback = myCallback;
-
-  // Give control to the polyscope gui
   // polyscope::show();
   return EXIT_SUCCESS;	
 }
