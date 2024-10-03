@@ -867,23 +867,19 @@ int main(int argc, char* argv[])
   args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {'s', 'samples'}, 10);
   args::ValueFlag<std::string> BB_selection_abs_path(parser, "absolute_mesh_path", "abs path to mesh folder", {'d', "mesh_dir"}, "../meshes/BB_selection");
 
-  try
-  {
+  try {
     parser.ParseCLI(argc, argv);
   }
-  catch (args::Help)
-  {
+  catch (args::Help) {
     std::cout << parser;
     return 0;
   }
-  catch (args::ParseError e)
-  {
+  catch (args::ParseError e) {
     std::cerr << e.what() << std::endl;
     std::cerr << parser;
     return 1;
   }
-  catch (args::ValidationError e)
-  {
+  catch (args::ValidationError e) {
     std::cerr << e.what() << std::endl;
     std::cerr << parser;
     return 1;
