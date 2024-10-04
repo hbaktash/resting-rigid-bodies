@@ -403,7 +403,7 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
   nlohmann::json jf_out = nlohmann::json::parse(ifs_out);
 
   size_t num_states = jf_out["animation"]["state_sequence"].size();
-  std::cout << "num states: " << num_states << "\n";
+  std::cout << "num steps til velocity=0 : " << num_states << "\n";
   auto r0_aa = jf_out["animation"]["state_sequence"][0]["rigid_bodies"][0]["rotation"],
         rn_aa = jf_out["animation"]["state_sequence"][num_states - 1]["rigid_bodies"][0]["rotation"];
   Eigen::Vector3d r0_vec(r0_aa[0], r0_aa[1], r0_aa[2]),
@@ -864,7 +864,7 @@ int main(int argc, char* argv[])
   args::ArgumentParser parser("This is a test program.", "This goes after the options.");
   args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
   args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {'s', 'samples'}, 10);
-  args::ValueFlag<std::string> BB_selection_abs_path(parser, "absolute_mesh_path", "abs path to mesh folder", {'d', "mesh_dir"}, "../meshes/BB_selection");
+  args::ValueFlag<std::string> BB_selection_abs_path(parser, "absolute_mesh_path", "abs path to mesh folder", {'d', "mesh_dir"}, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection");
 
   try {
     parser.ParseCLI(argc, argv);
