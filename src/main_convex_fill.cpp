@@ -163,7 +163,7 @@ float row1[3] = {0.,2.,0.};
 float row2[3] = {0.,0.,2.}; 
 
 // example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("dodecahedron"),std::string("Conway spiral 4"), std::string("oloid"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc"), std::string("mark_gomboc")};
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("cuub"), std::string("tilted cube"), std::string("sliced tet"), std::string("dodecahedron"),std::string("Conway spiral 4"), std::string("oloid"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("soccerball"), std::string("cowhead"), std::string("bunny"), std::string("gomboc"), std::string("mark_gomboc")};
 std::string all_polygons_current_item = "small_bunny",
             all_polygons_current_item2 = "tet";
 static const char* all_polygons_current_item_c_str = "bunnylp";

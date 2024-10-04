@@ -142,6 +142,7 @@ void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = 
   geometry = geometry_ptr.release();
   preprocess_mesh(mesh, geometry, true);
   G = find_center_of_mass(*mesh, *geometry).first;
+  std::cout << "center of mass before shift: " << G << "\n";
   for (Vertex v: mesh->vertices()){
     geometry->inputVertexPositions[v] -= G;
   }
@@ -229,7 +230,11 @@ void init_visuals(){
   vis_utils.draw_G();
   visualize_colored_polyhedra();
   visualize_gauss_map();
-  // psInputMesh->addFaceVectorQuantity("normals", geometry->faceNormals);
+
+
+  // DEBUG
+  // forwardSolver->hullGeometry->requireFaceNormals();
+  // psHullMesh->addFaceVectorQuantity("normals", forwardSolver->hullGeometry->faceNormals)->setEnabled(true);
 }
 
 void update_solver_and_boundaries(){
@@ -458,10 +463,10 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
 //             double lowest_height = 1e9;
 //             for (Face f: forwardSolver->hullMesh->faces()){
 //                 Vector3 rotated_face_normal = rotated_geo.faceNormal(f);
-//                 double height = cross(rotated_face_normal, Vector3({0,-1,0})).norm();
+//                 double height = (rotated_face_normal -  Vector3({0,-1,0})).norm();
 //                 if (height < lowest_height){
 //                     lowest_face   = f;
-//                     lowest_height = cross(rotated_face_normal, Vector3({0,-1,0})).norm();
+//                     lowest_height = height;
 //                 }
 //             }
 //             // for debugging
@@ -556,23 +561,29 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
         double lowest_height = 1e9;
         for (Face f: forwardSolver->hullMesh->faces()){
             Vector3 rotated_face_normal = rotated_geo.faceNormal(f);
-            double height = cross(rotated_face_normal, Vector3({0,-1,0})).norm();
+            double height = (rotated_face_normal - Vector3({0,-1,0})).norm();
             if (height < lowest_height){
                 lowest_face   = f;
-                lowest_height = cross(rotated_face_normal, Vector3({0,-1,0})).norm();
+                lowest_height = height;
             }
         }
+        std::cout << " at vertex " << sample_v.getIndex() << " lowest face: " << lowest_face.getIndex() << " ,  normal diff " << lowest_height << "\n";
+        
         // for debugging
-        Eigen::EulerAnglesZYXd temp_R_euler = euler_from_init_ori(random_orientation);    
+        Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(random_orientation);
+        Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
+  
         if (lowest_height < 1e-3){
             // std::cout << "stable face: " << f.getIndex() << "\n";
             if (forwardSolver->face_next_face[lowest_face] != lowest_face){
               std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
               std::cout << "with face: " << lowest_face.getIndex() << " ,  normal diff " << lowest_height << "\n";
-              std::cout << "mapping to a stable face\n";
               lowest_face = forwardSolver->face_last_face[lowest_face];
+              std::cout << "mapping to a stable face" << lowest_face.getIndex() << "\n";
             }
-            valid_count++;
+            else{
+              valid_count++;
+            }
             face_counts[lowest_face]++;
             face_dual_sum_areas[lowest_face] += dual_area;
             face_to_ori[lowest_face].push_back(random_orientation);
@@ -705,8 +716,85 @@ void compare_quasi_sample_convergence(){
 }
 
 
-void run_parallel_for_each_shape(std::string shapes_dir){
+void process_single_shape_for_IPC(std::string full_shape_path, 
+                                  nlohmann::json example_json, 
+                                  int max_steps_IPC, double total_icosphere_area){
+  std::string file_name = full_shape_path.substr(full_shape_path.find_last_of("/")+1);
+  std::string file_dir = full_shape_path.substr(0, full_shape_path.find_last_of("/"));
+  if (file_name == ".DS_Store")
+    return;
   
+  // remove obj suffix
+  const std::string suffix = ".obj";
+  if (file_name.size() >= suffix.size() && file_name.compare(file_name.size() - suffix.size(), suffix.size(), suffix) == 0) {
+      file_name = file_name.substr(0, file_name.size() - suffix.size());
+  }
+  
+  std::cout << " \n file dir: " << file_dir << std::endl;
+  std::cout << "   file name: " << file_name << std::endl;
+  if (!std::filesystem::exists(file_dir + "/" + file_name + ".obj")){ 
+    printf(" $$ part not found!\n");
+    return;
+  }
+  if (!std::filesystem::exists(file_dir + "/" + file_name + "_logs")){
+    std::filesystem::create_directory(file_dir + "/" + file_name + "_logs");
+  }
+  std::string log_dir = file_dir + "/" + file_name + "_logs";
+  if (std::filesystem::exists(log_dir + "/" + file_name + "_inProgress.txt")){ // already done
+    printf(" $$ in progress..!\n");
+    return;
+  }
+  if (std::filesystem::exists(log_dir + "/" + file_name + "_IPC" + ".txt")){ // already done
+    printf(" $$ already done!\n");
+    return;
+  }
+  
+  // create the in_progress log file
+  std::ofstream ofs(log_dir + "/" + file_name + "_inProgress.txt");
+  ofs.close();
+
+  try {
+    std::string mesh_full_path = file_dir + "/" + file_name + ".obj";
+    
+    generate_polyhedron_example(mesh_full_path, true);
+    // re-write for IPC use
+    writeSurfaceMesh(*mesh, *geometry, file_dir + "/" + file_name + "_normalized.obj");
+    update_solver();
+          
+    // run the IPC simulation
+    auto t0 = clock_type::now();
+    FaceData<double> dual_face_areas = run_IPC_experiment(example_json, file_dir, file_name, max_steps_IPC);
+    double total_time = chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count();
+
+    // write the results
+    std::ofstream outputFile(log_dir + "/" + file_name + "_IPC" + ".txt");  // Open/create a file named "test.txt" for writing
+    if (outputFile.is_open()) {
+      for (Face f: forwardSolver->hullMesh->faces()){
+        if (dual_face_areas[f] != 0. && !forwardSolver->face_is_stable(f)){
+          std::cout << " $$$$^#$^&$%^#%#$ shit: --- f" << f.getIndex() << " IPC non zero, ours zero" << std::endl;
+        }
+        if (forwardSolver->face_is_stable(f)){
+          outputFile << " -- f" << f.getIndex() << "\t-> IPC_prob: " << dual_face_areas[f]/total_icosphere_area
+                                                << "\t-> my_prob : " << boundary_builder->face_region_area[f]/(4.*PI) <<"\n";
+        }
+      }
+      outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
+      outputFile << " --- time:\t" << total_time << "\n";
+      outputFile.close();
+    } else {
+      std::cout << "Failed to create the file." << std::endl;
+    }
+  }
+  catch(const std::exception& e) { // probably couldnt make the mesh manifold
+    std::cerr << e.what() << '\n';
+  }
+
+  // remove the in_progress file
+  std::filesystem::remove(log_dir + "/" + file_name + "_inProgress.txt");
+}
+
+
+void run_parallel_for_each_BB_shape(std::string BB_base_dir){
   // ICOSphere preparation
   int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
   std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
@@ -725,77 +813,11 @@ void run_parallel_for_each_shape(std::string shapes_dir){
 
   // iterate through folders in path
   std::vector<std::string> part_names{"m0_p0", "m2_p0", "m2_p1", "m2_p2"};
-  for (const auto & entry : fs::directory_iterator(shapes_dir)){ // iterate through mesh ids
+  for (const auto & entry : fs::directory_iterator(BB_base_dir)){ // iterate through mesh ids
     std::string full_path = entry.path().string();
-    std::string file_id = full_path.substr(full_path.find_last_of("/")+1);
-
-    if (file_id == ".DS_Store")
-      continue;
-    std::cout << " \n Full path: " << full_path << std::endl;
-    std::cout << "   file id: " << file_id << std::endl;
-    for (std::string part_name: part_names){ // iterate through parts
-      std::string part_path = full_path + "/" + part_name;
-      std::cout << "  -- part path: " << part_path << std::endl;
-      
-      if (!std::filesystem::exists(part_path + ".obj")){ 
-        printf(" $$ part not found!\n");
-        continue;
-      }
-      if (!std::filesystem::exists(part_path + "_logs")){
-        std::filesystem::create_directory(part_path + "_logs");
-      }
-      std::string log_dir = part_path + "_logs";
-      if (std::filesystem::exists(log_dir + "/" + part_name + "_inProgress.txt")){ // already done
-        printf(" $$ in progress..!\n");
-        continue;
-      }
-      if (std::filesystem::exists(log_dir + "/" + part_name + "_IPC" + ".txt")){ // already done
-        printf(" $$ already done!\n");
-        continue;
-      }
-      
-      // create the in_progress log file
-      std::ofstream ofs(log_dir + "/" + part_name + "_inProgress.txt");
-      ofs.close();
-
-      try {
-        std::string mesh_full_path = part_path + ".obj";
-        
-        generate_polyhedron_example(mesh_full_path, true);
-        // re-write for IPC use
-        writeSurfaceMesh(*mesh, *geometry, part_path + "_normalized.obj");
-        update_solver();
-              
-        // run the IPC simulation
-        auto t0 = clock_type::now();
-        FaceData<double> dual_face_areas = run_IPC_experiment(example_json, full_path, part_name, max_steps_IPC);
-        double total_time = chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count();
-
-        // write the results
-        std::ofstream outputFile(log_dir + "/" + part_name + "_IPC" + ".txt");  // Open/create a file named "test.txt" for writing
-        if (outputFile.is_open()) {
-          for (Face f: forwardSolver->hullMesh->faces()){
-            if (dual_face_areas[f] != 0. && !forwardSolver->face_is_stable(f)){
-              std::cout << " $$$$^#$^&$%^#%#$ shit: --- f" << f.getIndex() << " IPC non zero, ours zero" << std::endl;
-            }
-            if (forwardSolver->face_is_stable(f)){
-              outputFile << " -- f" << f.getIndex() << "\t -> IPC_prob: " << dual_face_areas[f]/total_area
-                                                    << "\t -> my_prob : " << boundary_builder->face_region_area[f]/(4.*PI) <<"\n";
-            }
-          }
-          outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
-          outputFile << " --- time:\t" << total_time << "\n";
-          outputFile.close();
-        } else {
-          std::cout << "Failed to create the file." << std::endl;
-        }
-      }
-      catch(const std::exception& e) { // probably couldnt make the mesh manifold
-        std::cerr << e.what() << '\n';
-      }
-
-      // remove the in_progress file
-      std::filesystem::remove(log_dir + "/" + part_name + "_inProgress.txt");
+    for (std::string part_name: part_names){
+      full_path = full_path + "/" + part_name + ".obj";
+      process_single_shape_for_IPC(full_path, example_json, max_steps_IPC, total_area);
     }
   }
 }
@@ -845,10 +867,44 @@ void myCallback() {
         int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
         std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
         std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
-        run_IPC_experiment(example_json, "../meshes", all_polygons_current_item, max_steps_IPC);
+        // run_IPC_experiment(example_json, "../meshes", all_polygons_current_item, max_steps_IPC, true);
+        run_IPC_experiment(example_json, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf", 
+                           "m0_p0", max_steps_IPC, true);
+        
       }
       // else
       //   run_IPC_samples_MCMC("example.json", ICOS_samples, max_steps_IPC);
+    }
+    if (ImGui::Button("run single IPC simulation")){
+      // json template load
+      std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
+      std::ifstream ifs(jsons_dir + "/example.json");
+      nlohmann::json example_json = nlohmann::json::parse(ifs);
+      ifs.close();
+      std::string exec_dir = "../../rigid-ipc/build/rigid_ipc_sim";
+
+      int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
+      std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
+      std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+      // run_IPC_experiment(example_json, "../meshes", all_polygons_current_item, max_steps_IPC, true);
+      Vector3 init_ori = icos_sphere_geometry->inputVertexPositions[icos_sphere_mesh->vertex(131)];
+      init_ori = init_ori.normalize();
+      Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(init_ori);
+      Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
+  
+      std::cout << "131 orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
+        
+      Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(init_ori, example_json, 
+                                                      "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf", "m0_p0",
+                                                      1000, exec_dir, "ICOS");//73.1409  8.88752 -11.9604
+      // // get the bottom face
+      VertexData<Vector3> rotated_poses(*forwardSolver->hullMesh);
+      for (Vertex v: forwardSolver->hullMesh->vertices()){
+          rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
+      }
+      // VertexPositionGeometry rotated_geo(*forwardSolver->hullMesh, rotated_poses);
+      auto rotated_131 = polyscope::registerSurfaceMesh("131 rotated", rotated_poses, forwardSolver->hullMesh->getFaceVertexList());
+      rotated_131->addFaceColorQuantity("face colors", face_colors);
     }
 }
 
@@ -864,7 +920,8 @@ int main(int argc, char* argv[])
   args::ArgumentParser parser("This is a test program.", "This goes after the options.");
   args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
   args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {'s', 'samples'}, 10);
-  args::ValueFlag<std::string> BB_selection_abs_path(parser, "absolute_mesh_path", "abs path to mesh folder", {'d', "mesh_dir"}, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection");
+  args::ValueFlag<std::string> BB_base_dir(parser, "absolute_BB_path", "abs path to BB meshes folder", {'b', "bb_dir"}, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection");
+  args::ValueFlag<std::string> single_mesh_path(parser, "absolute_single_mesh_path", "abs path to single_mesh", {'m', "mesh_dir"}, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/fox.obj");
 
   try {
     parser.ParseCLI(argc, argv);
@@ -887,21 +944,48 @@ int main(int argc, char* argv[])
   if(total_samples)
     ICOS_samples = args::get(total_samples);
 
-  if (!BB_selection_abs_path){
-    std::cout << "provide absolute path to meshes folder\n";
+  if (BB_base_dir){
+    std::cout << "running on BB dataset\n";
+    std::string BB_selection_dir = args::get(BB_base_dir);
+    run_parallel_for_each_BB_shape(BB_selection_dir);
   }
-  std::string BB_selection_path = args::get(BB_selection_abs_path);
-  run_parallel_for_each_shape(BB_selection_path);
-  // polyscope::init();
-  // vis_utils = VisualUtils();
-  // generate_polyhedron_example("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m2_p1.obj");
-  // update_solver();
-  // init_visuals();
-  // polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
-  // // polyscope::view::upDir = polyscope::view::UpDir::YUp;
-  // // polyscope::options::groundPlaneHeightFactor = 1.; // adjust the plane height
-  // polyscope::state::userCallback = myCallback;
-  // polyscope::show();
+  else if (single_mesh_path){
+    // ICOSphere preparation
+    int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
+    std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
+    std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+    double total_area = 0;
+    for (Face f: icos_sphere_mesh->faces()){
+        total_area += icos_sphere_geometry->faceArea(f);
+    }
+    
+    // load json template
+    std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
+    std::ifstream ifs(jsons_dir + "/example.json");
+    nlohmann::json example_json = nlohmann::json::parse(ifs);
+    ifs.close();
+
+    std::string single_mesh_path_str = args::get(single_mesh_path);
+    std::cout << "running on single mesh: " << single_mesh_path_str << "\n";
+    process_single_shape_for_IPC(single_mesh_path_str, example_json, max_steps_IPC, total_area);
+  }
+  else{
+    std::cout << "No path provided. Starting gui\n";
+    polyscope::init();
+    vis_utils = VisualUtils();
+    // generate_polyhedron_example("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m2_p1.obj");
+    generate_polyhedron_example("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m0_p0.obj");
+    // re-write for IPC use
+    writeSurfaceMesh(*mesh, *geometry, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m0_p0_normalized.obj");
+          
+    update_solver();
+    init_visuals();
+    polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
+    // polyscope::view::upDir = polyscope::view::UpDir::YUp;
+    // polyscope::options::groundPlaneHeightFactor = 1.; // adjust the plane height
+    polyscope::state::userCallback = myCallback;
+    polyscope::show();
+  }
   return EXIT_SUCCESS;	
 }
 

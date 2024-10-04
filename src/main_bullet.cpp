@@ -545,7 +545,15 @@ FaceData<double> run_Bullet_experiment(){
     // record the result
     if (touching_face.getIndex() != INVALID_IND){
       // update stats
-      valid_count++;
+      if (forwardSolver->face_next_face[touching_face] != touching_face){
+        std::cout << "invalid orientation: " << random_orientation << "\n";
+        std::cout << "with face: " << touching_face.getIndex() << "\n";
+        touching_face = forwardSolver->face_last_face[touching_face];
+        std::cout << "mapping to a stable face" << touching_face.getIndex() << "\n";
+      }
+      else{
+        valid_count++;
+      }
       face_counts[touching_face]++;
       face_dual_sum_areas[touching_face] += dual_area;            
       face_samples[touching_face].push_back(random_orientation);
@@ -554,7 +562,6 @@ FaceData<double> run_Bullet_experiment(){
     if (samples % verbose_period == 0){
       std::cout << "at sample: " << samples << "\n";
       auto last = clock_type::now();
-
       using seconds_fp = chrono::duration<double, chrono::seconds::period>;
       std::cout << "  -- average time with (" << verbose_period << "): " << chrono::duration_cast<seconds_fp>(last - first).count()/(double)verbose_period << " seconds\n";
       first = last;
@@ -653,6 +660,7 @@ void find_empirical_probs(std::string shapes_path){
           outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
           outputFile << " --- time:\t" << total_time << "\n";
           outputFile.close();
+        }
       }
       catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
