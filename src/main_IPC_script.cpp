@@ -152,9 +152,6 @@ void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = 
   // }
   // std::cout << "max dist from center: " << max_dist << "\n";
   // std::cout << "center of mass after shift: " << G << "\n";
-  
-  // re-write for IPC use
-  writeSurfaceMesh(*mesh, *geometry, mesh_full_path);
 }
 
 
@@ -380,7 +377,7 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
   Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(init_ori);
   Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
   jf["max_iterations"] = max_iters;
-  jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = mesh_dir + "/" + mesh_name + ".obj";
+  jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = mesh_dir + "/" + mesh_name + "_normalized.obj";
   jf["rigid_body_problem"]["rigid_bodies"][0]["rotation"] = {temp_R_euler.angles()[2] * 180. / M_PI, 
                                                              temp_R_euler.angles()[1] * 180. / M_PI, 
                                                              temp_R_euler.angles()[0] * 180. / M_PI};
@@ -765,6 +762,8 @@ void run_parallel_for_each_shape(std::string shapes_dir){
         std::string mesh_full_path = part_path + ".obj";
         
         generate_polyhedron_example(mesh_full_path, true);
+        // re-write for IPC use
+        writeSurfaceMesh(*mesh, *geometry, part_path + "_normalized.obj");
         update_solver();
               
         // run the IPC simulation
@@ -777,7 +776,7 @@ void run_parallel_for_each_shape(std::string shapes_dir){
         if (outputFile.is_open()) {
           for (Face f: forwardSolver->hullMesh->faces()){
             if (dual_face_areas[f] != 0. && !forwardSolver->face_is_stable(f)){
-              std::cout << " $$$$^#$^&$%^#%#$ shit: --- f" << f.getIndex() << " IPC non zero, fwd zero" << std::endl;
+              std::cout << " $$$$^#$^&$%^#%#$ shit: --- f" << f.getIndex() << " IPC non zero, ours zero" << std::endl;
             }
             if (forwardSolver->face_is_stable(f)){
               outputFile << " -- f" << f.getIndex() << "\t -> IPC_prob: " << dual_face_areas[f]/total_area

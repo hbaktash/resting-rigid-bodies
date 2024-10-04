@@ -15,10 +15,10 @@ include(tinyAD)
 include(args)
 include(stan)
 include(osqp-cpp)
+# include(bullet3)
 # include(autodiff)
 # include(autodiff)
 # include(ipc-toolkit)
-# include(bullet3)
 
 # Library source files
 set(SRC_FILES
@@ -37,7 +37,6 @@ set(SRC_FILES
     src/deformation.cpp
     src/optimization.cpp
     src/remesh_tools.cpp
-    # src/bullet_sim.cpp
 )
 
 # Add rolling-dragons library, which will be shared by all executables.
@@ -91,12 +90,12 @@ set_property(TARGET scriptIPC PROPERTY CXX_STANDARD 20)
 
 # Add executables
 
-# add_executable(bulletSim src/main_bullet.cpp)
+# add_executable(bulletSim src/main_bullet.cpp src/bullet_sim.cpp)
 # target_link_libraries(bulletSim
 # PRIVATE
 # rolling_dragons::rolling_dragons
 # taywee::args
 # bullet3::bullet3
 # )
-# set_property(TARGET bulletSim PROPERTY CXX_STANDARD 20)
+# set_property(TARGET bulletSim PROPERTY CXX_STANDARD 17)
 
