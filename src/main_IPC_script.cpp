@@ -65,7 +65,7 @@ using namespace geometrycentral::surface;
 // dirs
 std::string IPC_REPO_DIR = "/Users/hbakt/Desktop/code/rigid-ipc";
 std::string BB_BASE_DIR = "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection";
-std::string SINGLE_MESH_PATH = "/Users/hbakt/Desktop/code/rolling-dragons/meshes/meshes/fox.obj";
+std::string SINGLE_MESH_PATH = "/Users/hbakt/Desktop/code/rolling-dragons/meshes/fox.obj";
 
 // simulation stuff
 // PhysicsEnv* my_env;
@@ -159,7 +159,7 @@ void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = 
   geometry = geometry_ptr.release();
   preprocess_mesh(mesh, geometry, true);
   G = find_center_of_mass(*mesh, *geometry).first;
-  std::cout << "center of mass before shift: " << G << "\n";
+  // std::cout << "center of mass before shift: " << G << "\n";
   for (Vertex v: mesh->vertices()){
     geometry->inputVertexPositions[v] -= G;
   }
@@ -857,23 +857,30 @@ void process_single_shape_for_experiment(std::string full_shape_path,
   }
   std::string log_dir = file_dir + "/" + file_name + "_logs";
 
-
-  if (std::filesystem::exists(log_dir + "/" + file_name + "_IPC_inProgress.txt") && ipc_sim){ // ipc in Progress
+  bool ipc_in_progress = std::filesystem::exists(log_dir + "/" + file_name + "_IPC_inProgress.txt"),
+       bullet_in_progress = std::filesystem::exists(log_dir + "/" + file_name + "_bullet_inProgress.txt");
+  if (ipc_in_progress && ipc_sim){ // ipc in Progress
     printf(" $$ IPC in progress..!\n");
-    return;
+    if (!bullet_sim)
+      return;
   }
-  if (std::filesystem::exists(log_dir + "/" + file_name + "_bullet_inProgress.txt") && bullet_sim){ // bullet in Progress
+  if (bullet_in_progress && bullet_sim){ // bullet in Progress
     printf(" $$ Bullet in progress..!\n");
-    return;
+    if (ipc_in_progress)
+      return;
   }
 
-  if (std::filesystem::exists(log_dir + "/" + file_name + "_IPC" + ".txt") && ipc_sim){ // already done
-    printf(" $$ IPC already done!\n");
-    return;
+  bool ipc_done = std::filesystem::exists(log_dir + "/" + file_name + "_IPC" + ".txt"), 
+       bullet_done = std::filesystem::exists(log_dir + "/" + file_name + "_bullet" + ".txt");
+  if (ipc_sim && ipc_done){ // already done
+    printf(" $$ IPC already done..!\n");
+    if (!bullet_sim)
+      return;
   }
-  if (std::filesystem::exists(log_dir + "/" + file_name + "_bullet" + ".txt") && bullet_sim){ // already done
-    printf(" $$ Bullet already done!\n");
-    return;
+  if (bullet_sim && bullet_done){
+    printf(" $$ Bullet already done..!\n");
+    if (ipc_done)
+      return;
   }
   
   // create the in_progress log file
@@ -999,9 +1006,9 @@ void run_parallel_for_each_BB_shape(std::string BB_base_dir){
   // iterate through folders in path
   std::vector<std::string> part_names{"m0_p0", "m2_p0", "m2_p1", "m2_p2"};
   for (const auto & entry : fs::directory_iterator(BB_base_dir)){ // iterate through mesh ids
-    std::string full_path = entry.path().string();
+    std::string fract_dir = entry.path().string();
     for (std::string part_name: part_names){
-      full_path = full_path + "/" + part_name + ".obj";
+      std::string full_path = fract_dir + "/" + part_name + ".obj";
       process_single_shape_for_experiment(full_path, example_json, max_steps_IPC, total_area);
     }
   }
@@ -1072,14 +1079,13 @@ int main(int argc, char* argv[])
 
   args::ArgumentParser parser("This is a test program.", "This goes after the options.");
   args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
-  args::ValueFlag<bool> verbose_arg(parser, "verbose", "print stuff or not", {'v', 'verbose'}, true);
+  args::Flag verbose_arg(parser, "verbose", "print stuff per sample or not", {'v', 'verbose'});
+  args::Flag do_bullet(parser, "do_bullet_sim", "do bullet sim", {'l', 'bullet'});
+  args::Flag do_IPC(parser, "do_IPC_sim", "do IPC sim", {'p', 'ipc'});
   args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {'s', 'samples'}, 10);
-  args::ValueFlag<std::string> IPC_repo_dir(parser, "IPC_repo_dir", "path to IPC repo (built and ready to run)", {'i', "ipc_dir"}, IPC_REPO_DIR);
+  args::ValueFlag<std::string> IPC_repo_dir(parser, "absolute_IPC_repo_dir", "abs path to IPC repo (built and ready to run)", {'i', "ipc_dir"}, IPC_REPO_DIR);
   args::ValueFlag<std::string> BB_base_dir(parser, "absolute_BB_path", "abs path to BB meshes folder", {'b', "bb_dir"}, BB_BASE_DIR);
   args::ValueFlag<std::string> single_mesh_path(parser, "absolute_single_mesh_path", "abs path to single_mesh", {'m', "mesh_dir"}, SINGLE_MESH_PATH);
-  args::ValueFlag<bool> do_bullet(parser, "do_bullet_sim", "do bullet sim", {'l', 'bullet'}, false);
-  args::ValueFlag<bool> do_IPC(parser, "do_IPC_sim", "do IPC sim", {'p', 'ipc'}, false);
-
 
   try {
     parser.ParseCLI(argc, argv);
