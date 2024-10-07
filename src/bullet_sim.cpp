@@ -256,7 +256,7 @@ Face PhysicsEnv::get_touching_face(VertexData<Vector3> positions){
         }
     }
     // std::cout << "lowest face normal: "<< new_face_normal << "\n";
-    if (least_diff > 0.1){
+    if (least_diff > 0.01){
         // printf(" normal diff: %f\n", least_diff);
         return Face();
     }

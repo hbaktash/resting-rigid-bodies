@@ -136,6 +136,7 @@ VertexPositionGeometry* icos_sphere_geometry;
 // Bullet simulation stuff
 PhysicsEnv* my_env;
 
+
 void initialize_vis(bool with_plane = true){
     polyscope::registerSurfaceMesh("my polyhedra", geometry->inputVertexPositions, mesh->getFaceVertexList());
     // ground plane on Polyscope has a weird height setting (scaled factor..)
@@ -526,7 +527,7 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
 
 
 FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string mesh_dir, std::string mesh_name,
-                          int max_iters = 1000, bool visuals = false){
+                                    int &invalid, int max_iters = 1000, bool visuals = false){
     // TODO write json to each file id in BB
     std::string exec_dir = IPC_REPO_DIR + "/build/rigid_ipc_sim";
     
@@ -626,6 +627,8 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
         if (face_counts[f] != 0)
             std::cout << "face " << f.getIndex() << " prob: " << face_dual_sum_areas[f]/total_area << "\n";
     }
+    std::cout << "valid count: " << valid_count << "/" << icos_sphere_mesh->nVertices() << "\n";
+    invalid = icos_sphere_mesh->nVertices() - valid_count;
     if (!visuals){
       return face_dual_sum_areas;
     }
@@ -641,7 +644,6 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
       auto raster_pc = polyscope::registerPointCloud("raster pc IPC", raster_positions);
       polyscope::PointCloudColorQuantity* pc_col_quant = raster_pc->addColorQuantity("stable face colors", raster_colors);
       pc_col_quant->setEnabled(true);
-      std::cout << "valid count: " << valid_count << "/" << icos_sphere_mesh->nVertices() << "\n";
       // json js = json::parse(str);
       return face_dual_sum_areas;
     }
@@ -747,7 +749,7 @@ void initalize_env(bool visuals = true){
 }
 
 
-FaceData<double> run_Bullet_experiment(){
+FaceData<double> run_Bullet_experiment(int &invalids){
   // sample and compute stable landing
   FaceData<std::vector<Vector3>> face_samples(*my_env->mesh);
   FaceData<size_t> face_counts(*my_env->mesh);
@@ -815,6 +817,7 @@ FaceData<double> run_Bullet_experiment(){
 
   }
   printf(" ### total invalid faces: %d/%d\n", samples - valid_count, samples);
+  invalids = samples - valid_count;
   return face_dual_sum_areas;
 }
 
@@ -906,7 +909,8 @@ void process_single_shape_for_experiment(std::string full_shape_path,
     if (ipc_sim){
       // run the IPC simulation
       auto t0 = clock_type::now();
-      FaceData<double> dual_face_areas_ipc = run_IPC_experiment(example_json, file_dir, file_name, max_steps_IPC);
+      int invalids = -1;
+      FaceData<double> dual_face_areas_ipc = run_IPC_experiment(example_json, file_dir, file_name, invalids, max_steps_IPC);
       double total_time_ipc = chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count();
       printf(" $$$ KL divergence! $$$\n");
       
@@ -929,6 +933,7 @@ void process_single_shape_for_experiment(std::string full_shape_path,
         outputFile << "\n --- KL div ipc|ours: " << KL_div_ipc_ours << "\t ours|ipc: " << KL_div_ours_ipc << "\n";
         outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
         outputFile << " --- total IPC time:\t" << total_time_ipc << "\n";
+        outputFile << " --- invalid count:\t" << invalids << "\n";
         outputFile.close();
       }
       else {
@@ -940,7 +945,8 @@ void process_single_shape_for_experiment(std::string full_shape_path,
       // run the bullet simulation
       auto t0 = clock_type::now();
       initalize_env(false);
-      FaceData<double> dual_face_areas_bullet = run_Bullet_experiment();
+      int invalids = -1;
+      FaceData<double> dual_face_areas_bullet = run_Bullet_experiment(invalids);
       double total_time_bullet = chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count();
       std::cout << " total bullet experiment time: " << total_time_bullet << "\n";
       
@@ -961,6 +967,7 @@ void process_single_shape_for_experiment(std::string full_shape_path,
         outputFile << "\n --- KL div bullet|ours: " << KL_div_bullet_ours << "\t ours|bullet: " << KL_div_ours_bullet << "\n";
         outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
         outputFile << " --- total Bullet time:\t" << total_time_bullet << "\n";
+        outputFile << " --- invalid count:\t" << invalids << "\n";
         outputFile.close();
       }
       else {
@@ -1059,8 +1066,9 @@ void myCallback() {
         int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
         std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
         std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+        int invalids = -1;
         run_IPC_experiment(example_json, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf", 
-                           "m0_p0", max_steps_IPC, true);
+                           "m0_p0", invalids, max_steps_IPC, true);
         
       }
       // else
