@@ -21,8 +21,6 @@
 #include "geometrycentral/surface/meshio.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
 
-// #include "LinearMath/btVector3.h"
-// #include "btBulletDynamicsCommon.h"
 
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
@@ -42,8 +40,15 @@
 // #include "bullet_sim.h"
 #include "visual_utils.h"
 
-#include "chrono"
+// bullet stuff
+#include "LinearMath/btVector3.h"
+#include "btBulletDynamicsCommon.h"
+#include "bullet_sim.h"
+
 // #include "ipc/ipc.hpp"
+
+// system stuff
+#include "chrono"
 #include <filesystem>
 #include <fstream> 
 
@@ -55,6 +60,12 @@ using seconds_fp = chrono::duration<double, chrono::seconds::period>;
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
+
+
+// dirs
+std::string IPC_REPO_DIR = "/Users/hbakt/Desktop/code/rigid-ipc";
+std::string BB_BASE_DIR = "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection";
+std::string SINGLE_MESH_PATH = "/Users/hbakt/Desktop/code/rolling-dragons/meshes/meshes/fox.obj";
 
 // simulation stuff
 // PhysicsEnv* my_env;
@@ -91,6 +102,9 @@ std::unique_ptr<VertexPositionGeometry> geometry_ptr;
 ManifoldSurfaceMesh* mesh;
 VertexPositionGeometry* geometry;
 
+bool verbose = false,
+     bullet_sim = false,
+     ipc_sim = false;
 
 // raster image stuff
 FaceData<Vector3> face_colors;
@@ -114,10 +128,13 @@ bool draw_snail_trail = true,
 // Vector3 old_g_vec, new_g_vec;
 int snail_trail_dummy_counter = 0;
 
-// ICOS
+// ICOSphere
 ManifoldSurfaceMesh* icos_sphere_mesh;
 VertexPositionGeometry* icos_sphere_geometry;
     
+
+// Bullet simulation stuff
+PhysicsEnv* my_env;
 
 void initialize_vis(bool with_plane = true){
     polyscope::registerSurfaceMesh("my polyhedra", geometry->inputVertexPositions, mesh->getFaceVertexList());
@@ -408,7 +425,7 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
   nlohmann::json jf_out = nlohmann::json::parse(ifs_out);
 
   size_t num_states = jf_out["animation"]["state_sequence"].size();
-  std::cout << "num steps til velocity=0 : " << num_states << "\n";
+  // std::cout << "num steps til velocity=0 : " << num_states << "\n";
   auto r0_aa = jf_out["animation"]["state_sequence"][0]["rigid_bodies"][0]["rotation"],
         rn_aa = jf_out["animation"]["state_sequence"][num_states - 1]["rigid_bodies"][0]["rotation"];
   Eigen::Vector3d r0_vec(r0_aa[0], r0_aa[1], r0_aa[2]),
@@ -423,8 +440,8 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
 
 
 // void run_IPC_samples_MCMC(std::string example_fname, int ICOS_samples = 1, int max_iters = 200){
-//     std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
-//     std::string exec_dir = "../../rigid-ipc/build/rigid_ipc_sim";
+//     std::string jsons_dir = IPC_REPO_DIR + "/fixtures/3D/examples";
+//     std::string exec_dir = IPC_REPO_DIR + "/build/rigid_ipc_sim";
 //     std::ifstream ifs(jsons_dir + "/" + example_fname);
 //     nlohmann::json jf = nlohmann::json::parse(ifs);
 //     ifs.close();
@@ -511,15 +528,17 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
 FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string mesh_dir, std::string mesh_name,
                           int max_iters = 1000, bool visuals = false){
     // TODO write json to each file id in BB
-    std::string exec_dir = "../../rigid-ipc/build/rigid_ipc_sim";
+    std::string exec_dir = IPC_REPO_DIR + "/build/rigid_ipc_sim";
     
     FaceData<std::vector<Vector3>> face_to_ori(*forwardSolver->hullMesh);
     FaceData<size_t> face_counts(*forwardSolver->hullMesh);
     FaceData<double> face_dual_sum_areas(*forwardSolver->hullMesh);
 
     // tilt the sphere randomly; to avoid singular configurations
+    std::mt19937 util_mersenne_twister(0); // fixed seed
     while (true){
-        Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
+        std::uniform_real_distribution<double> distx(-1, 1), disty(-1, 1), distz(-1, 1);
+        Vector3 random_orientation = {distx(util_mersenne_twister), disty(util_mersenne_twister), distz(util_mersenne_twister)};
         if (random_orientation.norm() <= 1){
             random_orientation = random_orientation.normalize();
             Eigen::AngleAxisd R = aa_from_init_ori(random_orientation);
@@ -545,7 +564,6 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
         random_orientation = random_orientation.normalize();
         
         // run the sim
-        auto t1 = clock_type::now();
         Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(random_orientation, template_json, mesh_dir, mesh_name,
                                                         max_iters, exec_dir, "ICOS");
         // get the bottom face
@@ -554,7 +572,6 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
             rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
         }
         VertexPositionGeometry rotated_geo(*forwardSolver->hullMesh, rotated_poses);
-        std::cout << "      single instance time: " << chrono::duration_cast<seconds_fp>(clock_type::now() - t1).count() << " s\n";
           
 
         Face lowest_face;
@@ -567,7 +584,6 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
                 lowest_height = height;
             }
         }
-        std::cout << " at vertex " << sample_v.getIndex() << " lowest face: " << lowest_face.getIndex() << " ,  normal diff " << lowest_height << "\n";
         
         // for debugging
         Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(random_orientation);
@@ -576,10 +592,12 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
         if (lowest_height < 1e-3){
             // std::cout << "stable face: " << f.getIndex() << "\n";
             if (forwardSolver->face_next_face[lowest_face] != lowest_face){
-              std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
-              std::cout << "with face: " << lowest_face.getIndex() << " ,  normal diff " << lowest_height << "\n";
+              if (verbose){
+                std::cout << "invalid orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
+                std::cout << "with face: " << lowest_face.getIndex() << " ,  normal diff " << lowest_height << "\n";
+                std::cout << "mapping to a stable face" << forwardSolver->face_last_face[lowest_face].getIndex() << "\n";
+              }
               lowest_face = forwardSolver->face_last_face[lowest_face];
-              std::cout << "mapping to a stable face" << lowest_face.getIndex() << "\n";
             }
             else{
               valid_count++;
@@ -715,10 +733,106 @@ void compare_quasi_sample_convergence(){
   printf("ICOS diff squared: %f\n", sqrt(ICOS_diff_squared));
 }
 
+void initalize_env(bool visuals = true){
+  // physics env
+  my_env = new PhysicsEnv();
+  my_env->init_physics();
+  my_env->init_geometry(forwardSolver->hullMesh, forwardSolver->hullGeometry);
+  my_env->add_ground(ground_box_y, ground_box_shape);
+  my_env->add_object(G, Vector3({0,-1,0}));
 
-void process_single_shape_for_IPC(std::string full_shape_path, 
+  // polyscope
+  if (visuals)
+    initialize_vis(true);
+}
+
+
+FaceData<double> run_Bullet_experiment(){
+  // sample and compute stable landing
+  FaceData<std::vector<Vector3>> face_samples(*my_env->mesh);
+  FaceData<size_t> face_counts(*my_env->mesh);
+  FaceData<double> face_dual_sum_areas(*my_env->mesh);
+  std::vector<Vector3> final_orientations;
+
+  // tilt the sphere randomly; to avoid singular configurations
+  while (true){
+      Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
+      if (random_orientation.norm() <= 1){
+          random_orientation = random_orientation.normalize();
+          Eigen::AngleAxisd R = aa_from_init_ori(random_orientation);
+          for (Vertex v: icos_sphere_mesh->vertices())
+              icos_sphere_geometry->inputVertexPositions[v] = vec2vec3(R.toRotationMatrix() * vec32vec(icos_sphere_geometry->inputVertexPositions[v]));
+          break;
+      }
+  }
+
+  // compute the total area of the ICOsphere
+  double total_area = 0;
+  for (Face f: icos_sphere_mesh->faces()){
+      total_area += icos_sphere_geometry->faceArea(f);
+  }
+  // iterate over the sphere
+  int verbose_period = 100;
+  auto t0 = clock_type::now();
+  auto first = clock_type::now();
+  size_t valid_count = 0, samples = 0;
+  for (Vertex sample_v: icos_sphere_mesh->vertices()){
+    samples++;
+    Vector3 random_orientation = icos_sphere_geometry->inputVertexPositions[sample_v];
+    double dual_area = icos_sphere_geometry->vertexDualArea(sample_v);
+    random_orientation = random_orientation.normalize(); // redundant
+    
+    // run the sim
+    auto t1 = clock_type::now();
+    my_env->refresh(G, random_orientation);
+    Face touching_face = my_env->final_stable_face(); // Invalid if not close to a face normal; wtf?
+    final_orientations.push_back(my_env->get_current_orientation() + vis_utils.center);
+    
+    // record the result
+    if (touching_face.getIndex() != INVALID_IND){
+      // update stats
+      if (forwardSolver->face_next_face[touching_face] != touching_face){
+        std::cout << "invalid orientation: " << random_orientation << "\n";
+        std::cout << "with face: " << touching_face.getIndex() << "\n";
+        touching_face = forwardSolver->face_last_face[touching_face];
+        std::cout << "mapping to a stable face" << touching_face.getIndex() << "\n";
+      }
+      else{
+        valid_count++;
+      }
+      face_counts[touching_face]++;
+      face_dual_sum_areas[touching_face] += dual_area;            
+      face_samples[touching_face].push_back(random_orientation);
+    }
+    // periodic verbose
+    if (samples % verbose_period == 0){
+      std::cout << "at sample: " << samples << "\n";
+      auto last = clock_type::now();
+      using seconds_fp = chrono::duration<double, chrono::seconds::period>;
+      std::cout << "  -- average time with (" << verbose_period << "): " << chrono::duration_cast<seconds_fp>(last - first).count()/(double)verbose_period << " seconds\n";
+      first = last;
+    }
+
+  }
+  printf(" ### total invalid faces: %d/%d\n", samples - valid_count, samples);
+  return face_dual_sum_areas;
+}
+
+
+// KL div A|B
+double get_KL_div(FaceData<double> distr_A, FaceData<double> dist_B){
+  double kl_divergence = 0.;
+  for (Face f: distr_A.getMesh()->faces()){
+    if (distr_A[f] != 0. && dist_B[f] != 0.)
+      kl_divergence += distr_A[f] * std::log(distr_A[f]/dist_B[f]);
+  }
+  return kl_divergence;
+}
+
+
+void process_single_shape_for_experiment(std::string full_shape_path, 
                                   nlohmann::json example_json, 
-                                  int max_steps_IPC, double total_icosphere_area){
+                                  int max_sim_steps, double total_icosphere_area){
   std::string file_name = full_shape_path.substr(full_shape_path.find_last_of("/")+1);
   std::string file_dir = full_shape_path.substr(0, full_shape_path.find_last_of("/"));
   if (file_name == ".DS_Store")
@@ -736,61 +850,129 @@ void process_single_shape_for_IPC(std::string full_shape_path,
     printf(" $$ part not found!\n");
     return;
   }
+
+  // log dir
   if (!std::filesystem::exists(file_dir + "/" + file_name + "_logs")){
     std::filesystem::create_directory(file_dir + "/" + file_name + "_logs");
   }
   std::string log_dir = file_dir + "/" + file_name + "_logs";
-  if (std::filesystem::exists(log_dir + "/" + file_name + "_inProgress.txt")){ // already done
-    printf(" $$ in progress..!\n");
+
+
+  if (std::filesystem::exists(log_dir + "/" + file_name + "_IPC_inProgress.txt") && ipc_sim){ // ipc in Progress
+    printf(" $$ IPC in progress..!\n");
     return;
   }
-  if (std::filesystem::exists(log_dir + "/" + file_name + "_IPC" + ".txt")){ // already done
-    printf(" $$ already done!\n");
+  if (std::filesystem::exists(log_dir + "/" + file_name + "_bullet_inProgress.txt") && bullet_sim){ // bullet in Progress
+    printf(" $$ Bullet in progress..!\n");
+    return;
+  }
+
+  if (std::filesystem::exists(log_dir + "/" + file_name + "_IPC" + ".txt") && ipc_sim){ // already done
+    printf(" $$ IPC already done!\n");
+    return;
+  }
+  if (std::filesystem::exists(log_dir + "/" + file_name + "_bullet" + ".txt") && bullet_sim){ // already done
+    printf(" $$ Bullet already done!\n");
     return;
   }
   
   // create the in_progress log file
-  std::ofstream ofs(log_dir + "/" + file_name + "_inProgress.txt");
-  ofs.close();
-
+  if (ipc_sim){
+    std::ofstream ofs_ipc(log_dir + "/" + file_name + "_IPC_inProgress.txt");
+    ofs_ipc.close();
+  }
+  if (bullet_sim){
+    std::ofstream ofs_bullet(log_dir + "/" + file_name + "_bullet_inProgress.txt");
+    ofs_bullet.close();
+  }
+  
   try {
     std::string mesh_full_path = file_dir + "/" + file_name + ".obj";
     
     generate_polyhedron_example(mesh_full_path, true);
-    // re-write for IPC use
-    writeSurfaceMesh(*mesh, *geometry, file_dir + "/" + file_name + "_normalized.obj");
-    update_solver();
-          
-    // run the IPC simulation
-    auto t0 = clock_type::now();
-    FaceData<double> dual_face_areas = run_IPC_experiment(example_json, file_dir, file_name, max_steps_IPC);
-    double total_time = chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count();
-
-    // write the results
-    std::ofstream outputFile(log_dir + "/" + file_name + "_IPC" + ".txt");  // Open/create a file named "test.txt" for writing
-    if (outputFile.is_open()) {
-      for (Face f: forwardSolver->hullMesh->faces()){
-        if (dual_face_areas[f] != 0. && !forwardSolver->face_is_stable(f)){
-          std::cout << " $$$$^#$^&$%^#%#$ shit: --- f" << f.getIndex() << " IPC non zero, ours zero" << std::endl;
-        }
-        if (forwardSolver->face_is_stable(f)){
-          outputFile << " -- f" << f.getIndex() << "\t-> IPC_prob: " << dual_face_areas[f]/total_icosphere_area
-                                                << "\t-> my_prob : " << boundary_builder->face_region_area[f]/(4.*PI) <<"\n";
-        }
-      }
-      outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
-      outputFile << " --- time:\t" << total_time << "\n";
-      outputFile.close();
-    } else {
-      std::cout << "Failed to create the file." << std::endl;
+    if(ipc_sim){
+      // re-write for IPC use
+      writeSurfaceMesh(*mesh, *geometry, file_dir + "/" + file_name + "_normalized.obj");
     }
+    update_solver();
+
+    if (ipc_sim){
+      // run the IPC simulation
+      auto t0 = clock_type::now();
+      FaceData<double> dual_face_areas_ipc = run_IPC_experiment(example_json, file_dir, file_name, max_steps_IPC);
+      double total_time_ipc = chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count();
+      printf(" $$$ KL divergence! $$$\n");
+      
+      double KL_div_ipc_ours = get_KL_div(dual_face_areas_ipc * (1./total_icosphere_area), boundary_builder->face_region_area * (1./(4.*PI))),
+             KL_div_ours_ipc = get_KL_div(boundary_builder->face_region_area * (1./(4.*PI)), dual_face_areas_ipc * (1./total_icosphere_area));
+      if (verbose)
+        std::cout << " total IPC time: " << total_time_ipc << "\n";
+      // write the IPC results
+      std::ofstream outputFile(log_dir + "/" + file_name + "_IPC" + ".txt");  // Open/create a file named "test.txt" for writing
+      if (outputFile.is_open()) {
+        for (Face f: forwardSolver->hullMesh->faces()){
+          if (dual_face_areas_ipc[f] != 0. && !forwardSolver->face_is_stable(f) && verbose){
+            std::cout << " $$$$^#$^&$%^#%#$ shit: --- f" << f.getIndex() << " IPC non zero, ours zero" << std::endl;
+          }
+          if (forwardSolver->face_is_stable(f)){
+            outputFile << " -- f" << f.getIndex() << "\t-> IPC_prob: " << dual_face_areas_ipc[f]/total_icosphere_area
+                                                  << "\t-> my_prob : " << boundary_builder->face_region_area[f]/(4.*PI) <<"\n";
+          }
+        }
+        outputFile << "\n --- KL div ipc|ours: " << KL_div_ipc_ours << "\t ours|ipc: " << KL_div_ours_ipc << "\n";
+        outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
+        outputFile << " --- total IPC time:\t" << total_time_ipc << "\n";
+        outputFile.close();
+      }
+      else {
+        std::cout << "Failed to create the file." << std::endl;
+      }
+    }
+
+    if (bullet_sim){
+      // run the bullet simulation
+      auto t0 = clock_type::now();
+      initalize_env(false);
+      FaceData<double> dual_face_areas_bullet = run_Bullet_experiment();
+      double total_time_bullet = chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count();
+      std::cout << " total bullet experiment time: " << total_time_bullet << "\n";
+      
+      // KL div stuff 
+      printf("getting KL div\n");
+      double KL_div_bullet_ours = get_KL_div(dual_face_areas_bullet * (1./total_icosphere_area), boundary_builder->face_region_area * (1./(4.*PI))),
+             KL_div_ours_bullet = get_KL_div(boundary_builder->face_region_area * (1./(4.*PI)), dual_face_areas_bullet * (1./total_icosphere_area));
+      printf("writing to file\n");
+      // write the Bullet results
+      std::ofstream outputFile(log_dir + "/" + file_name + "_bullet" + ".txt");  // Open/create a file named "test.txt" for writing
+      if (outputFile.is_open()) {
+        for (Face f: forwardSolver->hullMesh->faces()){
+          if (forwardSolver->face_is_stable(f)){
+            outputFile << " -- f" << f.getIndex() << "\t-> bullet_prob: " << dual_face_areas_bullet[f]/total_icosphere_area
+                                                  << "\t-> my_prob : " << boundary_builder->face_region_area[f]/(4.*PI) <<"\n";
+          }
+        }
+        outputFile << "\n --- KL div bullet|ours: " << KL_div_bullet_ours << "\t ours|bullet: " << KL_div_ours_bullet << "\n";
+        outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
+        outputFile << " --- total Bullet time:\t" << total_time_bullet << "\n";
+        outputFile.close();
+      }
+      else {
+        std::cout << "Failed to create the file." << std::endl;
+      }
+    }
+
+    
+    
   }
   catch(const std::exception& e) { // probably couldnt make the mesh manifold
     std::cerr << e.what() << '\n';
   }
 
   // remove the in_progress file
-  std::filesystem::remove(log_dir + "/" + file_name + "_inProgress.txt");
+  if (ipc_sim)
+    std::filesystem::remove(log_dir + "/" + file_name + "_IPC_inProgress.txt");
+  if (bullet_sim)
+    std::filesystem::remove(log_dir + "/" + file_name + "_bullet_inProgress.txt");
 }
 
 
@@ -804,11 +986,14 @@ void run_parallel_for_each_BB_shape(std::string BB_base_dir){
       total_area += icos_sphere_geometry->faceArea(f);
   }
   
-  // load json template
-  std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
-  std::ifstream ifs(jsons_dir + "/example.json");
-  nlohmann::json example_json = nlohmann::json::parse(ifs);
-  ifs.close();
+  nlohmann::json example_json;
+  if (ipc_sim){
+    // load json template
+    std::string jsons_dir = IPC_REPO_DIR + "/fixtures/3D/examples";
+    std::ifstream ifs(jsons_dir + "/example.json");
+    example_json = nlohmann::json::parse(ifs);
+    ifs.close();
+  }
       
 
   // iterate through folders in path
@@ -817,7 +1002,7 @@ void run_parallel_for_each_BB_shape(std::string BB_base_dir){
     std::string full_path = entry.path().string();
     for (std::string part_name: part_names){
       full_path = full_path + "/" + part_name + ".obj";
-      process_single_shape_for_IPC(full_path, example_json, max_steps_IPC, total_area);
+      process_single_shape_for_experiment(full_path, example_json, max_steps_IPC, total_area);
     }
   }
 }
@@ -858,7 +1043,7 @@ void myCallback() {
     if (ImGui::Checkbox("sampling ICOS", &ICOS_sampling));
     if (ImGui::Button("run IPC simulation")){
       // json template load
-      std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
+      std::string jsons_dir = IPC_REPO_DIR + "/fixtures/3D/examples";
       std::ifstream ifs(jsons_dir + "/example.json");
       nlohmann::json example_json = nlohmann::json::parse(ifs);
       ifs.close();
@@ -867,44 +1052,12 @@ void myCallback() {
         int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
         std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
         std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
-        // run_IPC_experiment(example_json, "../meshes", all_polygons_current_item, max_steps_IPC, true);
         run_IPC_experiment(example_json, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf", 
                            "m0_p0", max_steps_IPC, true);
         
       }
       // else
       //   run_IPC_samples_MCMC("example.json", ICOS_samples, max_steps_IPC);
-    }
-    if (ImGui::Button("run single IPC simulation")){
-      // json template load
-      std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
-      std::ifstream ifs(jsons_dir + "/example.json");
-      nlohmann::json example_json = nlohmann::json::parse(ifs);
-      ifs.close();
-      std::string exec_dir = "../../rigid-ipc/build/rigid_ipc_sim";
-
-      int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
-      std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
-      std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
-      // run_IPC_experiment(example_json, "../meshes", all_polygons_current_item, max_steps_IPC, true);
-      Vector3 init_ori = icos_sphere_geometry->inputVertexPositions[icos_sphere_mesh->vertex(131)];
-      init_ori = init_ori.normalize();
-      Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(init_ori);
-      Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
-  
-      std::cout << "131 orientation: " << temp_R_euler.angles().reverse().transpose() * 180. / M_PI << "\n";
-        
-      Eigen::AngleAxisd R_rest_aa = run_sim_fetch_rot(init_ori, example_json, 
-                                                      "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf", "m0_p0",
-                                                      1000, exec_dir, "ICOS");//73.1409  8.88752 -11.9604
-      // // get the bottom face
-      VertexData<Vector3> rotated_poses(*forwardSolver->hullMesh);
-      for (Vertex v: forwardSolver->hullMesh->vertices()){
-          rotated_poses[v] = vec2vec3(R_rest_aa.toRotationMatrix() * vec32vec(forwardSolver->hullGeometry->inputVertexPositions[v]));
-      }
-      // VertexPositionGeometry rotated_geo(*forwardSolver->hullMesh, rotated_poses);
-      auto rotated_131 = polyscope::registerSurfaceMesh("131 rotated", rotated_poses, forwardSolver->hullMesh->getFaceVertexList());
-      rotated_131->addFaceColorQuantity("face colors", face_colors);
     }
 }
 
@@ -919,9 +1072,14 @@ int main(int argc, char* argv[])
 
   args::ArgumentParser parser("This is a test program.", "This goes after the options.");
   args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
+  args::ValueFlag<bool> verbose_arg(parser, "verbose", "print stuff or not", {'v', 'verbose'}, true);
   args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {'s', 'samples'}, 10);
-  args::ValueFlag<std::string> BB_base_dir(parser, "absolute_BB_path", "abs path to BB meshes folder", {'b', "bb_dir"}, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection");
-  args::ValueFlag<std::string> single_mesh_path(parser, "absolute_single_mesh_path", "abs path to single_mesh", {'m', "mesh_dir"}, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/fox.obj");
+  args::ValueFlag<std::string> IPC_repo_dir(parser, "IPC_repo_dir", "path to IPC repo (built and ready to run)", {'i', "ipc_dir"}, IPC_REPO_DIR);
+  args::ValueFlag<std::string> BB_base_dir(parser, "absolute_BB_path", "abs path to BB meshes folder", {'b', "bb_dir"}, BB_BASE_DIR);
+  args::ValueFlag<std::string> single_mesh_path(parser, "absolute_single_mesh_path", "abs path to single_mesh", {'m', "mesh_dir"}, SINGLE_MESH_PATH);
+  args::ValueFlag<bool> do_bullet(parser, "do_bullet_sim", "do bullet sim", {'l', 'bullet'}, false);
+  args::ValueFlag<bool> do_IPC(parser, "do_IPC_sim", "do IPC sim", {'p', 'ipc'}, false);
+
 
   try {
     parser.ParseCLI(argc, argv);
@@ -941,33 +1099,55 @@ int main(int argc, char* argv[])
     return 1;
   }
 
+  if (verbose_arg)
+    verbose = true;
+
   if(total_samples)
     ICOS_samples = args::get(total_samples);
+  
+  if (IPC_repo_dir)
+    IPC_REPO_DIR = args::get(IPC_repo_dir);
+  
+  if (BB_base_dir)
+    BB_BASE_DIR = args::get(BB_base_dir);
+  
+  if (single_mesh_path)
+    SINGLE_MESH_PATH = args::get(single_mesh_path);
 
-  if (BB_base_dir){
-    std::cout << "running on BB dataset\n";
-    std::string BB_selection_dir = args::get(BB_base_dir);
-    run_parallel_for_each_BB_shape(BB_selection_dir);
-  }
-  else if (single_mesh_path){
-    // ICOSphere preparation
-    int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
-    std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
-    std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
-    double total_area = 0;
-    for (Face f: icos_sphere_mesh->faces()){
-        total_area += icos_sphere_geometry->faceArea(f);
+  if (do_bullet || do_IPC){ // Command line mode
+    if (do_bullet){
+      bullet_sim = true;
+      std::cout << "   ----  Bullet ---- \n";
     }
-    
-    // load json template
-    std::string jsons_dir = "../../rigid-ipc/fixtures/3D/examples";
-    std::ifstream ifs(jsons_dir + "/example.json");
-    nlohmann::json example_json = nlohmann::json::parse(ifs);
-    ifs.close();
+    if (do_IPC){
+      ipc_sim = true;
+      std::cout << "   ----  IPC    ---- \n";
+    }
 
-    std::string single_mesh_path_str = args::get(single_mesh_path);
-    std::cout << "running on single mesh: " << single_mesh_path_str << "\n";
-    process_single_shape_for_IPC(single_mesh_path_str, example_json, max_steps_IPC, total_area);
+    if (BB_base_dir){
+      std::cout << "running on BB dataset at: "<< BB_BASE_DIR << "\n";
+      run_parallel_for_each_BB_shape(BB_BASE_DIR);
+    }
+    else if (single_mesh_path){
+      
+      // make ICOSphere 
+      int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
+      std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
+      std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+      double total_area = 0;
+      for (Face f: icos_sphere_mesh->faces()){
+          total_area += icos_sphere_geometry->faceArea(f);
+      }
+      
+      // load json template
+      std::string jsons_dir = IPC_REPO_DIR + "/fixtures/3D/examples";
+      std::ifstream ifs(jsons_dir + "/example.json");
+      nlohmann::json example_json = nlohmann::json::parse(ifs);
+      ifs.close();
+
+      std::cout << "running on single mesh: " << SINGLE_MESH_PATH << "\n";
+      process_single_shape_for_experiment(SINGLE_MESH_PATH, example_json, max_steps_IPC, total_area);
+    }
   }
   else{
     std::cout << "No path provided. Starting gui\n";

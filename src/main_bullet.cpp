@@ -502,6 +502,7 @@ Eigen::AngleAxisd aa_from_init_ori(Vector3 init_ori){
 }
 
 FaceData<double> run_Bullet_experiment(){
+  
   // sample and compute stable landing
   FaceData<std::vector<Vector3>> face_samples(*my_env->mesh);
   FaceData<size_t> face_counts(*my_env->mesh);
@@ -638,9 +639,10 @@ void find_empirical_probs(std::string shapes_path){
         // load shape
         generate_polyhedron_example(mesh_full_path, true);
         update_solver();
-        initalize_env(false);
-
+        
         // run the Bullet experiment
+        // for bullet env
+        initalize_env(false);
         auto t0 = clock_type::now();
         FaceData<double> dual_face_areas = run_Bullet_experiment();
         double total_time = chrono::duration_cast<seconds_fp>(clock_type::now() - t0).count();
@@ -665,20 +667,6 @@ void find_empirical_probs(std::string shapes_path){
       catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         continue;
-      }
-      std::ofstream outputFile(part_path + ".txt");  // Open/create a file named "test.txt" for writing
-      if (outputFile.is_open()) {
-        outputFile << "KL " << kl_divergence << "  \n";  // Write a line of text to the file
-        for (Face f: my_env->mesh->faces()){
-          if (forwardSolver->face_is_stable(f)){
-            outputFile << " -- f" << f.getIndex() << " -> emp:" << accum_face_areas[f] << " ---- MS: " << boundary_builder->face_region_area[f]/(4.*PI) << "\n";
-          }
-        }
-        outputFile << " --- mesh size: " << mesh->nVertices() << " --- hull size: " << forwardSolver->hullMesh->nVertices() << "\n";
-        outputFile << " --- time: " << total_time << "\n";
-        outputFile.close();
-      } else {
-        std::cout << "Failed to create the file." << std::endl;
       }
       // return;
     }

@@ -158,7 +158,7 @@ void PhysicsEnv::add_ground(double ground_box_y, Vector3 ground_box_shape){
     btRigidBody* body = new btRigidBody(rbInfo);
 
     //add the body to the dynamics world
-    // body->setFriction(0.);
+    body->setFriction(0.1);
     // body->setRollingFriction(0.);
     // body->setSpinningFriction(0.);
     dynamicsWorld->addRigidBody(body);
