@@ -227,32 +227,18 @@ void PhysicsEnv::delete_object(){
 
 // get the lowest elements (touching the ground) and hope they are a face :
 Face PhysicsEnv::get_touching_face(VertexData<Vector3> positions){
-    Vector3 g_vec({0,-1,0}),
-            roof({0.,0.,0.}); // just a point thats higher than all others; TODO adjust with the ground
-    Vertex lowest_v, v1, v2;
-    double max_dot = 0.;
-    for (Vertex v: mesh->vertices()){
-        Vector3 p = positions[v];
-        double curr_dot = dot(p - roof, g_vec);
-
-        // std::cout << "  --  p pos: "<< p << "\n";
-        if (curr_dot >= max_dot){
-            max_dot = curr_dot;
-            lowest_v = v;
-        }
-    }
+    Vector3 g_vec({0,-1,0});
     // printf("searching\n");
     double least_diff = 1000.;
     Face lowest_face;
-    Vector3 new_face_normal;
-    for (Face adj_f: lowest_v.adjacentFaces()){
-        Vertex v1 = adj_f.halfedge().vertex(),
-            v2 = adj_f.halfedge().next().vertex(),
-            v3 = adj_f.halfedge().next().next().vertex();
-        new_face_normal = cross(positions[v2] - positions[v1], positions[v3] - positions[v1]).normalize();
-        if ((new_face_normal - g_vec).norm() < least_diff){
-            least_diff = (new_face_normal - g_vec).norm();
-            lowest_face = adj_f;
+    for (Face f: mesh->faces()){ // outward normals
+        Vertex v1 = f.halfedge().vertex(),
+               v2 = f.halfedge().next().vertex(),
+               v3 = f.halfedge().next().next().vertex();
+        Vector3 face_normal = cross(positions[v2] - positions[v1], positions[v3] - positions[v1]).normalize();
+        if ((face_normal - g_vec).norm() < least_diff){
+            least_diff = (face_normal - g_vec).norm();
+            lowest_face = f;
         }
     }
     // std::cout << "lowest face normal: "<< new_face_normal << "\n";

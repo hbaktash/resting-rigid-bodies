@@ -20,6 +20,44 @@
 #include "boundary_tools.h"
 
 
+// temp visuals
+void tmp_arc_vis(Vector3 p1, Vector3 p2, Vector3 center, double radius, 
+                        size_t seg_count, size_t edge_ind, 
+                        double radi_scale, glm::vec3 color){
+  // p1, p2 just represent normal vectors
+  if (norm(p1) > 1.01)
+    polyscope::warning("p1 norm larger than 1!");
+  if (norm(p2) > 1.01)
+    polyscope::warning("p2 norm larger than 1!");
+
+  std::vector<std::array<size_t, 2>> edgeInds;
+  std::vector<Vector3> positions;
+  double sqrt_radi = sqrt(radius);
+  // walk on p1-p2 segment
+  Vector3 curr_point = p1,
+          forward_vec = (p2-p1)/(double)seg_count;
+  Vector3 next_point = curr_point + forward_vec;
+  Vector3 curr_point_on_sphere = normalize(curr_point) * sqrt_radi + center ,
+          next_point_on_sphere = normalize(next_point) * sqrt_radi + center;
+  positions.push_back(curr_point_on_sphere);
+  for (size_t i = 0; i < seg_count; i++){
+    // add to positions list
+    curr_point_on_sphere = normalize(curr_point) * sqrt_radi + center ,
+    next_point_on_sphere = normalize(next_point) * sqrt_radi + center;
+    positions.push_back(next_point_on_sphere);
+    // add segment indices
+    edgeInds.push_back({i, i+1});
+
+    // update points
+    curr_point = next_point;
+    next_point += forward_vec;
+  }
+  auto psArcCurveNet = polyscope::registerCurveNetwork("Arc curve " + std::to_string(edge_ind), positions, edgeInds);
+  psArcCurveNet->setRadius(0.1 * radi_scale, false);
+  psArcCurveNet->setColor(color);
+  psArcCurveNet->setEnabled(true);
+}
+
 size_t BoundaryNormal::counter = 0;
 
 // constructor
@@ -77,8 +115,16 @@ void BoundaryBuilder::build_boundary_normals(){
     // printf("  back-flowing terminal edges \n");
     int i = 0;
     for (Edge e: terminal_edges){
+        
+        // // DEBUG
         // printf("\n - starting at terminal edge: %d/%d \n", i++, terminal_edges.size());
+        // std::cout << "  -e" << e.getIndex() << " : " << e.firstVertex().getIndex() << " , " << e.secondVertex().getIndex() << " adj faces: "<< e.halfedge().face().getIndex() << " " << e.halfedge().twin().face().getIndex() << std::endl;
+        // std::vector<std::array<size_t, 2>> vertex_pairs;
+        // vertex_pairs.push_back({e.firstVertex().getIndex(), e.secondVertex().getIndex()});
+        // polyscope::registerCurveNetwork("current edge", forward_solver->hullGeometry->inputVertexPositions, vertex_pairs);
+        
         // assert(edge_boundary_normals[e].size() == 1); // otherwise we proly have a Gomboc?
+        
         Vector3 stable_edge_normal = forward_solver->edge_stable_normal[e];
         BoundaryNormal *bnd_normal = new BoundaryNormal(stable_edge_normal);
         Face f1 = e.halfedge().face(),
@@ -86,7 +132,11 @@ void BoundaryBuilder::build_boundary_normals(){
         bnd_normal->f1 = forward_solver->face_last_face[f1];
         bnd_normal->f2 = forward_solver->face_last_face[f2];
         bnd_normal->host_e = e;
-
+        
+        // // DEBUG
+        // tmp_arc_vis(forward_solver->hullGeometry->faceNormal(f1), 
+        //                           forward_solver->hullGeometry->faceNormal(f2), 
+        //                           Vector3({0,2,0}), 1., 12, 1, 0.1, glm::vec3(1., 0., 1.));
         // for visuals
         edge_boundary_normals[e].push_back(bnd_normal);
         
@@ -98,6 +148,9 @@ void BoundaryBuilder::build_boundary_normals(){
             // Vector3 imm_f1_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().face()), // immediate face neighbors
             //         imm_f2_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().twin().face());
             
+            // std::cout << " ff1: " << bnd_normal->f1.getIndex() << " ff2: " << bnd_normal->f2.getIndex() << std::endl;
+            // std::cout << " with normals: " << ff1_normal.transpose() << "  --  " << ff2_normal.transpose() << std::endl;
+        
             double f1_area_sign = dot(f1_normal, cross(v_normal, tmp_normal)) >= 0 ? 1. : -1.; // f1 on rhs of bndN->vN
             if (forward_solver->vertex_is_stabilizable[v])
                 flow_back_boundary_on_edge(bnd_normal, Edge(), v, 
@@ -125,7 +178,8 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
                                                  double f1_area_sign){
     // bnd_normal has to be in boundary normals of dest_e; won't assert tho for better performance
     Vertex v = common_vertex; // given as argument for better performance
-    // std::cout<<"."<<std::endl;
+    
+    
     Vector3 tmp_normal({0.,0.,0.}), next_normal({0.,0.,0.});
     if (forward_solver->vertex_is_stabilizable[v]){ // we are at a source
         BoundaryNormal *curr_vertex_boundary_normal = vertex_boundary_normal[v];
@@ -144,6 +198,12 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
         tmp_normal = bnd_normal->normal;
         next_normal = curr_vertex_boundary_normal->normal;
         // printf("  -> V done! \n ");
+
+        // // DEBUG
+        // std::cout << "at stable V: " << v.getIndex() << std::endl;
+        // polyscope::registerPointCloud("Stable V", std::vector<Vector3>{next_normal +Vector3({0,2,0})})->setPointRadius(0.02);
+        // tmp_arc_vis(tmp_normal, next_normal, Vector3({0,2,0}), 1., 12, 0, 0.1, glm::vec3(1., 0., 1.));
+        // polyscope::show();  
     }
     else {
         // vertex is not an equilibria; i.e. source is outside the vertex
@@ -185,6 +245,20 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
             tmp_normal  = bnd_normal->normal,
             next_normal = new_boundary_normal->normal;
             
+            // std::cout << "intersected these to get: \n";
+            // tmp_arc_vis(vertex_stable_normal, bnd_normal->normal, Vector3({0,2,0}), 1., 12, 0, 0.1, glm::vec3(.1, 1., 0.1));
+            // tmp_arc_vis(tmp_f1_normal, tmp_f2_normal, Vector3({0,2,0}), 1., 12, 1, 0.1, glm::vec3(.1, .1, 1.));
+            // polyscope::registerPointCloud("4 intersections", std::vector<Vector3>{vertex_stable_normal +Vector3({0,2,0}),
+            //                                                                       bnd_normal->normal   +Vector3({0,2,0}),
+            //                                                                       tmp_f1_normal        +Vector3({0,2,0}), 
+            //                                                                       tmp_f2_normal        +Vector3({0,2,0})})->setPointRadius(0.01);
+            // polyscope::show();
+            // std::cout << "going through current vertex: " << v.getIndex() << std::endl;
+            // polyscope::registerPointCloud("current V", std::vector<Vector3>{vertex_stable_normal +Vector3({0,2,0})})->setPointRadius(0.01);
+            // printf("at next bnd normal : \n");//DEBUG
+            // tmp_arc_vis(tmp_normal, next_normal, Vector3({0,2,0}), 1., 12, 0, 0.1, glm::vec3(1., 0., 1.));
+            // polyscope::show();
+
             // go with the back-flow
             Vertex next_v = src_e.otherVertex(v);
             if (forward_solver->vertex_is_stabilizable[next_v]){
@@ -197,6 +271,7 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
                         forward_solver->edge_next_vertex[next_src_e] == next_v){ // next_src_e is a source for this next vertex
                         // std::cout << " e " << next_src_e.getIndex() << std::endl;
                         // non_singularity and divisive-ness will be checked inside the function
+                                                
                         bool res = flow_back_boundary_on_edge(new_boundary_normal, next_src_e, next_v, f1_area_sign);
                         if (res) // got to maximum and returning
                             break;

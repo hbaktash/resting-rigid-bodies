@@ -50,8 +50,8 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         // bnd_normal->normal_ad = point_to_segment_normal_ad(e);
         Eigen::Vector3<Scalar> edge_bnd_normal = point_to_segment_normal<Scalar>(G, hull_positions.row(e.firstVertex().getIndex()), hull_positions.row(e.secondVertex().getIndex()));
         
-        // //
-        // std::vector<std::pair<size_t, size_t>> vertex_pairs;
+        //
+        // std::vector<std::array<size_t, 2>> vertex_pairs;
         // vertex_pairs.push_back({e.firstVertex().getIndex(), e.secondVertex().getIndex()});
         // polyscope::registerCurveNetwork("current edge", hull_positions, vertex_pairs);
         
@@ -60,7 +60,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
              f2 = current_e.halfedge().twin().face();
         
         // //
-        // draw_arc_on_sphere_static(tmp_solver.hullGeometry->faceNormal(f1), 
+        // draw_arc_on_sphere_static_temp(tmp_solver.hullGeometry->faceNormal(f1), 
         //                           tmp_solver.hullGeometry->faceNormal(f2), 
         //                           Vector3({0,2,0}), 1., 12, 1, 0.1, glm::vec3(1., 0., 1.), 0.5);
         
@@ -78,6 +78,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             Eigen::Vector3<Scalar> tmp_normal  = edge_bnd_normal;   // changes in the while loop
             Vertex current_v = v;                            // changes in the while loop
             Eigen::Vector3<Scalar> v_normal    = (hull_positions.row(current_v.getIndex()) - G.transpose()).normalized(); // changes in the while loop
+            
             // polyscope::registerPointCloud("current V", std::vector<Vector3>{vec_to_GC_vec3(tmp_normal) +Vector3({0,2,0})});
             // polyscope::show();
 
@@ -158,7 +159,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
     size_t tmp_side_cnt = 0;
     double goal_prob = 1. / (double)side_count;
     for (auto pair: probs){ 
-        // std::cout << "  -f" << pair.first.getIndex() << " : " << pair.second/(4. * PI) << std::endl; 
+        std::cout << "  -f" << pair.first.getIndex() << " : " << pair.second/(4. * PI) << std::endl; 
         if (tmp_side_cnt < side_count){ // goal 1/n
             Scalar diff = face_region_area[pair.first] - goal_prob * 4. * PI;
             energy += diff * diff;
@@ -192,12 +193,18 @@ Eigen::Vector3<Scalar> BoundaryBuilder::point_to_segment_normal(Eigen::Vector3<S
 template <typename Scalar>
 Eigen::Vector3<Scalar> BoundaryBuilder::intersect_arcs(Eigen::Vector3<Scalar> v_normal, Eigen::Vector3<Scalar> R2, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B){
     Eigen::Vector3<Scalar> p = (((v_normal.cross(R2)).cross(A.cross(B)))).normalized(); // var_G.transpose()
-    if (p.dot(A) >= A.dot(B) && p.dot(B) >= A.dot(B))
+    if (p.cross(B).dot(A.cross(B)) >= 0. && p.cross(A).dot(B.cross(A)) >= 0.)
         return p;
-    else if (-p.dot(A) >= A.dot(B) && -p.dot(B) >= A.dot(B))
+    else if ((-p).cross(B).dot(A.cross(B)) >= 0. && (-p).cross(A).dot(B.cross(A)) >= 0.)
         return -p;
-    else 
+    else
         return Eigen::Vector3<Scalar>::Zero();
+    // if (p.dot(A) >= A.dot(B) && p.dot(B) >= A.dot(B))
+    //     return p;
+    // else if (-p.dot(A) >= A.dot(B) && -p.dot(B) >= A.dot(B))
+    //     return -p;
+    // else 
+    //     return Eigen::Vector3<Scalar>::Zero();
 }
 
 template <typename Scalar>

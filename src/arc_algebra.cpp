@@ -60,18 +60,40 @@ double patch_area(Vector3 A, Vector3 B, Vector3 C, Vector3 D){
 Vector3 intersect_arc_ray_with_arc(Vector3 R1, Vector3 R2, Vector3 A, Vector3 B, bool &sign_change){
     // printf(" norms: %f, %f, %f, %f \n", R1.norm(), R2.norm(), A.norm(), B.norm());
     
-    assert(abs(R1.norm() - 1.) <= EPS && abs(R2.norm() - 1.) <= EPS && abs(A.norm() - 1.) <= EPS && abs(B.norm() - 1.) <= EPS);
+    // assert(abs(R1.norm() - 1.) <= EPS && abs(R2.norm() - 1.) <= EPS && abs(A.norm() - 1.) <= EPS && abs(B.norm() - 1.) <= EPS);
     Vector3 ray_plane_normal = cross(R1, R2),
             AB_plane_normal = cross(A, B);
     Vector3 intersection_dir = cross(ray_plane_normal, AB_plane_normal);
-    Vector3 p1 = intersection_dir.normalize();
-    if (is_on_arc_segment(p1, A, B)){
+    Vector3 p = intersection_dir.normalize();
+    // if (is_on_arc_segment(p1, A, B)){
+    //     sign_change = false;
+    //     return p1;
+    // }
+    // else if (is_on_arc_segment(-p1, A, B)){
+    //     sign_change = true;
+    //     return -p1;
+    // }
+    // bool change1 = dot(p,A) > dot(A,B) && dot(p,B) > dot(A,B),
+    //      change2 = dot(-p, A) > dot(A, B) && dot(-p, B) > dot(A,B);
+    // std::cout <<" sign changes: " << change1 << ", " << change2 << std::endl;
+    // if (dot(p,A) >= dot(A,B) && dot(p,B) >= dot(A,B)){
+    //     sign_change = false;
+    //     return p; 
+    // }
+    // else if (dot(-p, A) >= dot(A, B) && dot(-p, B) >= dot(A,B)){
+    //     sign_change = true;
+    //     return -p;
+    // }
+    // bool change1 = dot(cross(p ,B), cross(A, B)) >= 0. && dot(cross(p ,A), cross(B, A)) >= 0.,
+    //      change2 = dot(cross(-p,B), cross(A, B)) >= 0. && dot(cross(-p,A), cross(B, A)) >= 0.;
+    // std::cout <<" sign changes: " << change1 << ", " << change2 << std::endl;
+    if (dot(cross(p,B), cross(A, B)) >= 0. && dot(cross(p,A), cross(B, A)) >= 0.){
         sign_change = false;
-        return p1;
-    } 
-    else if (is_on_arc_segment(-p1, A, B)){
+        return p; 
+    }
+    else if (dot(cross(-p,B), cross(A, B)) >= 0. && dot(cross(-p,A), cross(B, A)) >= 0.){
         sign_change = true;
-        return -p1;
+        return -p;
     }
     else 
         return Vector3::zero();

@@ -152,12 +152,19 @@ void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = 
   
   std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
   std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
-  std::tie(nm_mesh_ptr, geometry_ptr) = readSurfaceMesh(mesh_full_path);
+  std::tie(nm_mesh_ptr, nm_geometry_ptr) = readSurfaceMesh(mesh_full_path);
   SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
+  VertexPositionGeometry *nm_geometry = nm_geometry_ptr.release();
   nm_mesh->greedilyOrientFaces();
   mesh_ptr = nm_mesh->toManifoldMesh();
   mesh = mesh_ptr.release();
-  geometry = geometry_ptr.release();
+  geometry = new VertexPositionGeometry(*mesh);
+  // transfer from nm geometry
+  for (Vertex v : mesh->vertices()) {
+    geometry->inputVertexPositions[v.getIndex()] = nm_geometry->inputVertexPositions[v.getIndex()];
+  }
+
+  // preproccess and shift for external use
   preprocess_mesh(mesh, geometry, true);
   G = find_center_of_mass(*mesh, *geometry).first;
   // std::cout << "center of mass before shift: " << G << "\n";
@@ -175,12 +182,11 @@ void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = 
 
 
 void update_solver(){
-  //assuming convex input here
   forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
   forwardSolver->initialize_pre_computes();
+  vis_utils.forwardSolver = forwardSolver;
   boundary_builder = new BoundaryBuilder(forwardSolver);
   boundary_builder->build_boundary_normals();
-  vis_utils.forwardSolver = forwardSolver;
 }
 
 void color_faces(Forward3DSolver *fwd_solver){
@@ -777,7 +783,7 @@ FaceData<double> run_Bullet_experiment(int &invalids){
   int verbose_period = 100;
   auto t0 = clock_type::now();
   auto first = clock_type::now();
-  size_t valid_count = 0, samples = 0;
+  size_t valid_count = 0, samples = 0, edge_invalids = 0;
   for (Vertex sample_v: icos_sphere_mesh->vertices()){
     samples++;
     Vector3 random_orientation = icos_sphere_geometry->inputVertexPositions[sample_v];
@@ -794,10 +800,12 @@ FaceData<double> run_Bullet_experiment(int &invalids){
     if (touching_face.getIndex() != INVALID_IND){
       // update stats
       if (forwardSolver->face_next_face[touching_face] != touching_face){
-        std::cout << "invalid orientation: " << random_orientation << "\n";
-        std::cout << "with face: " << touching_face.getIndex() << "\n";
+        if (verbose){
+          std::cout << "invalid orientation: " << random_orientation << "\n";
+          std::cout << "with face: " << touching_face.getIndex() << "\n";
+          std::cout << "mapping to a stable face" << forwardSolver->face_last_face[touching_face].getIndex() << "\n";
+        }
         touching_face = forwardSolver->face_last_face[touching_face];
-        std::cout << "mapping to a stable face" << touching_face.getIndex() << "\n";
       }
       else{
         valid_count++;
@@ -805,6 +813,9 @@ FaceData<double> run_Bullet_experiment(int &invalids){
       face_counts[touching_face]++;
       face_dual_sum_areas[touching_face] += dual_area;            
       face_samples[touching_face].push_back(random_orientation);
+    }
+    else{
+      edge_invalids++;
     }
     // periodic verbose
     if (samples % verbose_period == 0){
@@ -817,6 +828,7 @@ FaceData<double> run_Bullet_experiment(int &invalids){
 
   }
   printf(" ### total invalid faces: %d/%d\n", samples - valid_count, samples);
+  std::cout << "     total edge invalids: " << edge_invalids << "/" << samples << "\n";
   invalids = samples - valid_count;
   return face_dual_sum_areas;
 }
@@ -1172,9 +1184,16 @@ int main(int argc, char* argv[])
     // re-write for IPC use
     // writeSurfaceMesh(*mesh, *geometry, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m0_p0_normalized.obj");
           
-    update_solver();
+    forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
+    forwardSolver->initialize_pre_computes();
+    vis_utils.forwardSolver = forwardSolver;
     init_visuals();
+    
+    boundary_builder = new BoundaryBuilder(forwardSolver);
+    boundary_builder->build_boundary_normals();
+    
     boundary_builder->print_area_of_boundary_loops();
+
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
     // polyscope::view::upDir = polyscope::view::UpDir::YUp;
     // polyscope::options::groundPlaneHeightFactor = 1.; // adjust the plane height
