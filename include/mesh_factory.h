@@ -33,6 +33,9 @@ Vector3 cylindrical_to_xyz(double h, double r, double theta);
 std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
 generate_polyhedra(std::string poly_str);
 
+std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
+generate_11_sided_polyhedron(std::string type);
+
 void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
                      bool triangulate = false, bool do_remesh = false, double remesh_edge_scale = 3.);
 

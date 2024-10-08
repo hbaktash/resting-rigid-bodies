@@ -1168,12 +1168,13 @@ int main(int argc, char* argv[])
     polyscope::init();
     vis_utils = VisualUtils();
     // generate_polyhedron_example("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m2_p1.obj");
-    generate_polyhedron_example("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m0_p0.obj");
+    generate_polyhedron_example(SINGLE_MESH_PATH);
     // re-write for IPC use
-    writeSurfaceMesh(*mesh, *geometry, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m0_p0_normalized.obj");
+    // writeSurfaceMesh(*mesh, *geometry, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m0_p0_normalized.obj");
           
     update_solver();
     init_visuals();
+    boundary_builder->print_area_of_boundary_loops();
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
     // polyscope::view::upDir = polyscope::view::UpDir::YUp;
     // polyscope::options::groundPlaneHeightFactor = 1.; // adjust the plane height

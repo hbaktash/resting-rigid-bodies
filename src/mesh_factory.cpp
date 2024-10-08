@@ -301,8 +301,7 @@ generate_polyhedra(std::string poly_str){
           std::string filename = "../meshes/" + poly_str + ".stl";
           std::tie(mesh, geometry) = readManifoldSurfaceMesh(filename);
       }
-        return std::make_tuple(std::move(mesh), std::move(geometry));
-      
+      return std::make_tuple(std::move(mesh), std::move(geometry));
     }
     // std::unique_ptr<ManifoldSurfaceMesh> poly_triangulated;
     
@@ -379,3 +378,65 @@ std::vector<Vector3> generate_normals_icosahedral(int resolution){
     }
     return normals;
 }
+
+
+// ###### for 11-sided dice #######
+std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
+generate_11_sided_polyhedron(std::string type){
+  std::vector<std::vector<size_t>> faces;
+  std::vector<Vector3> positions;
+  std::unique_ptr<ManifoldSurfaceMesh> mesh;
+  std::unique_ptr<VertexPositionGeometry> geometry;
+
+  // raised triangles
+  if (std::strcmp(type.c_str(), "triangular") == 0){
+    int n = 10;
+    positions.push_back(Vector3({0., 0., 1.})); // v0
+    for (size_t i = 0; i < n; i++){ // vi's
+      double theta = 2.*PI * (double)i/(double)n ;
+      positions.push_back(Vector3({cos(theta), sin(theta), -0.5}));
+      faces.push_back({0, i+1, (i+2 == n+1) ? 1 : i+2});
+    }
+    
+    // bottom 10-gon face
+    for (size_t i = 2; i < n; i++){ // eminating from v1
+      faces.push_back({1, i+1, i}); // orient outwards
+    }
+  }
+  else if (std::strcmp(type.c_str(), "circus tent") == 0){
+    int n = 5;
+    double z0 = 1., 
+           z1 = 0., 
+           z2 = -1.;
+    positions.push_back(Vector3({0., 0., z0})); // v0
+    // layer 1
+    for (size_t i = 0; i < n; i++){ // vi's at z1
+      double theta = 2.*PI * (double)i/(double)n ;
+      positions.push_back(Vector3({cos(theta), sin(theta), z1}));
+      faces.push_back({0, i+1, (i+2 == n+1) ? 1 : i+2}); // Inward normal
+    }
+    // layer 2
+    for (size_t i = 0; i < n ; i++){ // vi's at z2
+      double theta = 2.*PI * (double)i/(double)n ;
+      positions.push_back(Vector3({cos(theta), sin(theta), z2}));
+      faces.push_back({i+1 , (i+2 == n+1) ? 1 : i+2 , (i+2 + 5 == n+1 + 5) ? 1 + 5 : i+2 + 5});
+      faces.push_back({i+1 , (i+2 + 5 == n+1 + 5) ? 1 + 5 : i+2 + 5, i+1 + 5}); // 
+    }
+    // bottom pentagon face
+    // faces.push_back({6,7,8,9,10});
+    faces.push_back({6,7,8});
+    faces.push_back({6,8,9});
+    faces.push_back({6,9,10});
+  }
+
+  // offload
+  mesh.reset(new ManifoldSurfaceMesh(faces));
+  geometry = std::unique_ptr<VertexPositionGeometry>(new VertexPositionGeometry(*mesh));
+  for (Vertex v : mesh->vertices()) {
+      // Use the low-level indexers here since we're constructing
+      (*geometry).inputVertexPositions[v] = positions[v.getIndex()];
+  }
+  return std::make_tuple(std::move(mesh), std::move(geometry));
+}
+
+
