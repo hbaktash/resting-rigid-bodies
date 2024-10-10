@@ -114,31 +114,24 @@ void InverseSolver::update_fair_distribution(double normal_threshold){
 }
 
 
-void InverseSolver::find_d_pf_d_Gs(bool use_autodiff, bool check_FD){
+void InverseSolver::find_d_pf_d_Gs(bool check_FD){
     Vector3 zero_vec = Vector3::zero();
     Vector3 G = forwardSolver->get_G();
     d_pf_d_G = FaceData<Vector3>(*forwardSolver->hullMesh, zero_vec);
     for (Face f: forwardSolver->hullMesh->faces()){
-        if (!use_autodiff){
-            Vector3 f_g_grad = zero_vec;
-            // assuming "regularity"
-            for (Halfedge he: f.adjacentHalfedges()){
-                Vertex v0 = he.tailVertex(),
-                    v1 = he.tipVertex(),
-                    v2 = he.next().tipVertex();
-                Vector3 p0 = forwardSolver->hullGeometry->inputVertexPositions[v0], 
-                        p1 = forwardSolver->hullGeometry->inputVertexPositions[v1], 
-                        p2 = forwardSolver->hullGeometry->inputVertexPositions[v2];
-                Vector3 tmp_angle_G_grad = dihedral_angle_grad_G(G, p1, p0, p2);
-                f_g_grad += tmp_angle_G_grad;
-            }
-            d_pf_d_G[f] = f_g_grad;
+        Vector3 f_g_grad = zero_vec;
+        // assuming "regularity"
+        for (Halfedge he: f.adjacentHalfedges()){
+            Vertex v0 = he.tailVertex(),
+                v1 = he.tipVertex(),
+                v2 = he.next().tipVertex();
+            Vector3 p0 = forwardSolver->hullGeometry->inputVertexPositions[v0], 
+                    p1 = forwardSolver->hullGeometry->inputVertexPositions[v1], 
+                    p2 = forwardSolver->hullGeometry->inputVertexPositions[v2];
+            Vector3 tmp_angle_G_grad = dihedral_angle_grad_G(G, p1, p0, p2);
+            f_g_grad += tmp_angle_G_grad;
         }
-        else {
-            if (forwardSolver->face_last_face[f] == f){ // unstable faces have zero in exact grad
-                d_pf_d_G[f] = vec3d_to_vec3(boundaryBuilder->df_dG_grads[f]);
-            }
-        }
+        d_pf_d_G[f] = f_g_grad;
     }
     if (check_FD){
         printf("FD check: \n");
@@ -180,34 +173,23 @@ Vector3 InverseSolver::find_total_g_grad() {
 }
 
 // vertex grads
-void InverseSolver::find_d_pf_dvs(bool use_autodiff, bool check_FD) {
+void InverseSolver::find_d_pf_dvs(bool check_FD) {
     forwardSolver->initialize_pre_computes();
     Vector3 zvec = Vector3::zero();
     Vector3 G = forwardSolver->get_G();
     d_pf_dv = FaceData<VertexData<Vector3>>(*forwardSolver->hullMesh);
     for (Face f: forwardSolver->hullMesh->faces()){
         d_pf_dv[f] = VertexData<Vector3>(*forwardSolver->hullMesh, zvec);
-        if (use_autodiff){
-            if(forwardSolver->face_last_face[f] == f)
-                for (Vertex v: forwardSolver->hullMesh->vertices()){
-                    // d_pf_dv[f][v] = vec3d_to_vec3(boundaryBuilder->df_dv_grads_ad[f][v]);
-                    d_pf_dv[f][v] = vec3d_to_vec3(boundaryBuilder->df_dv_grads_ad[f].row(v.getIndex()));
-                    // printf(" - at f,v  %d,%d\n", f.getIndex(), v.getIndex());
-                    // std::cout << "   - grad: " << d_pf_dv[f][v] << "\n";
-                }
-        }
-        else {
-            for (Halfedge he: f.adjacentHalfedges()){
-                Vertex v0 = he.tailVertex(),
-                    v1 = he.tipVertex(),
-                    v2 = he.next().tipVertex();
-                Vector3 p0 = forwardSolver->hullGeometry->inputVertexPositions[v0], 
-                        p1 = forwardSolver->hullGeometry->inputVertexPositions[v1], 
-                        p2 = forwardSolver->hullGeometry->inputVertexPositions[v2];
-                d_pf_dv[f][v0] += dihedral_angle_grad_B(G, p1, p0, p2);
-                d_pf_dv[f][v1] += dihedral_angle_grad_A(G, p1, p0, p2);
-                d_pf_dv[f][v2] += dihedral_angle_grad_C(G, p1, p0, p2);
-            }
+        for (Halfedge he: f.adjacentHalfedges()){
+            Vertex v0 = he.tailVertex(),
+                v1 = he.tipVertex(),
+                v2 = he.next().tipVertex();
+            Vector3 p0 = forwardSolver->hullGeometry->inputVertexPositions[v0], 
+                    p1 = forwardSolver->hullGeometry->inputVertexPositions[v1], 
+                    p2 = forwardSolver->hullGeometry->inputVertexPositions[v2];
+            d_pf_dv[f][v0] += dihedral_angle_grad_B(G, p1, p0, p2);
+            d_pf_dv[f][v1] += dihedral_angle_grad_A(G, p1, p0, p2);
+            d_pf_dv[f][v2] += dihedral_angle_grad_C(G, p1, p0, p2);
         }
     }
     if (check_FD){
@@ -262,6 +244,9 @@ VertexData<Vector3> InverseSolver::find_total_vertex_grads() {
 
 // populating VertexData<DenseMatrix<double>> dv_d_G;
 void InverseSolver::find_dG_dvs(){
+    
+    assert(forwardSolver->volume > 0);
+
     // TODO; generalize for polygonal faces
     forwardSolver->initialize_pre_computes();
     Vector3 G = forwardSolver->get_G();
@@ -294,14 +279,14 @@ void InverseSolver::find_dG_dvs(){
 }
 
 // Vertex grads; Uni mass
-void InverseSolver::find_uni_mass_d_pf_dv(bool use_autodiff, bool frozen_G, bool check_FD){
+void InverseSolver::find_uni_mass_d_pf_dv(bool frozen_G, bool check_FD){
     uni_mass_d_pf_dv = FaceData<VertexData<Vector3>>(*forwardSolver->hullMesh);
     //  assuming that we only move convex hull vertices
     if (!frozen_G){
-        find_d_pf_d_Gs(use_autodiff);
+        find_d_pf_d_Gs();
         find_dG_dvs();
     }
-    find_d_pf_dvs(use_autodiff);
+    find_d_pf_dvs();
     Vector3 zvec = Vector3::zero();
     Vector3 G = forwardSolver->get_G();
     // printf("here\n");
@@ -360,12 +345,9 @@ void InverseSolver::find_uni_mass_d_pf_dv(bool use_autodiff, bool frozen_G, bool
 }
 
 // 
-VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(size_t goal_stable_count,
-                                                                    double stable_normal_update_thres){
+VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(double stable_normal_update_thres){
     Vector3 zvec = Vector3::zero();
     VertexData<Vector3> total_vertex_grads(*forwardSolver->hullMesh, zvec);
-
-    set_fair_distribution_for_sink_faces(goal_stable_count); // top k faces are set
 
     for (Face f: forwardSolver->hullMesh->faces()){ 
         Face sink_face = boundaryBuilder->forward_solver->face_last_face[f];

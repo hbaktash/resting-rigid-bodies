@@ -769,29 +769,28 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   Forward3DSolver tmp_solver(hull_positions, G_vec);
   tmp_solver.initialize_pre_computes();
   Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
-  double min_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec, tmp_solver, dice_side_count);
+  double min_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec, tmp_solver, dice_side_count, false);
   double s = step_size; //
 
   bool found_smth_optimal = false;
   int j;
   double tmp_dice_energy;
   for (j = 0; j < max_iter; j++) {
-      // update stuff
-    //   printf(" ^^ at line search iter: %d  s = %f, DE: %f\n", j, s, tmp_fair_dice_energy);
-    //   auto tmpmesh = polyscope::registerSurfaceMesh("temp hull LINE SEARCH", initial_hull_poses + s * grad,
-    //                                                 fwd_solver.hullMesh->getFaceVertexList());
-    //   tmpmesh->setSurfaceColor({0.6,0,0.5});
-    //   polyscope::show();
         tmp_solver = Forward3DSolver(hull_positions - s * dfdv, G_vec);
-        if (!G_is_inside(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, tmp_solver.get_G())){
+        if (frozen_G && !G_is_inside(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, tmp_solver.get_G())){
             printf("  - G outside! \n");
             s *= decay;
             continue;
         }
+        if (!frozen_G){
+            tmp_solver.set_uniform_G();
+            G_vec = vec32vec(tmp_solver.get_G());
+        }
         tmp_solver.initialize_pre_computes();
+        // re-assign since convhull inside solver reshuffles points
         Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
         tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, 
-                                                               G_vec, tmp_solver, dice_side_count);
+                                                               G_vec, tmp_solver, dice_side_count, false);
     //   printf("  *** temp fair dice energy %d: %f\n", j, tmp_fair_dice_energy);
 
         if (tmp_dice_energy < min_dice_energy){
@@ -803,7 +802,7 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   }
   s = found_smth_optimal ? s : 0.;
 //   printf("line search for dice ended at iter %d, s: %.10f, \n \t\t\t\t\t fnew: %f \n", j, s, tmp_fair_dice_energy);
-  printf("\t\t - line ended at iter %d/%d with s: %f \n", j, max_iter, s);
+//   printf("\t\t - line ended at iter %d/%d with s: %f \n", j, max_iter, s);
   return s;
 }
 

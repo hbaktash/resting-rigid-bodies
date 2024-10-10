@@ -3,7 +3,8 @@
 
 template <typename Scalar>
 Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                    Forward3DSolver &tmp_solver, size_t side_count
+                                    Forward3DSolver &tmp_solver, std::string policy, FaceData<double> goal_probs, 
+                                    size_t side_count, bool verbose
                                     ){
     // precomputes
     tmp_solver.initialize_pre_computes();
@@ -142,42 +143,54 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             }
         }
     }
-    // sort for dice energy
-    Scalar total_area = 0.;
-    std::vector<std::pair<Face, Scalar>> probs;
-    for (Face f: tmp_solver.hullMesh->faces()){
-        if (face_region_area[f] > 0){
-            // face_region_area[f] /= (4.*PI);
-            probs.push_back({f, face_region_area[f]});
-            total_area += face_region_area[f];
-        }
-    }
-    // std::cout << "sum over probabilities: " << total_area/(4.*PI) << std::endl;
-    std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
-    // printf(" static sorted probs: \n");
-    Scalar energy = 0.;
-    size_t tmp_side_cnt = 0;
-    double goal_prob = 1. / (double)side_count;
-    for (auto pair: probs){ 
-        std::cout << "  -f" << pair.first.getIndex() << " : " << pair.second/(4. * PI) << std::endl; 
-        if (tmp_side_cnt < side_count){ // goal 1/n
-            Scalar diff = face_region_area[pair.first] - goal_prob * 4. * PI;
-            energy += diff * diff;
-        }
-        else { // goal zero
-            Scalar diff = face_region_area[pair.first];
-            energy += diff * diff;
-        }
-        tmp_side_cnt++;
-    }
-    if (tmp_side_cnt < side_count){
-        printf("  - not enough faces\n");
-        energy += (side_count - tmp_side_cnt) * goal_prob * goal_prob * 4. * PI * 4. * PI;
-    }
 
-    // return probs[0].second; // DEBUG: max prob
+
+
+    if (std::strcmp(policy.c_str(), "fair_dice") == 0){
+        // sort for dice energy
+        Scalar total_area = 0.;
+        std::vector<std::pair<Face, Scalar>> probs;
+        for (Face f: tmp_solver.hullMesh->faces()){
+            if (face_region_area[f] > 0){
+                // face_region_area[f] /= (4.*PI);
+                probs.push_back({f, face_region_area[f]});
+                total_area += face_region_area[f];
+            }
+        }
+        // std::cout << "sum over probabilities: " << total_area/(4.*PI) << std::endl;
+        std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
+        // printf(" static sorted probs: \n");
+        Scalar energy = 0.;
+        size_t tmp_side_cnt = 0;
+        double goal_prob = 1. / (double)side_count;
+        for (auto pair: probs){ 
+            if(verbose){
+                std::cout << "  -f" << pair.first.getIndex() << " : " << pair.second/(4. * PI) << std::endl; 
+            }
+            if (tmp_side_cnt < side_count){ // goal 1/n
+                Scalar diff = face_region_area[pair.first] - goal_prob * 4. * PI;
+                energy += diff * diff;
+            }
+            else { // goal zero
+                Scalar diff = face_region_area[pair.first];
+                energy += diff * diff;
+            }
+            tmp_side_cnt++;
+        }
+        if (tmp_side_cnt < side_count){
+            printf("  - not enough faces\n");
+            energy += (side_count - tmp_side_cnt) * goal_prob * goal_prob * 4. * PI * 4. * PI;
+        }
+
+        // return probs[0].second; // DEBUG: max prob
+        
+        return energy; 
+    }
+    else if (std::strcmp(policy.c_str(), "manual_assignment") == 0){
+        Scalar energy = 0.;
+        // TODO
+    }
     
-    return energy; 
 }
 
 template <typename Scalar>

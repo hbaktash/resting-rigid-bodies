@@ -38,7 +38,7 @@ class Forward3DSolver {
     Vector3 G;
   public:
 
-    double volume;
+    double volume = -1.;
     // input goemetry
     ManifoldSurfaceMesh* inputMesh;
     VertexPositionGeometry* inputGeometry;

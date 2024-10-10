@@ -95,13 +95,23 @@ generate_polyhedra(std::string poly_str){
       positions.push_back(Vector3({ 1,  1,  1})/2.);
       positions.push_back(Vector3({ 1, -1,  1})/2.);
       // v0 adjs
-      faces.push_back({0, 1, 2, 3});
-      faces.push_back({0, 4, 5, 1});
-      faces.push_back({0, 3, 7, 4});
+      faces.push_back({0, 1, 2});
+      faces.push_back({0, 2, 3});
+      
+      faces.push_back({0, 4, 5});
+      faces.push_back({0, 5, 1});
+      
+      faces.push_back({0, 3, 7});
+      faces.push_back({0, 7, 4});
       // v6 adjs
-      faces.push_back({6, 5, 4, 7});
-      faces.push_back({6, 2, 1, 5});
-      faces.push_back({6, 7, 3, 2});
+      faces.push_back({6, 5, 4});
+      faces.push_back({6, 4, 7});
+      
+      faces.push_back({6, 2, 1});
+      faces.push_back({6, 1, 5});
+      
+      faces.push_back({6, 7, 3});
+      faces.push_back({6, 3, 2});
     }
     else if (std::strcmp(poly_str.c_str(), "tilted cube") == 0){
       // bottom face
@@ -115,13 +125,23 @@ generate_polyhedra(std::string poly_str){
       positions.push_back(Vector3({ 1,  1,  1})/2.);
       positions.push_back(Vector3({ 1, -1,  1})/2.);
       // v0 adjs
-      faces.push_back({0, 1, 2, 3});
-      faces.push_back({0, 4, 5, 1});
-      faces.push_back({0, 3, 7, 4});
+      faces.push_back({0, 1, 2});
+      faces.push_back({0, 2, 3});
+      
+      faces.push_back({0, 4, 5});
+      faces.push_back({0, 5, 1});
+      
+      faces.push_back({0, 3, 7});
+      faces.push_back({0, 7, 4});
       // v6 adjs
-      faces.push_back({6, 5, 4, 7});
-      faces.push_back({6, 2, 1, 5});
-      faces.push_back({6, 7, 3, 2});
+      faces.push_back({6, 5, 4});
+      faces.push_back({6, 4, 7});
+      
+      faces.push_back({6, 2, 1});
+      faces.push_back({6, 1, 5});
+      
+      faces.push_back({6, 7, 3});
+      faces.push_back({6, 3, 2});
     }
     else if (std::strcmp(poly_str.c_str(), "tet2") == 0){
       n = 4;
@@ -403,7 +423,7 @@ generate_11_sided_polyhedron(std::string type){
       faces.push_back({1, i+1, i}); // orient outwards
     }
   }
-  else if (std::strcmp(type.c_str(), "circus tent") == 0){
+  else if (std::strcmp(type.c_str(), "circus") == 0){
     int n = 5;
     double z0 = 1., 
            z1 = 0., 
@@ -419,16 +439,27 @@ generate_11_sided_polyhedron(std::string type){
     for (size_t i = 0; i < n ; i++){ // vi's at z2
       double theta = 2.*PI * (double)i/(double)n ;
       positions.push_back(Vector3({cos(theta), sin(theta), z2}));
-      faces.push_back({i+1 , (i+2 == n+1) ? 1 : i+2 , (i+2 + 5 == n+1 + 5) ? 1 + 5 : i+2 + 5});
-      faces.push_back({i+1 , (i+2 + 5 == n+1 + 5) ? 1 + 5 : i+2 + 5, i+1 + 5}); // 
+      faces.push_back({(i+2 == n+1) ? 1 : i+2 , i+1 , (i+2 + 5 == n+1 + 5) ? 1 + 5 : i+2 + 5});
+      faces.push_back({(i+2 + 5 == n+1 + 5) ? 1 + 5 : i+2 + 5, i+1 , i+1 + 5}); // 
     }
     // bottom pentagon face
     // faces.push_back({6,7,8,9,10});
-    faces.push_back({6,7,8});
-    faces.push_back({6,8,9});
-    faces.push_back({6,9,10});
+    faces.push_back({7,6,8});
+    faces.push_back({8,6,9});
+    faces.push_back({9,6,10});
+  }
+  else {
+    printf("type %s not recognized\n", type.c_str());
+    return generate_polyhedra(type);
   }
 
+  printf("faces are: \n");
+  for (std::vector<size_t> f: faces){
+    for (size_t ind: f){
+      printf(" %d,", ind);
+    }
+    printf("\n");
+  }
   // offload
   mesh.reset(new ManifoldSurfaceMesh(faces));
   geometry = std::unique_ptr<VertexPositionGeometry>(new VertexPositionGeometry(*mesh));

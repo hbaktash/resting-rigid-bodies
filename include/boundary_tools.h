@@ -137,7 +137,7 @@ class BoundaryBuilder {
         // TODO template
         template <typename Scalar>
         static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                  Forward3DSolver &tmp_solver, size_t side_count);
+                                  Forward3DSolver &tmp_solver, size_t side_count, bool verbose);
         template <typename Scalar>
         static Eigen::Vector3<Scalar> point_to_segment_normal(Eigen::Vector3<Scalar> P, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B);
         template <typename Scalar>
