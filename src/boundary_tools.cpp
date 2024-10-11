@@ -58,6 +58,153 @@ void tmp_arc_vis(Vector3 p1, Vector3 p2, Vector3 center, double radius,
   psArcCurveNet->setEnabled(true);
 }
 
+
+
+FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
+  FaceData<double> goal_probs(*tmp_solver->hullMesh, 0.);
+
+  // 6/36
+  Face closest_face;
+  double closest_normal_diff = 1000.;
+  Vector3 nf7({0,0,-1}); // bottom face
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf7).norm();
+    if (tmp_solver->face_is_stable(f) && 
+        normal_diff < closest_normal_diff){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 6./36.;
+  
+  // 5/36 - 1st
+  closest_normal_diff = 1000.;
+  Vector3 nf61({0.629,0.457,0.629}); 
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf61).norm();
+    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 5./36.;
+
+  // 5/36 - 2nd
+  closest_normal_diff = 1000.;
+  Vector3 nf62({0.809,0.587,0.}); 
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf62).norm();
+    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 5./36.;
+
+  // 4/36 - 1st
+  closest_normal_diff = 1000.;
+  Vector3 nf51({-0.24,0.739,0.629}); 
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf51).norm();
+    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 4./36.;
+
+
+  // 4/36 - 2nd
+  closest_normal_diff = 1000.;
+  Vector3 nf52({-0.309, 0.951, 0.}); 
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf52).norm();
+    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 4./36.;
+
+
+  // 3/36 - 1st
+  closest_normal_diff = 1000.;
+  Vector3 nf41({-0.777, 0., 0.629}); 
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf41).norm();
+    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 3./36.;
+
+
+  // 3/36 - 2nd
+  closest_normal_diff = 1000.;
+  Vector3 nf42({-1., 0., 0.}); 
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf42).norm();
+    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 3./36.;
+
+  // 2/36 - 1st
+  closest_normal_diff = 1000.;
+  Vector3 nf31({-0.24, -0.739, 0.629}); 
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf31).norm();
+    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 2./36.;
+
+  // 2/36 - 2nd
+  closest_normal_diff = 1000.;
+  Vector3 nf32({-0.309, -0.951, 0.}); 
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf32).norm();
+    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 2./36.;
+
+  // 1/36 - 1st
+  closest_normal_diff = 1000.;
+  Vector3 nf21({0.629, -0.456, 0.629}); 
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf21).norm();
+    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 1./36.;
+  
+  // 1/36 - 2nd
+  closest_normal_diff = 1000.;
+  Vector3 nf22({0.809, -0.587, 0.}); 
+  for (Face f: tmp_solver->hullMesh->faces()){
+    double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf22).norm();
+    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+      closest_face = f;
+      closest_normal_diff = normal_diff;
+    }
+  }
+  goal_probs[closest_face] = 1./36.;
+  
+  return goal_probs;
+}
+
+
+
 size_t BoundaryNormal::counter = 0;
 
 // constructor
@@ -763,13 +910,15 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
 // hull update stuff
 // frozen G so far
 double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec,
-                               size_t dice_side_count, 
+                               std::string policy, FaceData<double> goal_probs, size_t dice_side_count, 
                                double step_size, double decay, bool frozen_G, size_t max_iter){
   
   Forward3DSolver tmp_solver(hull_positions, G_vec);
   tmp_solver.initialize_pre_computes();
   Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
-  double min_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec, tmp_solver, dice_side_count, false);
+
+  double min_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec, tmp_solver, 
+                                                                policy, goal_probs, dice_side_count, false);
   double s = step_size; //
 
   bool found_smth_optimal = false;
@@ -789,8 +938,8 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
         tmp_solver.initialize_pre_computes();
         // re-assign since convhull inside solver reshuffles points
         Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
-        tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, 
-                                                               G_vec, tmp_solver, dice_side_count, false);
+        tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec, tmp_solver, 
+                                                               policy, goal_probs, dice_side_count, false);
     //   printf("  *** temp fair dice energy %d: %f\n", j, tmp_fair_dice_energy);
 
         if (tmp_dice_energy < min_dice_energy){

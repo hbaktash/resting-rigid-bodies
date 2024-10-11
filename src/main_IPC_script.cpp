@@ -104,7 +104,8 @@ VertexPositionGeometry* geometry;
 
 bool verbose = false,
      bullet_sim = false,
-     ipc_sim = false;
+     ipc_sim = false,
+     just_ours = false;
 
 // raster image stuff
 FaceData<Vector3> face_colors;
@@ -876,12 +877,12 @@ void process_single_shape_for_experiment(std::string full_shape_path,
        bullet_in_progress = std::filesystem::exists(log_dir + "/" + file_name + "_bullet_inProgress.txt");
   if (ipc_in_progress && ipc_sim){ // ipc in Progress
     printf(" $$ IPC in progress..!\n");
-    if (!bullet_sim)
+    if (!bullet_sim && !just_ours)
       return;
   }
   if (bullet_in_progress && bullet_sim){ // bullet in Progress
     printf(" $$ Bullet in progress..!\n");
-    if (ipc_in_progress)
+    if (ipc_in_progress && !just_ours)
       return;
   }
 
@@ -889,12 +890,12 @@ void process_single_shape_for_experiment(std::string full_shape_path,
        bullet_done = std::filesystem::exists(log_dir + "/" + file_name + "_bullet" + ".txt");
   if (ipc_sim && ipc_done){ // already done
     printf(" $$ IPC already done..!\n");
-    if (!bullet_sim)
+    if (!bullet_sim && !just_ours)
       return;
   }
   if (bullet_sim && bullet_done){
     printf(" $$ Bullet already done..!\n");
-    if (ipc_done)
+    if (ipc_done && !just_ours)
       return;
   }
   
@@ -987,8 +988,24 @@ void process_single_shape_for_experiment(std::string full_shape_path,
       }
     }
 
-    
-    
+    if (just_ours && !std::filesystem::exists(log_dir + "/" + file_name + "_just_ours" + ".txt")){
+      printf("writing to file\n");
+      // write the Bullet results
+      std::ofstream outputFile(log_dir + "/" + file_name + "_just_ours" + ".txt");  // Open/create a file named "test.txt" for writing
+      if (outputFile.is_open()) {
+        for (Face f: forwardSolver->hullMesh->faces()){
+          if (forwardSolver->face_is_stable(f)){
+            outputFile << " -- f" << f.getIndex() << "\t-> my_prob : " << boundary_builder->face_region_area[f]/(4.*PI) <<"\n";
+          }
+        }
+        outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
+        outputFile.close();
+      }
+      else {
+        std::cout << "Failed to create the file." << std::endl;
+      }
+    }
+
   }
   catch(const std::exception& e) { // probably couldnt make the mesh manifold
     std::cerr << e.what() << '\n';
@@ -1097,11 +1114,12 @@ int main(int argc, char* argv[])
   //   printf("Single precision\n");
   // #endif
 
-  args::ArgumentParser parser("This is a test program.", "This goes after the options.");
-  args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
+  args::ArgumentParser parser(   "This is a test program.", "This goes after the options.");
+  args::HelpFlag help(parser,    "help", "Display this help menu", {'h', "help"});
   args::Flag verbose_arg(parser, "verbose", "print stuff per sample or not", {'v', 'verbose'});
-  args::Flag do_bullet(parser, "do_bullet_sim", "do bullet sim", {'l', 'bullet'});
-  args::Flag do_IPC(parser, "do_IPC_sim", "do IPC sim", {'p', 'ipc'});
+  args::Flag do_bullet(parser,   "do_bullet_sim", "do bullet sim", {'l', 'bullet'});
+  args::Flag do_IPC(parser,      "do_IPC_sim", "do IPC sim", {'p', 'ipc'});
+  args::Flag do_just_ours(parser, "do_just_ours", "do just ours", {'j', 'just'});
   args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {'s', 'samples'}, 10);
   args::ValueFlag<std::string> IPC_repo_dir(parser, "absolute_IPC_repo_dir", "abs path to IPC repo (built and ready to run)", {'i', "ipc_dir"}, IPC_REPO_DIR);
   args::ValueFlag<std::string> BB_base_dir(parser, "absolute_BB_path", "abs path to BB meshes folder", {'b', "bb_dir"}, BB_BASE_DIR);
@@ -1140,7 +1158,7 @@ int main(int argc, char* argv[])
   if (single_mesh_path)
     SINGLE_MESH_PATH = args::get(single_mesh_path);
 
-  if (do_bullet || do_IPC){ // Command line mode
+  if (do_bullet || do_IPC || do_just_ours){ // Command line mode
     if (do_bullet){
       bullet_sim = true;
       std::cout << "   ----  Bullet ---- \n";
@@ -1148,6 +1166,10 @@ int main(int argc, char* argv[])
     if (do_IPC){
       ipc_sim = true;
       std::cout << "   ----  IPC    ---- \n";
+    }
+    if (do_just_ours){
+      just_ours = true;
+      std::cout << "   ----  Just Ours    ---- \n";
     }
 
     if (BB_base_dir){

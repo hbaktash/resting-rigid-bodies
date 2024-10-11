@@ -55,4 +55,7 @@ get_convex_hull_mesh(std::vector<Vector3> point_set);
 std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>
 get_convex_hull_mesh(VertexData<Vector3> point_set);
 
+std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*> 
+get_mesh_for_convex_set(Eigen::MatrixX3d convex_point_cloud);
+
 Vector3 project_back_into_hull(VertexPositionGeometry *hull_geometry, Vector3 p);

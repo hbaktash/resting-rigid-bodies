@@ -87,7 +87,7 @@ int sobolev_p = 2;
 
 // example choice
 std::vector<std::string> all_input_names = {std::string("triangular"), std::string("circus"), std::string("tet"), std::string("tet2"), std::string("cube")}; //{std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
-std::string input_name = "circus";
+std::string input_name = "triangular";
 
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false, 
@@ -208,7 +208,7 @@ VertexData<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Forward3DSolv
 
 void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec,
                            Eigen::MatrixX3d &df_dv, Eigen::Vector3d &df_dG, double &dice_energy,
-                           bool use_autodiff, bool frozen_G, std::string policy, int fair_sides){
+                           bool use_autodiff, bool frozen_G, std::string policy, FaceData<double> goal_probs, int fair_sides){
     Forward3DSolver fwd_solver(hull_positions, G_vec);
     
     assert(hull_positions.rows() == fwd_solver.hullMesh->nVertices()); // check if input was convex
@@ -254,7 +254,7 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
         Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
         size_t flat_n = hull_poses_G_append_vec.rows();
         Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-        return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, fwd_solver, fair_sides, false);
+        return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, fwd_solver, policy, goal_probs, fair_sides, false);
       };
       Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
       Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
@@ -284,7 +284,8 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
     
 }
 
-void dice_energy_opt(bool frozen_G, size_t step_count = 20){
+
+void dice_energy_opt(std::string policy, bool frozen_G, size_t step_count = 20){
   Forward3DSolver tmp_solver(mesh, geometry, G, true);
   tmp_solver.set_uniform_G();
   tmp_solver.initialize_pre_computes();
@@ -303,9 +304,10 @@ void dice_energy_opt(bool frozen_G, size_t step_count = 20){
     Eigen::MatrixX3d dfdV(hull_positions.rows(), 3);
     
     printf("getting grads\n");
+    FaceData<double> goal_probs;
     get_dice_energy_grads(hull_positions, G_vec, dfdV, dfdG, dice_e, 
                           use_autodiff_for_dice_grad, frozen_G,
-                          "[policy]", fair_sides_count);
+                          policy, goal_probs, fair_sides_count);
     // update_visuals_with_G(&tmp_solver, &tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << "i: "<< iter << "\tDE: " << dice_e << ANSI_RESET << "\n";
     polyscope::getPointCloud("Center of Mass")->updatePointPositions(std::vector<Vector3>{tmp_solver.get_G()});
@@ -328,10 +330,10 @@ void dice_energy_opt(bool frozen_G, size_t step_count = 20){
     //DEBUG
     // polyscope::frameTick();
     // polyscope::screenshot(false);
-    polyscope::show();
+    // polyscope::show();
 
     // printf("line search\n");
-    double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, fair_sides_count, 
+    double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, policy, goal_probs, fair_sides_count, 
                                                    dice_energy_step, dice_search_decay, frozen_G, 500);
     std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
     hull_positions = hull_positions - opt_step_size * dfdV;
@@ -345,10 +347,29 @@ void dice_energy_opt(bool frozen_G, size_t step_count = 20){
     tmp_solver.initialize_pre_computes();
   }
   // Sorry; use boundary builder for visuals only
+
   BoundaryBuilder tmp_bnd_builder(&tmp_solver);
   tmp_bnd_builder.build_boundary_normals();
   update_visuals(&tmp_solver, &tmp_bnd_builder);
   tmp_bnd_builder.print_area_of_boundary_loops();
+
+
+
+  // DEBUG for 11 sided double dice sum example
+  FaceData<double> goal_probs = get_double_dice_probs_for_circus(&tmp_solver);
+  FaceData<double> curr_probs_acum(*tmp_solver.hullMesh, 0.);
+  for (Face f: tmp_solver.hullMesh->faces()){
+    curr_probs_acum[f] = tmp_bnd_builder.face_region_area[tmp_solver.face_last_face[f]]/(4.*PI);
+    if (goal_probs[f] > 0.){
+      std::cout << "face " << f.getIndex() << "\tprob: " << tmp_bnd_builder.face_region_area[f]/(4.*PI) << "\tgoal:" << goal_probs[f] << " | " <<goal_probs[f]*36<<"/36 " << "\n";
+    }
+  }
+  // polyscope::removeAllStructures();
+  polyscope::registerSurfaceMesh("initial hull", geometry->inputVertexPositions, mesh->getFaceVertexList());
+  polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
+  polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>({tmp_solver.get_G()}))->setPointRadius(0.05);
+  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity(" current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setEnabled(true);
+  // writeSurfaceMesh(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, "11_sided_double_dice_sum.obj");
 }
 
 
@@ -374,7 +395,7 @@ void myCallback() {
   ImGui::SliderFloat("DE step decay", &dice_search_decay, 0.1, 1.);
   
   if (ImGui::Button("dice energy opt")){
-    dice_energy_opt(false, DE_step_count);
+    dice_energy_opt("manual", false, DE_step_count);
   }
   if (ImGui::Button("show grads")){
     Forward3DSolver tmp_solver(mesh, geometry, G, true);
@@ -390,27 +411,20 @@ void myCallback() {
     Eigen::MatrixX3d dfdV_ad(hull_positions.rows(), 3), dfdV_proxy(hull_positions.rows(), 3);
     
     int fair_sides = fair_sides_count;
-    // printf("getting AD grads\n");
-    // frozen_G = true;
-    // get_dice_energy_grads(hull_positions, G_vec, dfdV_ad, dfdG_ad, 
-    //                       dice_e, true, "[policy]", fair_sides);  
-    // // printf("getting proxy grads\n");
-    // get_dice_energy_grads(hull_positions, G_vec, dfdV_proxy, dfdG_proxy, 
-    //                       dice_e, false, "[policy]", fair_sides);
-    // polyscope::getSurfaceMesh("hull mesh")->addVertexVectorQuantity("grads ad", -1.*dfdV_ad)->setEnabled(true);
-    // polyscope::getSurfaceMesh("hull mesh")->addVertexVectorQuantity("grads proxy", -1.*dfdV_proxy)->setEnabled(true);
-
 
     printf(" geting unif G grads\n");
     bool frozen_G = false;
+    std::string policy = "fair";
+    FaceData<double> goal_probs;
+
     Eigen::Vector3d dfdG_ad_uniG, dfdG_proxy_uniG;
     Eigen::MatrixX3d dfdV_ad_uniG(hull_positions.rows(), 3), dfdV_proxy_uniG(hull_positions.rows(), 3);
     printf("getting AD grads\n");
     get_dice_energy_grads(hull_positions, G_vec, dfdV_ad_uniG, dfdG_ad_uniG, 
-                          dice_e, true, frozen_G, "[policy]", fair_sides);  
+                          dice_e, true, frozen_G, policy, goal_probs, fair_sides);  
     printf("getting proxy grads\n");
     get_dice_energy_grads(hull_positions, G_vec, dfdV_proxy_uniG, dfdG_proxy_uniG, 
-                          dice_e, false, frozen_G, "[policy]", fair_sides);
+                          dice_e, false, frozen_G, policy, goal_probs, fair_sides);
     polyscope::getSurfaceMesh("hull mesh")->addVertexVectorQuantity("grads ad UNI", -1.*dfdV_ad_uniG)->setEnabled(true);
     polyscope::getSurfaceMesh("hull mesh")->addVertexVectorQuantity("grads proxy UNI", -1.*dfdV_proxy_uniG)->setEnabled(true);
   }

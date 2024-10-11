@@ -146,7 +146,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
 
 
 
-    if (std::strcmp(policy.c_str(), "fair_dice") == 0){
+    if (std::strcmp(policy.c_str(), "fair") == 0){
         // sort for dice energy
         Scalar total_area = 0.;
         std::vector<std::pair<Face, Scalar>> probs;
@@ -186,9 +186,14 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         
         return energy; 
     }
-    else if (std::strcmp(policy.c_str(), "manual_assignment") == 0){
+    else if (std::strcmp(policy.c_str(), "manual") == 0){
+        FaceData<double> my_probs = get_double_dice_probs_for_circus(&tmp_solver);
         Scalar energy = 0.;
-        // TODO
+        for (Face f: tmp_solver.hullMesh->faces()){
+            Scalar diff = face_region_area[f] - my_probs[f] * 4. * PI;
+            energy += diff * diff;
+        }
+        return energy;
     }
     
 }
@@ -199,9 +204,6 @@ Eigen::Vector3<Scalar> BoundaryBuilder::point_to_segment_normal(Eigen::Vector3<S
                     AB = B - A;
     return (PB * AB.dot(AB) - AB * AB.dot(PB)).normalized();
 }
-// autodiff::Vector3var PB = var_positions.row(v2.getIndex()) - var_G.transpose(),// var_G,
-//                          AB = var_positions.row(v2.getIndex()) - var_positions.row(v1.getIndex());
-//     return (PB * AB.dot(AB) - AB * AB.dot(PB));//.normalized();
 
 template <typename Scalar>
 Eigen::Vector3<Scalar> BoundaryBuilder::intersect_arcs(Eigen::Vector3<Scalar> v_normal, Eigen::Vector3<Scalar> R2, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B){
