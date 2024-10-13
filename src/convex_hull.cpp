@@ -60,7 +60,7 @@ get_convex_hull(std::vector<Vector3> point_set){
     }
     coordT* data = new coordT[num_points * dim];
     std::copy(pset_flat_vec.begin(), pset_flat_vec.end(), data);
-    Qhull qhull("n", 3, num_points, data, "QJ Q3"); // was using QJ Q3 and // Qt Q3 // then Qt ; Tv for debug?
+    Qhull qhull("n", 3, num_points, data, "Qt"); // was using QJ Q3 and // Qt Q3 // then Qt ; Tv for debug?
     
     // make data structures
     size_t my_count = 0, max_ind = 0;
