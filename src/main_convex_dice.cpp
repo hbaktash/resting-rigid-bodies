@@ -209,7 +209,7 @@ VertexData<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Forward3DSolv
 void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec,
                            Eigen::MatrixX3d &df_dv, Eigen::Vector3d &df_dG, double &dice_energy,
                            bool use_autodiff, bool frozen_G, std::string policy, FaceData<double> goal_probs, int fair_sides){
-    Forward3DSolver fwd_solver(hull_positions, G_vec);
+    Forward3DSolver fwd_solver(hull_positions, G_vec, true); // when getting grads, the input must be convex
     
     assert(hull_positions.rows() == fwd_solver.hullMesh->nVertices()); // check if input was convex
 
@@ -246,7 +246,7 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
       }
       df_dG = vec32vec(G_grad);
     }
-    else {
+    else { // autodiff
       // rebuild hull_positions since they were shuffled in solver's convex hull computation
       Eigen::MatrixX3d hull_positions = vertex_data_to_matrix(fwd_solver.hullGeometry->inputVertexPositions); 
       auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
@@ -270,14 +270,12 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
 
       // populate df_dv by mapping to original input indices
       if (frozen_G){
-        for (Vertex v: fwd_solver.hullMesh->vertices()){
-            df_dv.row(fwd_solver.org_hull_indices[v]) = dfdV.row(v.getIndex());
-        }
+        df_dv = dfdV;
       }
       else {
         VertexData<Eigen::Matrix3d> dG_dv = get_COM_grads_for_convex_uniform_shape(&fwd_solver);
         for (Vertex v: fwd_solver.hullMesh->vertices()){
-          df_dv.row(fwd_solver.org_hull_indices[v]) = dfdV.row(v.getIndex()) + (dG_dv[v].transpose() * df_dG).transpose();
+          df_dv.row(v.getIndex()) = dfdV.row(v.getIndex()) + (dG_dv[v].transpose() * df_dG).transpose();
         }
       }
     }
@@ -337,7 +335,7 @@ void dice_energy_opt(std::string policy, bool frozen_G, size_t step_count = 20){
                                                    dice_energy_step, dice_search_decay, frozen_G, 500);
     std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
     hull_positions = hull_positions - opt_step_size * dfdV;
-    tmp_solver = Forward3DSolver(hull_positions, G_vec);
+    tmp_solver = Forward3DSolver(hull_positions, G_vec, false); // could have been convaved
     if (!frozen_G){
       tmp_solver.set_uniform_G();
       G_vec = vec32vec(tmp_solver.get_G());
@@ -444,8 +442,10 @@ int main(int argc, char **argv) {
   // init_convex_shape_to_fill(all_polygons_current_item2);
   // deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
   polyscope::state::userCallback = myCallback;
-
   polyscope::show();
 
   return EXIT_SUCCESS;
 }
+
+
+// 

@@ -3,12 +3,13 @@
 
 template <typename Scalar>
 Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                    Forward3DSolver &tmp_solver, std::string policy, FaceData<double> goal_probs, 
+                                    std::string policy, FaceData<double> goal_probs, 
                                     size_t side_count, bool verbose
                                     ){
     // precomputes
+    Eigen::MatrixX3d hull_positions_d = hull_positions;
+    Forward3DSolver tmp_solver(hull_positions_d, G, true); // assuming input is convex; will be asserted internally in the constructor
     tmp_solver.initialize_pre_computes();
-    // printf("stan: initialized solver\n");
     FaceData<Face> face_last_face = tmp_solver.face_last_face;
     VertexData<bool> vertex_is_stabilizable = tmp_solver.vertex_is_stabilizable; 
     EdgeData<Vertex> edge_next_vertex = tmp_solver.edge_next_vertex;
@@ -143,8 +144,6 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             }
         }
     }
-
-
 
     if (std::strcmp(policy.c_str(), "fair") == 0){
         // sort for dice energy

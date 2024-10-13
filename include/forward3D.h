@@ -68,17 +68,17 @@ class Forward3DSolver {
     Forward3DSolver() {}
     // TODO; make constructor for non_convex input
     Forward3DSolver(ManifoldSurfaceMesh* inputMesh, VertexPositionGeometry* inputGeo, Vector3 G, bool concave_input = true);
-    Forward3DSolver(Eigen::MatrixX3d point_cloud, Eigen::Vector3d G);
+    Forward3DSolver(Eigen::MatrixX3d point_cloud, Eigen::Vector3d G, bool is_convex);
     // setter/getter for G
     void set_G(Vector3 new_G);
     void set_uniform_G();
     Vector3 get_G();
 
     // Hull related updates
-    bool first_hull = true;
-    void update_hull_index_arrays();
-    void update_convex_hull(bool with_projection = false);
-    void update_hull_points_correspondence(VertexData<Vector3> new_hull_points, VertexData<Vector3> old_points);
+    // bool first_hull = true;
+    // void update_hull_index_arrays();
+    // void update_convex_hull(bool with_projection = false);
+    // void update_hull_points_correspondence(VertexData<Vector3> new_hull_points, VertexData<Vector3> old_points);
 
     // initialize state
     void initialize_state(Vertex curr_v, Edge curr_e, Face curr_f, Vector3 curr_g_vec);

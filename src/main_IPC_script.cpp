@@ -173,12 +173,12 @@ void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = 
     geometry->inputVertexPositions[v] -= G;
   }
   G = find_center_of_mass(*mesh, *geometry).first;
+  // std::cout << "center of mass after shift: " << G << "\n";
   // double max_dist = 0;
   // for (Vertex v: mesh->vertices()){
   //   max_dist = std::max(max_dist, geometry->inputVertexPositions[v].norm());
   // }
   // std::cout << "max dist from center: " << max_dist << "\n";
-  // std::cout << "center of mass after shift: " << G << "\n";
 }
 
 
@@ -859,10 +859,13 @@ void process_single_shape_for_experiment(std::string full_shape_path,
   if (file_name.size() >= suffix.size() && file_name.compare(file_name.size() - suffix.size(), suffix.size(), suffix) == 0) {
       file_name = file_name.substr(0, file_name.size() - suffix.size());
   }
-  
-  std::cout << " \n file dir: " << file_dir << std::endl;
-  std::cout << "   file name: " << file_name << std::endl;
+  if (verbose){
+    std::cout << " \n file dir: " << file_dir << std::endl;
+    std::cout << "   file name: " << file_name << std::endl;
+  }
   if (!std::filesystem::exists(file_dir + "/" + file_name + ".obj")){ 
+    std::cout << " \n file dir: " << file_dir << std::endl;
+    std::cout << "   file name: " << file_name << std::endl;
     printf(" $$ part not found!\n");
     return;
   }
@@ -1008,6 +1011,8 @@ void process_single_shape_for_experiment(std::string full_shape_path,
 
   }
   catch(const std::exception& e) { // probably couldnt make the mesh manifold
+    std::cout << " \n file dir: " << file_dir << std::endl;
+    std::cout << "   file name: " << file_name << std::endl;
     std::cerr << e.what() << '\n';
   }
 
@@ -1205,20 +1210,36 @@ int main(int argc, char* argv[])
     generate_polyhedron_example(SINGLE_MESH_PATH);
     // re-write for IPC use
     // writeSurfaceMesh(*mesh, *geometry, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m0_p0_normalized.obj");
-          
-    forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
-    forwardSolver->initialize_pre_computes();
-    vis_utils.forwardSolver = forwardSolver;
+    update_solver();
     init_visuals();
-    
-    boundary_builder = new BoundaryBuilder(forwardSolver);
-    boundary_builder->build_boundary_normals();
-    
     boundary_builder->print_area_of_boundary_loops();
 
+
+    // with templated
+    // Forward3DSolver* tmpSolver = new Forward3DSolver(mesh, geometry, G, true);
+    // tmpSolver->set_uniform_G();
+    // Eigen::MatrixX3d hull_poses = vertex_data_to_matrix(tmpSolver->hullGeometry->inputVertexPositions); 
+    // ManifoldSurfaceMesh*    hull_mesh1, *hull_mesh2, *hull_mesh3;
+    // VertexPositionGeometry* hull_geo1, *hull_geo2, *hull_geo3;
+    
+    // std::tie(hull_mesh1, hull_geo1) = get_convex_hull_mesh(vertex_data_to_matrix(geometry->inputVertexPositions));
+    // std::tie(hull_mesh2, hull_geo2) = get_convex_hull_mesh(vertex_data_to_matrix(hull_geo1->inputVertexPositions));
+    // std::tie(hull_mesh3, hull_geo3) = get_convex_hull_mesh(vertex_data_to_matrix(hull_geo2->inputVertexPositions));
+    
+    // polyscope::registerSurfaceMesh("input", geometry->inputVertexPositions, mesh->getFaceVertexList());
+    // polyscope::registerSurfaceMesh("hull 1", hull_geo1->inputVertexPositions, hull_mesh1->getFaceVertexList());
+    // // polyscope::registerSurfaceMesh("hull 2", hull_geo2->inputVertexPositions, hull_mesh2->getFaceVertexList());
+    // // polyscope::registerSurfaceMesh("hull 3", hull_geo3->inputVertexPositions, hull_mesh3->getFaceVertexList());
+    // polyscope::registerPointCloud("input points", geometry->inputVertexPositions);
+    // polyscope::registerPointCloud("hull 1 points", hull_geo1->inputVertexPositions);
+    // // polyscope::registerPointCloud("hull 2 points", hull_geo2->inputVertexPositions);
+    // // polyscope::registerPointCloud("hull 3 points", hull_geo3->inputVertexPositions);
+    // std::cout << "input size "<< mesh->nVertices() << "\n";
+    // std::cout << "hull 1: " << hull_mesh1->nVertices() << " hull 2: " << hull_mesh2->nVertices() << " hull 3: " << hull_mesh3->nVertices() << "\n";
+
+    // FaceData<double> goal_probs(*tmpSolver->hullMesh, 0.);
+    // BoundaryBuilder::dice_energy<double>(hull_poses, vec32vec(tmpSolver->get_G()), "fair", goal_probs, 6, true);
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
-    // polyscope::view::upDir = polyscope::view::UpDir::YUp;
-    // polyscope::options::groundPlaneHeightFactor = 1.; // adjust the plane height
     polyscope::state::userCallback = myCallback;
     polyscope::show();
   }

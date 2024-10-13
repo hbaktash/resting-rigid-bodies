@@ -271,7 +271,7 @@ void BoundaryBuilder::build_boundary_normals(){
         // polyscope::registerCurveNetwork("current edge", forward_solver->hullGeometry->inputVertexPositions, vertex_pairs);
         
         // assert(edge_boundary_normals[e].size() == 1); // otherwise we proly have a Gomboc?
-        
+
         Vector3 stable_edge_normal = forward_solver->edge_stable_normal[e];
         BoundaryNormal *bnd_normal = new BoundaryNormal(stable_edge_normal);
         Face f1 = e.halfedge().face(),
@@ -287,21 +287,33 @@ void BoundaryBuilder::build_boundary_normals(){
         // for visuals
         edge_boundary_normals[e].push_back(bnd_normal);
         
+        Vector3 adj_f1_normal  = forward_solver->hullGeometry->faceNormal(f1),
+                adj_f2_normal  = forward_solver->hullGeometry->faceNormal(f2);
         for (Vertex v: {e.firstVertex(), e.secondVertex()}){
             Vector3 tmp_normal = bnd_normal->normal,
-                    f1_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f1), // final faces
-                    f2_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f2),
+                    ff1_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f1), // final faces
+                    ff2_normal  = forward_solver->hullGeometry->faceNormal(bnd_normal->f2),
                     v_normal   = forward_solver->vertex_stable_normal[v];
             // Vector3 imm_f1_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().face()), // immediate face neighbors
             //         imm_f2_normal = forward_solver->hullGeometry->faceNormal(e.halfedge().twin().face());
             
             // std::cout << " ff1: " << bnd_normal->f1.getIndex() << " ff2: " << bnd_normal->f2.getIndex() << std::endl;
             // std::cout << " with normals: " << ff1_normal.transpose() << "  --  " << ff2_normal.transpose() << std::endl;
-        
-            double f1_area_sign = dot(f1_normal, cross(v_normal, tmp_normal)) >= 0 ? 1. : -1.; // f1 on rhs of bndN->vN
+
+            // OLD
+            // double f1_area_sign = dot(ff1_normal, cross(v_normal, tmp_normal)) >= 0 ? 1. : -1.; // f1 on rhs of bndN->vN
+            
+            double ff1_area_sign = dot(ff1_normal, cross(tmp_normal,v_normal)) >= 0 ? 1. : -1.; // ff1 on rhs of bndN->vN; static
+            double ff2_area_sign = dot(ff2_normal, cross(tmp_normal,v_normal)) >= 0 ? 1. : -1.; // ff2 on rhs of bndN->vN; static
+            double adj_f1_area_sign = dot(adj_f1_normal, cross(tmp_normal, v_normal)) >= 0 ? 1. : -1.; // ff1 on rhs of bndN->vN; static
+            double adj_f2_area_sign = dot(adj_f2_normal, cross(tmp_normal, v_normal)) >= 0 ? 1. : -1.; // ff2 on rhs of bndN->vN; static
+            
+            ff1_area_sign *= adj_f1_area_sign == ff1_area_sign ? 1. : -1.;
+            ff2_area_sign *= adj_f2_area_sign == ff2_area_sign ? 1. : -1.;
+
             if (forward_solver->vertex_is_stabilizable[v])
                 flow_back_boundary_on_edge(bnd_normal, Edge(), v, 
-                                               f1_area_sign);
+                                           ff1_area_sign, ff2_area_sign);
             else {
                 for (Edge neigh_e: v.adjacentEdges()){
                     if (neigh_e != e &&
@@ -310,7 +322,7 @@ void BoundaryBuilder::build_boundary_normals(){
                         // face_attraction_boundary[bnd_normal->f1].push_back(bnd_normal);
                         // face_attraction_boundary[bnd_normal->f2].push_back(bnd_normal);
                         flow_back_boundary_on_edge(bnd_normal, neigh_e, v, 
-                                                f1_area_sign);
+                                                ff1_area_sign, ff2_area_sign);
                     }
                 }
             }
@@ -322,7 +334,7 @@ void BoundaryBuilder::build_boundary_normals(){
 
 // recursively follow the boundary curve to a source
 bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
-                                                 double f1_area_sign){
+                                                 double f1_area_sign, double f2_area_sign){
     // bnd_normal has to be in boundary normals of dest_e; won't assert tho for better performance
     Vertex v = common_vertex; // given as argument for better performance
     
@@ -410,7 +422,7 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
             Vertex next_v = src_e.otherVertex(v);
             if (forward_solver->vertex_is_stabilizable[next_v]){
                 // printf(" v ");
-                flow_back_boundary_on_edge(new_boundary_normal, Edge(), next_v, f1_area_sign);
+                flow_back_boundary_on_edge(new_boundary_normal, Edge(), next_v, f1_area_sign, f2_area_sign);
             }
             else {
                 for (Edge next_src_e: next_v.adjacentEdges()){
@@ -419,7 +431,8 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
                         // std::cout << " e " << next_src_e.getIndex() << std::endl;
                         // non_singularity and divisive-ness will be checked inside the function
                                                 
-                        bool res = flow_back_boundary_on_edge(new_boundary_normal, next_src_e, next_v, f1_area_sign);
+                        bool res = flow_back_boundary_on_edge(new_boundary_normal, next_src_e, next_v, 
+                                                              f1_area_sign, f2_area_sign);
                         if (res) // got to maximum and returning
                             break;
                     }
@@ -438,12 +451,12 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
     }
     Vector3 f1_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f1), // f1,f2 are the same along the current path to maximum
             f2_normal = forward_solver->hullGeometry->faceNormal(bnd_normal->f2);
-    double curr_f1_alignment = dot(f1_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.; // checking alignment again since it could change along the way
-    double curr_f2_alignment = dot(f2_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.;
-    double f1_sign_change = f1_area_sign == curr_f1_alignment ? 1. : -1;
-    double f2_sign_change = (-f1_area_sign == curr_f2_alignment) ? 1.: -1;
-    face_region_area[bnd_normal->f1] += f1_sign_change * abs(triangle_patch_area_on_sphere(f1_normal, bnd_normal->normal, next_normal));
-    face_region_area[bnd_normal->f2] += f2_sign_change * abs(triangle_patch_area_on_sphere(f2_normal, bnd_normal->normal, next_normal));
+    // double curr_f1_alignment = dot(f1_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.; // checking alignment again since it could change along the way
+    // double curr_f2_alignment = dot(f2_normal, cross(next_normal, tmp_normal)) >= 0 ? 1. : -1.;
+    // double f1_sign_change = f1_area_sign == curr_f1_alignment ? 1. : -1;
+    // double f2_sign_change = (-f1_area_sign == curr_f2_alignment) ? 1.: -1;
+    face_region_area[bnd_normal->f1] += f1_area_sign * triangle_patch_area_on_sphere(f1_normal, bnd_normal->normal, next_normal);
+    face_region_area[bnd_normal->f2] += f2_area_sign * triangle_patch_area_on_sphere(f2_normal, bnd_normal->normal, next_normal);
     // printf(" -ret- ");
     return true;
     // TODO: take care of when f1,f2 on the same side when starting from saddle 
@@ -489,7 +502,7 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
     printf(" Face probs:\n");
     std::vector<std::pair<Face, double>> probs;
     for (Face f: forward_solver->hullMesh->faces()){
-        if (face_region_area[f] > 0){
+        if (face_region_area[f] != 0){
             // face_region_area[f] /= (4.*PI);
             probs.push_back({f, face_region_area[f]/(4.*PI)});
         }
@@ -913,11 +926,10 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
                                std::string policy, FaceData<double> goal_probs, size_t dice_side_count, 
                                double step_size, double decay, bool frozen_G, size_t max_iter){
   
-  Forward3DSolver tmp_solver(hull_positions, G_vec);
+  Forward3DSolver tmp_solver(hull_positions, G_vec, true); // assuming input is convex; will be asserted internally in the constructor
   tmp_solver.initialize_pre_computes();
-  Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
-
-  double min_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec, tmp_solver, 
+  
+  double min_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions, G_vec, 
                                                                 policy, goal_probs, dice_side_count, false);
   double s = step_size; //
 
@@ -925,29 +937,29 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   int j;
   double tmp_dice_energy;
   for (j = 0; j < max_iter; j++) {
-        tmp_solver = Forward3DSolver(hull_positions - s * dfdv, G_vec);
-        if (frozen_G && !G_is_inside(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, tmp_solver.get_G())){
-            printf("  - G outside! \n");
-            s *= decay;
-            continue;
-        }
-        if (!frozen_G){
-            tmp_solver.set_uniform_G();
-            G_vec = vec32vec(tmp_solver.get_G());
-        }
-        tmp_solver.initialize_pre_computes();
-        // re-assign since convhull inside solver reshuffles points
-        Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
-        tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec, tmp_solver, 
-                                                               policy, goal_probs, dice_side_count, false);
+    tmp_solver = Forward3DSolver(hull_positions - s * dfdv, G_vec, false); // not necessarily convex
+    if (frozen_G && !G_is_inside(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, tmp_solver.get_G())){
+        printf("  - G outside! \n");
+        s *= decay;
+        continue;
+    }
+    if (!frozen_G){
+        tmp_solver.set_uniform_G();
+        G_vec = vec32vec(tmp_solver.get_G());
+    }
+    tmp_solver.initialize_pre_computes();
+    // re-assign since qhull inside solver reshuffles points
+    Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
+    tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec, 
+                                                            policy, goal_probs, dice_side_count, false);
     //   printf("  *** temp fair dice energy %d: %f\n", j, tmp_fair_dice_energy);
 
-        if (tmp_dice_energy < min_dice_energy){
-            found_smth_optimal = true;
-            break; //  x new is good
-        }
-        else
-            s *= decay;
+    if (tmp_dice_energy < min_dice_energy){
+        found_smth_optimal = true;
+        break; //  x new is good
+    }
+    else
+        s *= decay;
   }
   s = found_smth_optimal ? s : 0.;
 //   printf("line search for dice ended at iter %d, s: %.10f, \n \t\t\t\t\t fnew: %f \n", j, s, tmp_fair_dice_energy);

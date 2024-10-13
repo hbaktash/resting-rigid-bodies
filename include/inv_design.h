@@ -81,7 +81,7 @@ class InverseSolver{
         VertexData<Vector3> find_uni_mass_total_vertex_grads(double stable_normal_update_thres = -1.);
         
         // pre-step for updates 
-        void subdivide_for_aggressive_updates(VertexData<Vector3> hull_updates);
+        // void subdivide_for_aggressive_updates(VertexData<Vector3> hull_updates);
         
 
         // *** Deformations

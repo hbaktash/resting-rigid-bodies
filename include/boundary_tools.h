@@ -119,7 +119,7 @@ class BoundaryBuilder {
         void build_boundary_normals();
         // flow back from a edge with boundary normal; till u find a source
         bool flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
-                                        double f1_area_sign);
+                                        double f1_area_sign, double f2_area_sign);
 
         // // same shit but for autodiff
         // void build_boundary_normals_for_autodiff( // autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G, 
@@ -139,7 +139,7 @@ class BoundaryBuilder {
         // TODO template
         template <typename Scalar>
         static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                  Forward3DSolver &tmp_solver, std::string policy, FaceData<double> goal_probs, 
+                                  std::string policy, FaceData<double> goal_probs, 
                                   size_t side_count, bool verbose);
         template <typename Scalar>
         static Eigen::Vector3<Scalar> point_to_segment_normal(Eigen::Vector3<Scalar> P, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B);

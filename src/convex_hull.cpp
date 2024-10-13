@@ -60,7 +60,7 @@ get_convex_hull(std::vector<Vector3> point_set){
     }
     coordT* data = new coordT[num_points * dim];
     std::copy(pset_flat_vec.begin(), pset_flat_vec.end(), data);
-    Qhull qhull("n", 3, num_points, data, "QJ Q3");
+    Qhull qhull("n", 3, num_points, data, "QJ Q3"); // was using QJ Q3 and // Qt Q3 // then Qt ; Tv for debug?
     
     // make data structures
     size_t my_count = 0, max_ind = 0;
@@ -117,6 +117,7 @@ get_convex_hull(std::vector<Vector3> point_set){
     surf_mesh->greedilyOrientFaces();
 
     // make sure of outward orientation; can't just make qhull do it ??!
+    // since mesh is already oriented and is convex, only need to check one face
     Face f0 = surf_mesh->face(0);
     Vertex v0 = f0.halfedge().tailVertex(),
            v1 = f0.halfedge().tipVertex(),
@@ -124,8 +125,8 @@ get_convex_hull(std::vector<Vector3> point_set){
     Vector3 p0 = poses[v0.getIndex()],
             p1 = poses[v1.getIndex()],
             p2 = poses[v2.getIndex()];
-    Vector3 p_other = poses[f0.halfedge().twin().next().tipVertex().getIndex()]; // damn you qhull!!!!
-    if (dot(p_other - p0, cross(p1 - p0, p2 - p1)) > 0.){
+    Vector3 p_other = poses[f0.halfedge().twin().next().tipVertex().getIndex()];
+    if (dot(p_other - p0, cross(p1 - p0, p2 - p1)) > 0.){ 
         surf_mesh->invertOrientation(f0);
         surf_mesh->greedilyOrientFaces(); // will start with f0!
     }
@@ -194,7 +195,7 @@ get_mesh_for_convex_set(Eigen::MatrixX3d convex_point_cloud){
     ManifoldSurfaceMesh *hull_mesh = new ManifoldSurfaceMesh(org_index_hull_faces);
     VertexPositionGeometry* hull_geometry = new VertexPositionGeometry(*hull_mesh);
     for (Vertex hull_v: hull_mesh->vertices())
-        hull_geometry->inputVertexPositions[hull_v] = hull_poses[hull_v.getIndex()];
+        hull_geometry->inputVertexPositions[hull_v] = vec_to_GC_vec3(convex_point_cloud.row(hull_v.getIndex()));
     return std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>(hull_mesh, hull_geometry);
 }
 

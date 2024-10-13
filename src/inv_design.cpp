@@ -367,58 +367,6 @@ VertexData<Vector3> InverseSolver::find_uni_mass_total_vertex_grads(double stabl
 }
 
 
-void InverseSolver::subdivide_for_aggressive_updates(VertexData<Vector3> hull_updates){
-    // sub-dividing for aggressive updates
-    std::vector<Edge> to_split_edges;
-    for (Edge e: forwardSolver->inputMesh->edges()){
-        Vertex v1 = e.firstVertex(), 
-                v2 = e.secondVertex();
-        size_t on_hull_idx1 = forwardSolver->on_hull_index[v1],
-               on_hull_idx2 = forwardSolver->on_hull_index[v2];
-        if (on_hull_idx1 != INVALID_IND && on_hull_idx2 != INVALID_IND){
-            Vertex on_hull_v1 = forwardSolver->hullMesh->vertex(on_hull_idx1),
-                   on_hull_v2 = forwardSolver->hullMesh->vertex(on_hull_idx2);
-            if (hull_updates[on_hull_v1].norm() != 0. && hull_updates[on_hull_v2].norm() != 0.){
-                to_split_edges.push_back(e);
-            }
-        }
-    }
-    printf(" splitting %d edges\n", to_split_edges.size());
-    printf("current mesh size: %d\n", forwardSolver->inputMesh->nVertices());
-    for (Edge e: to_split_edges){
-        Vertex v1 = e.firstVertex(), 
-               v2 = e.secondVertex();
-        Halfedge he = forwardSolver->inputMesh->splitEdgeTriangular(e);
-        // only containers that need update should be the index-trackers
-        forwardSolver->on_hull_index[he.vertex()] = INVALID_IND; // made sure it lays inside the hull
-        // update the current mesh-geometry
-        forwardSolver->inputGeometry->inputVertexPositions[he.vertex()] = 
-            (forwardSolver->inputGeometry->inputVertexPositions[v1] + 
-             forwardSolver->inputGeometry->inputVertexPositions[v2])/2.;
-        // update the inital mesh-geometry; to get the initial laplacian
-        initial_geometry->inputVertexPositions[he.vertex()] = 
-            (initial_geometry->inputVertexPositions[v1] + 
-             initial_geometry->inputVertexPositions[v2])/2.;
-        Vector3 curr_inward_offset = (forwardSolver->inputGeometry->faceNormal(he.face()) + 
-                                      forwardSolver->inputGeometry->faceNormal(he.twin().face())) * 1e-6 * -1.,
-                initial_inward_offset = (initial_geometry->faceNormal(he.face()) + 
-                                         initial_geometry->faceNormal(he.twin().face())) * 1e-6 * -1.; // assuming outward normals
-        forwardSolver->inputGeometry->inputVertexPositions[he.vertex()] += curr_inward_offset;
-        initial_geometry->inputVertexPositions[he.vertex()] += initial_inward_offset;
-    }
-    // resizing laplacian and stuff
-    forwardSolver->inputGeometry->refreshQuantities();
-    initial_geometry->refreshQuantities();
-
-    // updating interior indices
-    forwardSolver->update_hull_index_arrays();
-    
-    initial_geometry->requireCotanLaplacian();
-    initial_Ls = initial_geometry->cotanLaplacian;
-    initial_geometry->unrequireCotanLaplacian();
-}
-
-
 VertexData<DenseMatrix<double>> 
 InverseSolver::find_rotations(DenseMatrix<double> old_pos, DenseMatrix<double> new_pos){
     VertexData<DenseMatrix<double>> rotations(*forwardSolver->inputMesh);
@@ -652,7 +600,57 @@ VertexData<Vector3> InverseSolver::diffusive_update_positions(VertexData<Vector3
 }
 
 
-
+// =========== Graveyard ===========
 // VertexData<Vector3> InverseSolver::sobolev_diffuse_gradients(Eigen::MatrixXd grads, double sobolev_lambda, size_t sobolev_p = 2){
 //     vertex_data_to_matrix
+// }
+// void InverseSolver::subdivide_for_aggressive_updates(VertexData<Vector3> hull_updates){
+//     // sub-dividing for aggressive updates
+//     std::vector<Edge> to_split_edges;
+//     for (Edge e: forwardSolver->inputMesh->edges()){
+//         Vertex v1 = e.firstVertex(), 
+//                 v2 = e.secondVertex();
+//         size_t on_hull_idx1 = forwardSolver->on_hull_index[v1],
+//                on_hull_idx2 = forwardSolver->on_hull_index[v2];
+//         if (on_hull_idx1 != INVALID_IND && on_hull_idx2 != INVALID_IND){
+//             Vertex on_hull_v1 = forwardSolver->hullMesh->vertex(on_hull_idx1),
+//                    on_hull_v2 = forwardSolver->hullMesh->vertex(on_hull_idx2);
+//             if (hull_updates[on_hull_v1].norm() != 0. && hull_updates[on_hull_v2].norm() != 0.){
+//                 to_split_edges.push_back(e);
+//             }
+//         }
+//     }
+//     printf(" splitting %d edges\n", to_split_edges.size());
+//     printf("current mesh size: %d\n", forwardSolver->inputMesh->nVertices());
+//     for (Edge e: to_split_edges){
+//         Vertex v1 = e.firstVertex(), 
+//                v2 = e.secondVertex();
+//         Halfedge he = forwardSolver->inputMesh->splitEdgeTriangular(e);
+//         // only containers that need update should be the index-trackers
+//         forwardSolver->on_hull_index[he.vertex()] = INVALID_IND; // made sure it lays inside the hull
+//         // update the current mesh-geometry
+//         forwardSolver->inputGeometry->inputVertexPositions[he.vertex()] = 
+//             (forwardSolver->inputGeometry->inputVertexPositions[v1] + 
+//              forwardSolver->inputGeometry->inputVertexPositions[v2])/2.;
+//         // update the inital mesh-geometry; to get the initial laplacian
+//         initial_geometry->inputVertexPositions[he.vertex()] = 
+//             (initial_geometry->inputVertexPositions[v1] + 
+//              initial_geometry->inputVertexPositions[v2])/2.;
+//         Vector3 curr_inward_offset = (forwardSolver->inputGeometry->faceNormal(he.face()) + 
+//                                       forwardSolver->inputGeometry->faceNormal(he.twin().face())) * 1e-6 * -1.,
+//                 initial_inward_offset = (initial_geometry->faceNormal(he.face()) + 
+//                                          initial_geometry->faceNormal(he.twin().face())) * 1e-6 * -1.; // assuming outward normals
+//         forwardSolver->inputGeometry->inputVertexPositions[he.vertex()] += curr_inward_offset;
+//         initial_geometry->inputVertexPositions[he.vertex()] += initial_inward_offset;
+//     }
+//     // resizing laplacian and stuff
+//     forwardSolver->inputGeometry->refreshQuantities();
+//     initial_geometry->refreshQuantities();
+
+//     // updating interior indices
+//     forwardSolver->update_hull_index_arrays();
+    
+//     initial_geometry->requireCotanLaplacian();
+//     initial_Ls = initial_geometry->cotanLaplacian;
+//     initial_geometry->unrequireCotanLaplacian();
 // }
