@@ -164,7 +164,12 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         double goal_prob = 1. / (double)side_count;
         for (auto pair: probs){ 
             if(verbose){
-                std::cout << "  -f" << pair.first.getIndex() << " : " << pair.second/(4. * PI) << std::endl; 
+                std::cout << "  -f" << pair.first.getIndex() 
+                          << "(" 
+                          << pair.first.halfedge().vertex().getIndex() << ", "
+                          << pair.first.halfedge().tipVertex().getIndex()<< ", "
+                          << pair.first.halfedge().next().tipVertex().getIndex()
+                          << ")" << " : " << pair.second/(4. * PI) << std::endl; 
             }
             if (tmp_side_cnt < side_count){ // goal 1/n
                 Scalar diff = face_region_area[pair.first] - goal_prob * 4. * PI;

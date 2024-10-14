@@ -1212,33 +1212,7 @@ int main(int argc, char* argv[])
     // writeSurfaceMesh(*mesh, *geometry, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m0_p0_normalized.obj");
     update_solver();
     init_visuals();
-    boundary_builder->print_area_of_boundary_loops();
 
-
-    // with templated
-    // Forward3DSolver* tmpSolver = new Forward3DSolver(mesh, geometry, G, true);
-    // tmpSolver->set_uniform_G();
-    // Eigen::MatrixX3d hull_poses = vertex_data_to_matrix(tmpSolver->hullGeometry->inputVertexPositions); 
-    // ManifoldSurfaceMesh*    hull_mesh1, *hull_mesh2, *hull_mesh3;
-    // VertexPositionGeometry* hull_geo1, *hull_geo2, *hull_geo3;
-    
-    // std::tie(hull_mesh1, hull_geo1) = get_convex_hull_mesh(vertex_data_to_matrix(geometry->inputVertexPositions));
-    // std::tie(hull_mesh2, hull_geo2) = get_convex_hull_mesh(vertex_data_to_matrix(hull_geo1->inputVertexPositions));
-    // std::tie(hull_mesh3, hull_geo3) = get_convex_hull_mesh(vertex_data_to_matrix(hull_geo2->inputVertexPositions));
-    
-    // polyscope::registerSurfaceMesh("input", geometry->inputVertexPositions, mesh->getFaceVertexList());
-    // polyscope::registerSurfaceMesh("hull 1", hull_geo1->inputVertexPositions, hull_mesh1->getFaceVertexList());
-    // // polyscope::registerSurfaceMesh("hull 2", hull_geo2->inputVertexPositions, hull_mesh2->getFaceVertexList());
-    // // polyscope::registerSurfaceMesh("hull 3", hull_geo3->inputVertexPositions, hull_mesh3->getFaceVertexList());
-    // polyscope::registerPointCloud("input points", geometry->inputVertexPositions);
-    // polyscope::registerPointCloud("hull 1 points", hull_geo1->inputVertexPositions);
-    // // polyscope::registerPointCloud("hull 2 points", hull_geo2->inputVertexPositions);
-    // // polyscope::registerPointCloud("hull 3 points", hull_geo3->inputVertexPositions);
-    // std::cout << "input size "<< mesh->nVertices() << "\n";
-    // std::cout << "hull 1: " << hull_mesh1->nVertices() << " hull 2: " << hull_mesh2->nVertices() << " hull 3: " << hull_mesh3->nVertices() << "\n";
-
-    // FaceData<double> goal_probs(*tmpSolver->hullMesh, 0.);
-    // BoundaryBuilder::dice_energy<double>(hull_poses, vec32vec(tmpSolver->get_G()), "fair", goal_probs, 6, true);
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
     polyscope::state::userCallback = myCallback;
     polyscope::show();

@@ -510,7 +510,11 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
     std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
     printf("sorted probs: \n");
     for (auto pair: probs)
-        printf("  -f %d: %f\n", pair.first.getIndex(), pair.second);
+        printf("  -f %d (%d,%d,%d): %f\n", pair.first.getIndex(), 
+                                           pair.first.halfedge().vertex().getIndex(), 
+                                           pair.first.halfedge().tipVertex().getIndex(),
+                                           pair.first.halfedge().next().tipVertex().getIndex(),
+                                           pair.second);
 }
 
 

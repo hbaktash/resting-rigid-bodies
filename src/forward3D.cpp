@@ -19,7 +19,7 @@
 #include "forward3D.h"
 
 Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPositionGeometry* inputGeo_,
-                             Vector3 inputG_, bool concave_input){
+                                 Vector3 inputG_, bool concave_input){
     inputMesh = inputMesh_;
     inputGeometry = inputGeo_;
     if (concave_input){
@@ -38,7 +38,9 @@ Forward3DSolver::Forward3DSolver(ManifoldSurfaceMesh* inputMesh_, VertexPosition
     else {
         hullMesh = inputMesh_;
         hullGeometry = inputGeo_;
-        trivial_initialize_index_trackers(); //
+        org_hull_indices = VertexData<size_t>(*hullMesh);
+        for (Vertex hull_v: hullMesh->vertices())
+            org_hull_indices[hull_v] = hull_v.getIndex();
     }
     // hullMesh = inputMesh_;
     // hullGeometry = inputGeo_;

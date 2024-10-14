@@ -138,11 +138,10 @@ get_convex_hull(std::vector<Vector3> point_set){
 
 std::tuple<std::vector<std::vector<size_t>>, std::vector<size_t>, std::vector<Vector3>>
 get_convex_hull(VertexData<Vector3> point_set){
-    const size_t num_points = point_set.size();
+    const size_t num_points = point_set.getMesh()->nVertices();
     std::vector<Vector3> point_set_vec;
     for (size_t i = 0; i < num_points ; i++){
-        Vector3 p = point_set[i];
-        point_set_vec.push_back(p);
+        point_set_vec.push_back(point_set[i]);
     }
     return get_convex_hull(point_set_vec);
 }
