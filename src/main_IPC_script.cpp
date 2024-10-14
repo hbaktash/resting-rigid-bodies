@@ -149,6 +149,28 @@ void initialize_vis(bool with_plane = true){
     }
 }
 
+
+void generate_icosmesh(){
+  // ICOSphere preparation
+  int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
+  std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
+  std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+  // tilt the sphere randomly; to avoid singular configurations
+  std::mt19937 util_mersenne_twister(0); // fixed seed
+  while (true){
+      std::uniform_real_distribution<double> distx(-1, 1), disty(-1, 1), distz(-1, 1);
+      Vector3 random_orientation = {distx(util_mersenne_twister), disty(util_mersenne_twister), distz(util_mersenne_twister)};
+      if (random_orientation.norm() <= 1){
+          random_orientation = random_orientation.normalize();
+          Eigen::AngleAxisd R = aa_from_init_ori(random_orientation);
+          for (Vertex v: icos_sphere_mesh->vertices())
+              icos_sphere_geometry->inputVertexPositions[v] = vec2vec3(R.toRotationMatrix() * vec32vec(icos_sphere_geometry->inputVertexPositions[v]));
+          break;
+      }
+  }
+}
+
+
 void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = true){
   
   std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
@@ -540,21 +562,7 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
     
     FaceData<std::vector<Vector3>> face_to_ori(*forwardSolver->hullMesh);
     FaceData<size_t> face_counts(*forwardSolver->hullMesh);
-    FaceData<double> face_dual_sum_areas(*forwardSolver->hullMesh);
-
-    // tilt the sphere randomly; to avoid singular configurations
-    std::mt19937 util_mersenne_twister(0); // fixed seed
-    while (true){
-        std::uniform_real_distribution<double> distx(-1, 1), disty(-1, 1), distz(-1, 1);
-        Vector3 random_orientation = {distx(util_mersenne_twister), disty(util_mersenne_twister), distz(util_mersenne_twister)};
-        if (random_orientation.norm() <= 1){
-            random_orientation = random_orientation.normalize();
-            Eigen::AngleAxisd R = aa_from_init_ori(random_orientation);
-            for (Vertex v: icos_sphere_mesh->vertices())
-                icos_sphere_geometry->inputVertexPositions[v] = vec2vec3(R.toRotationMatrix() * vec32vec(icos_sphere_geometry->inputVertexPositions[v]));
-            break;
-        }
-    }
+    FaceData<double> face_dual_sum_areas(*forwardSolver->hullMesh);    
     
     // compute the total area of the ICOsphere
     double total_area = 0;
@@ -665,21 +673,8 @@ void compare_quasi_sample_convergence(){
   int total_invalids = 0;
   size_t valid_count = 0;
   auto t1 = clock();
-  ManifoldSurfaceMesh* icos_sphere_mesh;
-  VertexPositionGeometry* icos_sphere_geometry;
-  std::cout << "generating icosahedral sphere with resolution: " << resolution << "\n";
-  std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
-  // tilt the ICOS sphere randomly
-  while (true){
-      Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
-      if (random_orientation.norm() <= 1){
-          random_orientation = random_orientation.normalize();
-          Eigen::AngleAxisd R = aa_from_init_ori(random_orientation);
-          for (Vertex v: icos_sphere_mesh->vertices())
-              icos_sphere_geometry->inputVertexPositions[v] = vec2vec3(R.toRotationMatrix() * vec32vec(icos_sphere_geometry->inputVertexPositions[v]));
-          break;
-      }
-  }
+  
+  generate_icosmesh();
   // iterate over the ICOS sphere
   double total_area = 0;
   for (Face f: icos_sphere_mesh->faces()) total_area += icos_sphere_geometry->faceArea(f);
@@ -1025,15 +1020,13 @@ void process_single_shape_for_experiment(std::string full_shape_path,
 
 
 void run_parallel_for_each_BB_shape(std::string BB_base_dir){
-  // ICOSphere preparation
-  int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
-  std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
-  std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+  
+  generate_icosmesh();
   double total_area = 0;
   for (Face f: icos_sphere_mesh->faces()){
       total_area += icos_sphere_geometry->faceArea(f);
   }
-  
+
   nlohmann::json example_json;
   if (ipc_sim){
     // load json template
@@ -1097,9 +1090,7 @@ void myCallback() {
       ifs.close();
       
       if (ICOS_sampling){
-        int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
-        std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
-        std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+        generate_icosmesh();
         int invalids = -1;
         run_IPC_experiment(example_json, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf", 
                            "m0_p0", invalids, max_steps_IPC, true);
@@ -1184,9 +1175,7 @@ int main(int argc, char* argv[])
     else if (single_mesh_path){
       
       // make ICOSphere 
-      int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
-      std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
-      std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+      generate_icosmesh();
       double total_area = 0;
       for (Face f: icos_sphere_mesh->faces()){
           total_area += icos_sphere_geometry->faceArea(f);
