@@ -173,35 +173,42 @@ void initialize_state(std::string input_name){
 }
 
 
-VertexData<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Forward3DSolver *tmp_solver){
-  Vector3 tmp_G = tmp_solver->get_G();
-  Eigen::Matrix3d zmat = Eigen::Matrix3d::Zero();
-  VertexData<Eigen::Matrix3d> dG_dv = VertexData<Eigen::Matrix3d>(*tmp_solver->hullMesh, zmat);
-  for (Face f: tmp_solver->hullMesh->faces()){
-      // double face_area = tmp_solver->hullGeometry->faceArea(f);
-      double face_area = polygonal_face_area(f, *tmp_solver->hullGeometry);
+std::vector<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Eigen::MatrixX3d hull_positions){
+  ManifoldSurfaceMesh *tmp_hull_mesh;
+  VertexPositionGeometry *tmp_hull_geometry;
+  std::tie(tmp_hull_mesh, tmp_hull_geometry) = get_mesh_for_convex_set(hull_positions);
+  auto G_V_pair = find_center_of_mass(*tmp_hull_mesh, *tmp_hull_geometry);
+  Vector3 tmp_G = G_V_pair.first;
+  double volume = G_V_pair.second;
 
-      Vector3 face_normal = tmp_solver->hullGeometry->faceNormal(f); // assuming outward normals
+  Eigen::Matrix3d zmat = Eigen::Matrix3d::Zero();
+  std::vector<Eigen::Matrix3d> dG_dv(hull_positions.rows());
+  for (size_t i = 0; i < hull_positions.rows(); i++)
+      dG_dv[i] = zmat;
+  for (Face f: tmp_hull_mesh->faces()){
+      // double face_area = tmp_solver->hullGeometry->faceArea(f);
+      double face_area = polygonal_face_area(f, *tmp_hull_geometry);
+
+      Vector3 face_normal = tmp_hull_geometry->faceNormal(f); // assuming outward normals
       size_t face_degree = f.degree();
       // assuming polygon faces here; 
       // TODO; check correctness for polygons
       Vector3 vert_sum = Vector3::zero();
       for (Vertex tmp_v: f.adjacentVertices())
-          vert_sum += tmp_solver->hullGeometry->inputVertexPositions[tmp_v];
+          vert_sum += tmp_hull_geometry->inputVertexPositions[tmp_v];
       for (Halfedge he: f.adjacentHalfedges()){
           Vertex v = he.tailVertex();
-          Vector3 p = tmp_solver->hullGeometry->inputVertexPositions[v];
+          Vector3 p = tmp_hull_geometry->inputVertexPositions[v];
           Vector3 Gf_G = (vert_sum + p)/(double)(face_degree + 1) - tmp_G;
           DenseMatrix<double> tmp_mat = vec32vec(Gf_G) * 
                                         vec32vec(face_normal).transpose();
           assert(tmp_mat.cols() == 3);
           assert(tmp_mat.rows() == 3);
-          dG_dv[v] += face_area * tmp_mat;
+          dG_dv[v.getIndex()] += face_area * tmp_mat;
       }
   }
-  double volume = tmp_solver->volume;
-  for (Vertex v: tmp_solver->hullMesh->vertices())
-      dG_dv[v] /= 3.*volume;
+  for (size_t i = 0; i < hull_positions.rows(); i++)
+      dG_dv[i] /= 3.*volume;
   return dG_dv;
 }
 
@@ -209,19 +216,19 @@ VertexData<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Forward3DSolv
 void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec,
                            Eigen::MatrixX3d &df_dv, Eigen::Vector3d &df_dG, double &dice_energy,
                            bool use_autodiff, bool frozen_G, std::string policy, FaceData<double> goal_probs, int fair_sides){
-    Forward3DSolver fwd_solver(hull_positions, G_vec, true); // when getting grads, the input must be convex
-    
-    assert(hull_positions.rows() == fwd_solver.hullMesh->nVertices()); // check if input was convex
-
-    if (!frozen_G){
-      std::pair<Vector3, double> G_V_pair = find_center_of_mass(*fwd_solver.hullMesh, *fwd_solver.hullGeometry);
-      fwd_solver.volume = G_V_pair.second;
-      fwd_solver.set_G(G_V_pair.first); // since it deosn't make sense to gave non-uniform G with dependent G
-    }
-    
-    fwd_solver.initialize_pre_computes();
     
     if (!use_autodiff){
+      Forward3DSolver fwd_solver(hull_positions, G_vec, true); // when getting grads, the input must be convex
+      
+      assert(hull_positions.rows() == fwd_solver.hullMesh->nVertices()); // check if input was convex
+
+      if (!frozen_G){
+        std::pair<Vector3, double> G_V_pair = find_center_of_mass(*fwd_solver.hullMesh, *fwd_solver.hullGeometry);
+        fwd_solver.volume = G_V_pair.second;
+        fwd_solver.set_G(G_V_pair.first); // since it deosn't make sense to gave non-uniform G with dependent G
+      }
+      
+      fwd_solver.initialize_pre_computes();
       printf("   initialized for diffs\n");
       BoundaryBuilder *bnd_builder = new BoundaryBuilder(&fwd_solver);
       bnd_builder->build_boundary_normals();
@@ -248,13 +255,13 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
     }
     else { // autodiff
       // rebuild hull_positions since they were shuffled in solver's convex hull computation
-      Eigen::MatrixX3d hull_positions = vertex_data_to_matrix(fwd_solver.hullGeometry->inputVertexPositions); 
+      // Eigen::MatrixX3d hull_positions = vertex_data_to_matrix(fwd_solver.hullGeometry->inputVertexPositions); 
       auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
         // decompose flat vector to positions and center of mass; G is the last 3 elements
         Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
         size_t flat_n = hull_poses_G_append_vec.rows();
         Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-        return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, fwd_solver, policy, goal_probs, fair_sides, false);
+        return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, policy, goal_probs, fair_sides, false);
       };
       Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
       Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
@@ -273,9 +280,9 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
         df_dv = dfdV;
       }
       else {
-        VertexData<Eigen::Matrix3d> dG_dv = get_COM_grads_for_convex_uniform_shape(&fwd_solver);
-        for (Vertex v: fwd_solver.hullMesh->vertices()){
-          df_dv.row(v.getIndex()) = dfdV.row(v.getIndex()) + (dG_dv[v].transpose() * df_dG).transpose();
+        std::vector<Eigen::Matrix3d> dG_dv = get_COM_grads_for_convex_uniform_shape(hull_positions);
+        for (size_t i = 0; i < hull_positions.rows(); i++){
+          df_dv.row(i) = dfdV.row(i) + (dG_dv[i].transpose() * df_dG).transpose();
         }
       }
     }
@@ -313,6 +320,7 @@ void dice_energy_opt(std::string policy, bool frozen_G, size_t step_count = 20){
     curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
     // show grads
     curr_hull_psmesh->addVertexVectorQuantity("ad total grads", -1.*dfdV)->setEnabled(true);
+    
     // diffused grads
     if (do_sobolev_dice_grads){    
       current_sobolev_lambda *= sobolev_lambda_decay;

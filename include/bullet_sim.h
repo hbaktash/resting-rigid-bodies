@@ -24,6 +24,10 @@
 #include "geometrycentral/surface/vertex_position_geometry.h"
 
 
+// --- Debugging ---
+#include "polyscope/polyscope.h"
+#include "polyscope/surface_mesh.h"
+
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
@@ -59,8 +63,8 @@ class PhysicsEnv {
     //make sure to re-use collision shapes among rigid bodies whenever possible!
     btAlignedObjectArray<btCollisionShape*> collisionShapes;
 
-    int MAX_ITERS = 100000, MIN_ITERS = 100;
-    double tol = 1e-9,
+    int MAX_ITERS = 1e8, MIN_ITERS = 10000;
+    double tol = 1e-10,
            default_step_size = 0.017; // 1/60
 
 

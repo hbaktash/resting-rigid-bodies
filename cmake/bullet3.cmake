@@ -18,6 +18,7 @@ MESSAGE(STATUS "bullet3 INCLUDE DIR: ${bullet3_INCLUDE_DIR}")
 MESSAGE(STATUS "bullet3 LIBRARY DIR: ${bullet3_LIBRARY_DIRS}")
 MESSAGE(STATUS "bullet3 ROOT DIR: ${bullet3_DIR}")
 
+# set(BT_USE_DOUBLE_PRECISION ON)
 set_target_properties(BulletDynamics PROPERTIES FOLDER third_party)
 add_library(bullet3_ INTERFACE)
 target_include_directories(bullet3_ INTERFACE ${bullet3_SOURCE_DIR}/src ${bullet3_SOURCE_DIR}/src/BulletCollision ${bullet3_SOURCE_DIR}/src/BulletDynamics ${bullet3_SOURCE_DIR}/src/LinearMath)

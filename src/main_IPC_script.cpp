@@ -16,6 +16,8 @@
 * from Adobe.
 *************************************************************************
 */
+// #define BT_USE_DOUBLE_PRECISION
+
 #include "unsupported/Eigen/EulerAngles"
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/meshio.h"
@@ -68,10 +70,13 @@ std::string BB_BASE_DIR = "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_s
 std::string SINGLE_MESH_PATH = "/Users/hbakt/Desktop/code/rolling-dragons/meshes/fox.obj";
 
 // simulation stuff
+
+
+// Bullet simulation stuff
+PhysicsEnv* my_env;
 // PhysicsEnv* my_env;
-float step_size = 0.001, // 0.016
-      refresh_x, refresh_y, refresh_z,
-      G_x, G_y, G_z;
+double bullet_step_size = 0.01; // 0.016;
+
 int step_count = 1;
 Vector3 G;
 Vector3 refresh_orientation({0,-1,0});
@@ -134,9 +139,6 @@ ManifoldSurfaceMesh* icos_sphere_mesh;
 VertexPositionGeometry* icos_sphere_geometry;
     
 
-// Bullet simulation stuff
-PhysicsEnv* my_env;
-
 
 void initialize_vis(bool with_plane = true){
     polyscope::registerSurfaceMesh("my polyhedra", geometry->inputVertexPositions, mesh->getFaceVertexList());
@@ -147,27 +149,6 @@ void initialize_vis(bool with_plane = true){
       psPlane->setDrawWidget(false);
       psPlane->setPose(glm::vec3{0., ground_box_y + 1, 0.}, glm::vec3{0., 1., 0.});
     }
-}
-
-
-void generate_icosmesh(){
-  // ICOSphere preparation
-  int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
-  std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
-  std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
-  // tilt the sphere randomly; to avoid singular configurations
-  std::mt19937 util_mersenne_twister(0); // fixed seed
-  while (true){
-      std::uniform_real_distribution<double> distx(-1, 1), disty(-1, 1), distz(-1, 1);
-      Vector3 random_orientation = {distx(util_mersenne_twister), disty(util_mersenne_twister), distz(util_mersenne_twister)};
-      if (random_orientation.norm() <= 1){
-          random_orientation = random_orientation.normalize();
-          Eigen::AngleAxisd R = aa_from_init_ori(random_orientation);
-          for (Vertex v: icos_sphere_mesh->vertices())
-              icos_sphere_geometry->inputVertexPositions[v] = vec2vec3(R.toRotationMatrix() * vec32vec(icos_sphere_geometry->inputVertexPositions[v]));
-          break;
-      }
-  }
 }
 
 
@@ -664,6 +645,27 @@ FaceData<double> run_IPC_experiment(nlohmann::json template_json, std::string me
     }
 }
 
+
+void generate_icosmesh(){
+  // ICOSphere preparation
+  int resolution = (int)sqrt(ICOS_samples/10); // decent approximation
+  std::tie(icos_sphere_mesh, icos_sphere_geometry) = get_convex_hull_mesh(generate_normals_icosahedral(resolution));
+  std::cout << " @ Icos subdivision vertex count N = " << icos_sphere_mesh->nVertices() << "\n";
+  // tilt the sphere randomly; to avoid singular configurations
+  std::mt19937 util_mersenne_twister(0); // fixed seed
+  while (true){
+      std::uniform_real_distribution<double> distx(-1, 1), disty(-1, 1), distz(-1, 1);
+      Vector3 random_orientation = {distx(util_mersenne_twister), disty(util_mersenne_twister), distz(util_mersenne_twister)};
+      if (random_orientation.norm() <= 1){
+          random_orientation = random_orientation.normalize();
+          Eigen::AngleAxisd R = aa_from_init_ori(random_orientation);
+          for (Vertex v: icos_sphere_mesh->vertices())
+              icos_sphere_geometry->inputVertexPositions[v] = vec2vec3(R.toRotationMatrix() * vec32vec(icos_sphere_geometry->inputVertexPositions[v]));
+          break;
+      }
+  }
+}
+
 // to delete
 void compare_quasi_sample_convergence(){
   
@@ -744,7 +746,7 @@ void initalize_env(bool visuals = true){
   my_env->init_geometry(forwardSolver->hullMesh, forwardSolver->hullGeometry);
   my_env->add_ground(ground_box_y, ground_box_shape);
   my_env->add_object(G, Vector3({0,-1,0}));
-
+  my_env->default_step_size = bullet_step_size;
   // polyscope
   if (visuals)
     initialize_vis(true);
@@ -757,18 +759,6 @@ FaceData<double> run_Bullet_experiment(int &invalids){
   FaceData<size_t> face_counts(*my_env->mesh);
   FaceData<double> face_dual_sum_areas(*my_env->mesh);
   std::vector<Vector3> final_orientations;
-
-  // tilt the sphere randomly; to avoid singular configurations
-  while (true){
-      Vector3 random_orientation = {randomReal(-1,1), randomReal(-1,1), randomReal(-1,1)};
-      if (random_orientation.norm() <= 1){
-          random_orientation = random_orientation.normalize();
-          Eigen::AngleAxisd R = aa_from_init_ori(random_orientation);
-          for (Vertex v: icos_sphere_mesh->vertices())
-              icos_sphere_geometry->inputVertexPositions[v] = vec2vec3(R.toRotationMatrix() * vec32vec(icos_sphere_geometry->inputVertexPositions[v]));
-          break;
-      }
-  }
 
   // compute the total area of the ICOsphere
   double total_area = 0;
@@ -1104,11 +1094,11 @@ void myCallback() {
 
 int main(int argc, char* argv[])
 {
-  // #ifdef BT_USE_DOUBLE_PRECISION
-  // 	printf("BT_USE_DOUBLE_PRECISION\n");
-  // #else
-  //   printf("Single precision\n");
-  // #endif
+  #ifdef BT_USE_DOUBLE_PRECISION
+  	printf("BT_USE_DOUBLE_PRECISION\n");
+  #else
+    printf("Single precision\n");
+  #endif
 
   args::ArgumentParser parser(   "This is a test program.", "This goes after the options.");
   args::HelpFlag help(parser,    "help", "Display this help menu", {'h', "help"});
@@ -1174,6 +1164,13 @@ int main(int argc, char* argv[])
     }
     else if (single_mesh_path){
       
+      // --- Debugging --- //
+      polyscope::init();
+      vis_utils = VisualUtils();
+      generate_polyhedron_example(SINGLE_MESH_PATH);
+      update_solver();
+      init_visuals();
+
       // make ICOSphere 
       generate_icosmesh();
       double total_area = 0;

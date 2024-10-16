@@ -19,6 +19,8 @@
 #include "geometry_utils.h"
 #include "bullet_sim.h"
 
+
+
 geometrycentral::DenseMatrix<double> openGL_mat_to_GC_mat(btScalar* m){
     geometrycentral::DenseMatrix<double> trans_mat(4,4);
     for (int flat_ind = 0; flat_ind < 16; flat_ind++){
@@ -331,26 +333,35 @@ Face PhysicsEnv::final_stable_face(bool save_trail){
         // check center of mass motion
         btVector3 btG = body->getCenterOfMassPosition();
         curr_G = Vector3({btG.getX(), btG.getY(), btG.getZ()});
+                    
         if (i == 0){
             old_G = curr_G;
         }
         else {
-            if (norm(old_G - curr_G) < tol && i > MIN_ITERS){ // has stopped moving
+            double Gdiff = norm(old_G - curr_G)/default_step_size;
+            // printf(" --- at iter %d \t with G_diff: %f \n", i, Gdiff);
+            if (Gdiff < tol && i > MIN_ITERS){ // has stopped moving
                 // printf("---- at a stable state; step %d\n", i);
                 Vector<Vector3> new_positions = get_new_positions(geometry->inputVertexPositions.toVector());
                 VertexData<Vector3> new_positions_vd(*mesh);
                 new_positions_vd.fromVector(new_positions);
                 final_stable_face = get_touching_face(new_positions_vd);
                 if (final_stable_face.getIndex() != INVALID_IND){
+                    
+                    // printf(" --- stopped at iter %d \t with G_diff: %f \n", i, Gdiff);
+                    // printf(" ---         at face %d\n", final_stable_face.getIndex());
+                    // polyscope::getSurfaceMesh("colored polyhedra")->updateVertexPositions(new_positions_vd);
+                    // polyscope::show();
                     break; // break if valid face
-                    // printf(" --- stopped at face %d\n", final_stable_face.getIndex());
                     // std::cout << " --- initial face normal: "<< geometry->faceNormal(final_stable_face) << "\n";
                 }
-                break; // TODOOO::: checking if running for too long is helpful
+                // printf(" --- stopped at iter %d \t with G_diff: %f \n", i, norm(old_G - curr_G));
+                break; // Seems like running for too long is not helpful
             }
             old_G = curr_G;
         }
     }
+    // printf(" --- Never stopped! max iters %d \t with G_diff: %f \n", MAX_ITERS, norm(old_G - curr_G));
     // if (body && body->getMotionState()) {
     //     body->getMotionState()->getWorldTransform(trans);
     // }

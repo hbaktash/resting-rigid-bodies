@@ -8,7 +8,8 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
                                     ){
     // precomputes
     Eigen::MatrixX3d hull_positions_d = hull_positions;
-    Forward3DSolver tmp_solver(hull_positions_d, G, true); // assuming input is convex; will be asserted internally in the constructor
+    Eigen::Vector3d G_d = G;
+    Forward3DSolver tmp_solver(hull_positions_d, G_d, true); // assuming input is convex; will be asserted internally in the constructor
     tmp_solver.initialize_pre_computes();
     FaceData<Face> face_last_face = tmp_solver.face_last_face;
     VertexData<bool> vertex_is_stabilizable = tmp_solver.vertex_is_stabilizable; 
