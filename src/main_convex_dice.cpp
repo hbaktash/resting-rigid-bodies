@@ -16,7 +16,6 @@
 * from Adobe.
 *************************************************************************
 */
-#include <stan/math.hpp>
 
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/meshio.h"

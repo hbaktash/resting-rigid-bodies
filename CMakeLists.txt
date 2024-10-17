@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD 20)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 # Dependencies
+include(Eigen3)
 include(geometry-central)
 include(polyscope)
 include(qhull)
@@ -18,6 +19,7 @@ include(osqp-cpp)
 # include(autodiff)
 # include(autodiff)
 # include(ipc-toolkit)
+
 
 # Library source files
 set(SRC_FILES

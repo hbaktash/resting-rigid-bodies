@@ -31,5 +31,6 @@ target_include_directories(stan
     ${stan_SUNDIALS_INCLUDE_DIR}
 )
 target_compile_definitions(stan INTERFACE "_REENTRANT")
+target_compile_options(stan INTERFACE "-include" "stan/math/prim/fun/Eigen.hpp")
 target_link_libraries(stan INTERFACE "${stan_LIBRARIES}" TBB::tbb Eigen3::Eigen)
 add_library(stan::stan ALIAS stan)
