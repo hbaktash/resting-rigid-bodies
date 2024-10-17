@@ -22,12 +22,14 @@
 // #include "geometrycentral/surface/manifold_surface_mesh.h"
 // #include "geometrycentral/surface/vertex_position_geometry.h"
 // #include "geometrycentral/surface/surface_point.h"
+#include <stan/math.hpp>
 #include "forward3D.h"
 #include "utils.h"
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
 #include "polyscope/point_cloud.h"
 #include "polyscope/curve_network.h"
+
 
 // Add missing include path for autodiff library
 // #include <autodiff/reverse/var/eigen.hpp>

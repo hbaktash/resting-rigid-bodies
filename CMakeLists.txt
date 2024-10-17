@@ -49,6 +49,7 @@ polyscope::polyscope
 qhull::qhull
 tinyad::tinyad
 osqp-cpp::osqp-cpp
+stan::stan
 )
 add_library(rolling_dragons::rolling_dragons ALIAS rolling_dragons)
 
@@ -81,7 +82,6 @@ target_link_libraries(convexDice
 PRIVATE
 rolling_dragons::rolling_dragons
 taywee::args
-stan::stan
 )
 set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
 

@@ -7,8 +7,8 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
                                     size_t side_count, bool verbose
                                     ){
     // precomputes
-    Eigen::MatrixX3d hull_positions_d = hull_positions;
-    Eigen::Vector3d G_d = G;
+    Eigen::MatrixX3d hull_positions_d = hull_positions; //.template cast<double>();
+    Eigen::Vector3d G_d = G; //.template cast<double>();
     Forward3DSolver tmp_solver(hull_positions_d, G_d, true); // assuming input is convex; will be asserted internally in the constructor
     tmp_solver.initialize_pre_computes();
     FaceData<Face> face_last_face = tmp_solver.face_last_face;
@@ -200,7 +200,10 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         }
         return energy;
     }
-    
+    else {
+        throw std::invalid_argument("policy not recognized");
+        return 0.;
+    }
 }
 
 template <typename Scalar>
