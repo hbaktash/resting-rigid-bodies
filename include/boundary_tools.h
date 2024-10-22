@@ -141,6 +141,7 @@ class BoundaryBuilder {
         // TODO template
         template <typename Scalar>
         static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
+                                  Forward3DSolver &tmp_solver,
                                   std::string policy, FaceData<double> goal_probs, 
                                   size_t side_count, bool verbose);
         template <typename Scalar>

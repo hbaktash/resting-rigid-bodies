@@ -17,7 +17,6 @@ include(args)
 include(stan)
 include(osqp-cpp)
 # include(autodiff)
-# include(autodiff)
 # include(ipc-toolkit)
 
 

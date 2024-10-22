@@ -63,10 +63,60 @@ void tmp_arc_vis(Vector3 p1, Vector3 p2, Vector3 center, double radius,
 FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
   FaceData<double> goal_probs(*tmp_solver->hullMesh, 0.);
 
-  // 6/36
   Face closest_face;
+  // Vector3 nf7({0,0,-1}); // bottom face
+  // Vector3 nf61({0.629,0.457,0.629}); 
+  // Vector3 nf62({0.809,0.587,0.}); 
+  // Vector3 nf51({-0.24,0.739,0.629});
+  // Vector3 nf52({-0.309, 0.951, 0.}); 
+  // Vector3 nf41({-0.777, 0., 0.629}); 
+  // Vector3 nf42({-1., 0., 0.}); 
+  // Vector3 nf31({-0.24, -0.739, 0.629}); 
+  // Vector3 nf32({-0.309, -0.951, 0.}); 
+  // Vector3 nf21({0.629, -0.456, 0.629}); 
+  // Vector3 nf22({0.809, -0.587, 0.}); 
+
+  // wide tent
+  // Vector3  nf7({0, 0, -1}); // bottom face
+  // Vector3 nf61({0.803215, 0.26098, 0.535477});   // 0
+  // Vector3 nf62({0.803215, -0.26098, 0.535477});  // 9
+  // Vector3 nf51({0.496414, 0.683255, 0.535477});  // 1
+  // Vector3 nf52({0.496414, -0.683255, 0.535477}); // 8
+  // Vector3 nf41({0, 0.84455, 0.535477});          // 2
+  // Vector3 nf42({0, -0.84455, 0.535477});         // 7
+  // Vector3 nf31({-0.496414, 0.683255, 0.535477}); // 3
+  // Vector3 nf32({-0.496414, -0.683255, 0.535477});// 6
+  // Vector3 nf21({-0.803215, 0.26098, 0.535477});  // 4
+  // Vector3 nf22({-0.803215, -0.26098, 0.535477}); // 5
+
+  // atipodal tent
+  Vector3 nf7({0, 0, -1}); // bottom face
+  Vector3 nf61({0.803215, 0.26098, 0.535477});   // 0
+  Vector3 nf62({-0.803215, -0.26098, 0.535477}); // 5
+  Vector3 nf51({0.496414, 0.683255, 0.535477});  // 1
+  Vector3 nf52({-0.496414, -0.683255, 0.535477});// 6
+  Vector3 nf31({0, 0.84455, 0.535477});          // 2
+  Vector3 nf32({0, -0.84455, 0.535477});         // 7
+  Vector3 nf21({-0.496414, 0.683255, 0.535477}); // 3
+  Vector3 nf22({0.496414, -0.683255, 0.535477}); // 8
+  Vector3 nf41({-0.803215, 0.26098, 0.535477});  // 4
+  Vector3 nf42({0.803215, -0.26098, 0.535477});  // 9
+
+  // Hendecahedron
+  // Vector3 nf61({0, -0.707107, 0.707107}); // bottom 4 faces
+  // Vector3 nf62({0, 0.707107, 0.707107});
+  // Vector3 nf21({0.447214, 0, 0.894427});    // triangle
+  // Vector3 nf22({-0.447214, 0, 0.894427});   // triangle
+  // Vector3 nf7({0, 0, -1});                // top unique quad
+  // Vector3 nf31({-0.894427, 0, -0.447214}); // top ring; 6 faces
+  // Vector3 nf32({0.894427, 0, -0.447214});    // triangle   
+  // Vector3 nf51({-0.57735, -0.57735, -0.57735});// top, right quads
+  // Vector3 nf52({0.57735, -0.57735, -0.57735});
+  // Vector3 nf41({-0.57735, 0.57735, -0.57735}); // top, left quads
+  // Vector3 nf42({0.57735, 0.57735, -0.57735});
+
+  // 6/36
   double closest_normal_diff = 1000.;
-  Vector3 nf7({0,0,-1}); // bottom face
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf7).norm();
     if (tmp_solver->face_is_stable(f) && 
@@ -79,10 +129,10 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
   
   // 5/36 - 1st
   closest_normal_diff = 1000.;
-  Vector3 nf61({0.629,0.457,0.629}); 
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf61).norm();
-    if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
+    if (tmp_solver->face_is_stable(f) && 
+        normal_diff < closest_normal_diff && goal_probs[f] == 0.){
       closest_face = f;
       closest_normal_diff = normal_diff;
     }
@@ -91,7 +141,6 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
 
   // 5/36 - 2nd
   closest_normal_diff = 1000.;
-  Vector3 nf62({0.809,0.587,0.}); 
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf62).norm();
     if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
@@ -103,7 +152,6 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
 
   // 4/36 - 1st
   closest_normal_diff = 1000.;
-  Vector3 nf51({-0.24,0.739,0.629}); 
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf51).norm();
     if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
@@ -116,7 +164,7 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
 
   // 4/36 - 2nd
   closest_normal_diff = 1000.;
-  Vector3 nf52({-0.309, 0.951, 0.}); 
+  
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf52).norm();
     if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
@@ -129,7 +177,7 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
 
   // 3/36 - 1st
   closest_normal_diff = 1000.;
-  Vector3 nf41({-0.777, 0., 0.629}); 
+  
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf41).norm();
     if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
@@ -142,7 +190,7 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
 
   // 3/36 - 2nd
   closest_normal_diff = 1000.;
-  Vector3 nf42({-1., 0., 0.}); 
+  
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf42).norm();
     if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
@@ -154,7 +202,7 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
 
   // 2/36 - 1st
   closest_normal_diff = 1000.;
-  Vector3 nf31({-0.24, -0.739, 0.629}); 
+  
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf31).norm();
     if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
@@ -166,7 +214,7 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
 
   // 2/36 - 2nd
   closest_normal_diff = 1000.;
-  Vector3 nf32({-0.309, -0.951, 0.}); 
+  
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf32).norm();
     if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
@@ -178,7 +226,7 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
 
   // 1/36 - 1st
   closest_normal_diff = 1000.;
-  Vector3 nf21({0.629, -0.456, 0.629}); 
+  
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf21).norm();
     if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
@@ -190,7 +238,7 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
   
   // 1/36 - 2nd
   closest_normal_diff = 1000.;
-  Vector3 nf22({0.809, -0.587, 0.}); 
+  
   for (Face f: tmp_solver->hullMesh->faces()){
     double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - nf22).norm();
     if (tmp_solver->face_is_stable(f) && normal_diff < closest_normal_diff && goal_probs[f] == 0.){
@@ -931,15 +979,21 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
                                double step_size, double decay, bool frozen_G, size_t max_iter){
   
   Forward3DSolver tmp_solver(hull_positions, G_vec, true); // assuming input is convex; will be asserted internally in the constructor
+  if (!frozen_G){
+    tmp_solver.set_uniform_G();
+    G_vec = vec32vec(tmp_solver.get_G());
+  }
   tmp_solver.initialize_pre_computes();
   
+  std::cout << "getting fair dice energy for the initial hull\n";
   double min_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions, G_vec, 
-                                                                policy, goal_probs, dice_side_count, false);
+                                                                tmp_solver,
+                                                                policy, goal_probs, dice_side_count, true);
   double s = step_size; //
 
   bool found_smth_optimal = false;
-  int j;
   double tmp_dice_energy;
+  int j;
   for (j = 0; j < max_iter; j++) {
     tmp_solver = Forward3DSolver(hull_positions - s * dfdv, G_vec, false); // not necessarily convex
     if (frozen_G && !G_is_inside(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, tmp_solver.get_G())){
@@ -954,9 +1008,18 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
     tmp_solver.initialize_pre_computes();
     // re-assign since qhull inside solver reshuffles points
     Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
-    tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec, 
-                                                            policy, goal_probs, dice_side_count, false);
-    //   printf("  *** temp fair dice energy %d: %f\n", j, tmp_fair_dice_energy);
+    // TODO: remove the redundancy here once indices are figured out
+    Forward3DSolver tmp_solver2(tmp_hull_positions, G_vec, true);
+    std::cout << "   ---   step "<< j <<" -----\n";
+    tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec,
+                                                           tmp_solver2,
+                                                           policy, goal_probs, dice_side_count, true);
+    if (j%50 == 0){
+      printf("  *** temp fair dice energy %d: %f  , MIN: %f\n", j, tmp_dice_energy, min_dice_energy);
+      polyscope::registerSurfaceMesh("tmp_hull", tmp_solver2.hullGeometry->inputVertexPositions, tmp_solver2.hullMesh->getFaceVertexList());
+      polyscope::registerPointCloud("tmp_G", std::vector<Vector3>{tmp_solver2.get_G()});
+      polyscope::show();
+    }
 
     if (tmp_dice_energy < min_dice_energy){
         found_smth_optimal = true;
@@ -966,8 +1029,8 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
         s *= decay;
   }
   s = found_smth_optimal ? s : 0.;
-//   printf("line search for dice ended at iter %d, s: %.10f, \n \t\t\t\t\t fnew: %f \n", j, s, tmp_fair_dice_energy);
-//   printf("\t\t - line ended at iter %d/%d with s: %f \n", j, max_iter, s);
+  printf("line search for dice ended at iter %d, s: %.10f, \n", j, s);
+  // printf("\t\t - line ended at iter %d/%d with s: %f \n", j, max_iter, s);
   return s;
 }
 

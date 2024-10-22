@@ -448,6 +448,12 @@ generate_11_sided_polyhedron(std::string type){
     faces.push_back({8,6,9});
     faces.push_back({9,6,10});
   }
+  else if (std::strcmp(type.c_str(), "hendecahedron") == 0){
+    std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
+    std::unique_ptr<VertexPositionGeometry> geometry_ptr;
+    std::tie(mesh_ptr, geometry_ptr) = readManifoldSurfaceMesh("../meshes/hendecahedron.stl");
+    return std::make_tuple(std::move(mesh_ptr), std::move(geometry_ptr));
+  }
   else {
     printf("type %s not recognized\n", type.c_str());
     return generate_polyhedra(type);

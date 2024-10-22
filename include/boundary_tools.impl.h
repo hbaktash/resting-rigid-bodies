@@ -3,13 +3,14 @@
 
 template <typename Scalar>
 Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
+                                    Forward3DSolver &tmp_solver,
                                     std::string policy, FaceData<double> goal_probs, 
                                     size_t side_count, bool verbose
                                     ){
-    // precomputes
-    Eigen::MatrixX3d hull_positions_d = hull_positions.template cast<double>();
-    Eigen::Vector3d G_d = G.template cast<double>();
-    Forward3DSolver tmp_solver(hull_positions_d, G_d, true); // assuming input is convex; will be asserted internally in the constructor
+    // Eigen::MatrixX3d hull_positions_d = hull_positions.template cast<double>();
+    // Eigen::Vector3d G_d = G.template cast<double>();
+    // Forward3DSolver tmp_solver(hull_positions_d, G_d, true); // assuming input is convex; will be asserted internally in the constructor
+    // // precomputes
     tmp_solver.initialize_pre_computes();
     FaceData<Face> face_last_face = tmp_solver.face_last_face;
     VertexData<bool> vertex_is_stabilizable = tmp_solver.vertex_is_stabilizable; 
@@ -195,8 +196,22 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         FaceData<double> my_probs = get_double_dice_probs_for_circus(&tmp_solver);
         Scalar energy = 0.;
         for (Face f: tmp_solver.hullMesh->faces()){
-            Scalar diff = face_region_area[f] - my_probs[f] * 4. * PI;
-            energy += diff * diff;
+            // // TODO: norm 2
+            // Scalar diff = face_region_area[f] - my_probs[f] * 4. * PI;
+            // energy += diff * diff;
+            // TODO: KL div
+            if (face_region_area[f] > 0 && my_probs[f] > 0){
+                if(verbose){
+                    std::cout << "  -f" << f.getIndex() 
+                                << "(" 
+                                << f.halfedge().vertex().getIndex() << ", "
+                                << f.halfedge().tipVertex().getIndex()<< ", "
+                                << f.halfedge().next().tipVertex().getIndex()
+                                << ")" << " : " << face_region_area[f]/(4. * PI) << " goal: "<< my_probs[f] << std::endl; 
+                }
+                double goal_area = my_probs[f] * 4. * PI;
+                energy += goal_area * log(goal_area / face_region_area[f]);
+            }
         }
         return energy;
     }
