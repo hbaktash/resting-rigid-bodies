@@ -141,7 +141,7 @@ class BoundaryBuilder {
         // TODO template
         template <typename Scalar>
         static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                  Forward3DSolver &tmp_solver,
+                                  Forward3DSolver &tmp_solver, double bary_reg,
                                   std::string policy, FaceData<double> goal_probs, 
                                   size_t side_count, bool verbose);
         template <typename Scalar>
@@ -152,7 +152,8 @@ class BoundaryBuilder {
         static Scalar triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B, Eigen::Vector3<Scalar> C);
 };
 
-double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec,
+double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
+                                double bary_reg,
                                std::string policy, FaceData<double> goal_probs, size_t dice_side_count, double step_size, double decay, bool frozen_G, 
                                size_t max_iter);
 

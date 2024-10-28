@@ -78,13 +78,13 @@ add_library(rolling_dragons::rolling_dragons ALIAS rolling_dragons)
 
 # Add executables
 
-add_executable(convexDice src/main_convex_dice.cpp)
-target_link_libraries(convexDice
-PRIVATE
-rolling_dragons::rolling_dragons
-taywee::args
-)
-set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
+# add_executable(convexDice src/main_convex_dice.cpp)
+# target_link_libraries(convexDice
+# PRIVATE
+# rolling_dragons::rolling_dragons
+# taywee::args
+# )
+# set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
 
 
 # Add executables

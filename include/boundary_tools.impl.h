@@ -3,11 +3,11 @@
 
 template <typename Scalar>
 Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                    Forward3DSolver &tmp_solver,
+                                    Forward3DSolver &tmp_solver, double bary_reg,
                                     std::string policy, FaceData<double> goal_probs, 
                                     size_t side_count, bool verbose
                                     ){
-    // Eigen::MatrixX3d hull_positions_d = hull_positions.template cast<double>();
+    // Eigen::MatrixX3d hull_positions_d = static_cast<Eigen::MatrixX3d>(hull_positions);//.template cast<double>();
     // Eigen::Vector3d G_d = G.template cast<double>();
     // Forward3DSolver tmp_solver(hull_positions_d, G_d, true); // assuming input is convex; will be asserted internally in the constructor
     // // precomputes
@@ -46,6 +46,10 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
 
     // morse complex areas; only non-zero for stable faces
     FaceData<Scalar> face_region_area(*tmp_solver.hullMesh, 0.);
+    
+    // for barycentric energy
+    FaceData<std::set<Vertex>> face_region_boundary_vertices(*tmp_solver.hullMesh);
+    FaceData<Scalar> distance_to_barycenters(*tmp_solver.hullMesh, 0.);
     // printf("  stan: back-flowing terminal edges %lu \n", terminal_edges.size());
     int i = 1;
     for (Edge e: terminal_edges){
@@ -111,7 +115,10 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
                     Scalar patch_area_ff2 = triangle_patch_signed_area_on_sphere<Scalar>(ff2_normal, tmp_normal, next_normal);
                     face_region_area[ff2] += ff2_area_sign * patch_area_ff2;
                     // draw_arc_on_sphere_static(vec2vec3(tmp_normal), vec2vec3(next_normal), Vector3({0,2,0}), 1., 12, 0, 0.1, glm::vec3(1., 0., 1.), 0.5);
-                    // polyscope::show();            
+                    // polyscope::show();         
+                    // for barycentric energy
+                    face_region_boundary_vertices[ff1].insert(current_v);
+                    face_region_boundary_vertices[ff2].insert(current_v);
                     break; // Exit while; got to a maximum
                 }
                 else{
@@ -146,7 +153,26 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             }
         }
     }
+    
 
+    //// regularizer
+    // compute distance to bary centers
+    Scalar bary_energy = 0.;
+    for (Face f: tmp_solver.hullMesh->faces()){
+        if (face_region_area[f] > 0){
+            Eigen::Vector3<Scalar> barycenter = Eigen::Vector3<Scalar>::Zero();
+            for (Vertex v: face_region_boundary_vertices[f]){
+                barycenter += (hull_positions.row(v.getIndex())- G.transpose()).normalized(); // vertex-G normals
+            }
+            barycenter /= face_region_boundary_vertices[f].size();
+            barycenter = barycenter.normalized();
+            distance_to_barycenters[f] = (barycenter - face_normals[f]).norm();
+            bary_energy += bary_reg * distance_to_barycenters[f] * distance_to_barycenters[f];
+        }
+    }
+
+    Scalar energy = 0.;
+    energy += bary_energy;
     if (std::strcmp(policy.c_str(), "fair") == 0){
         // sort for dice energy
         Scalar total_area = 0.;
@@ -161,7 +187,6 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         // std::cout << "sum over probabilities: " << total_area/(4.*PI) << std::endl;
         std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
         // printf(" static sorted probs: \n");
-        Scalar energy = 0.;
         size_t tmp_side_cnt = 0;
         double goal_prob = 1. / (double)side_count;
         for (auto pair: probs){ 
@@ -189,36 +214,32 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         }
 
         // return probs[0].second; // DEBUG: max prob
-        
-        return energy; 
     }
     else if (std::strcmp(policy.c_str(), "manual") == 0){
         FaceData<double> my_probs = get_double_dice_probs_for_circus(&tmp_solver);
-        Scalar energy = 0.;
         for (Face f: tmp_solver.hullMesh->faces()){
             // // TODO: norm 2
-            // Scalar diff = face_region_area[f] - my_probs[f] * 4. * PI;
-            // energy += diff * diff;
-            // TODO: KL div
-            if (face_region_area[f] > 0 && my_probs[f] > 0){
-                if(verbose){
-                    std::cout << "  -f" << f.getIndex() 
-                                << "(" 
-                                << f.halfedge().vertex().getIndex() << ", "
-                                << f.halfedge().tipVertex().getIndex()<< ", "
-                                << f.halfedge().next().tipVertex().getIndex()
-                                << ")" << " : " << face_region_area[f]/(4. * PI) << " goal: "<< my_probs[f] << std::endl; 
-                }
-                double goal_area = my_probs[f] * 4. * PI;
-                energy += goal_area * log(goal_area / face_region_area[f]);
-            }
+            Scalar diff = face_region_area[f] - my_probs[f] * 4. * PI;
+            energy += diff * diff;
+            // // TODO: KL div
+            // if (face_region_area[f] > 0 && my_probs[f] > 0){
+            //     if(verbose){
+            //         std::cout << "  -f" << f.getIndex() 
+            //                     << "(" 
+            //                     << f.halfedge().vertex().getIndex() << ", "
+            //                     << f.halfedge().tipVertex().getIndex()<< ", "
+            //                     << f.halfedge().next().tipVertex().getIndex()
+            //                     << ")" << " : " << face_region_area[f]/(4. * PI) << " goal: "<< my_probs[f] << std::endl; 
+            //     }
+            //     double goal_area = my_probs[f] * 4. * PI;
+            //     energy += goal_area * log(goal_area / face_region_area[f]);
+            // }
         }
-        return energy;
     }
     else {
         throw std::invalid_argument("policy not recognized");
-        return 0.;
     }
+    return energy;
 }
 
 template <typename Scalar>

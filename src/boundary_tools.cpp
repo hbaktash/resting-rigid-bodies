@@ -64,19 +64,21 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
   FaceData<double> goal_probs(*tmp_solver->hullMesh, 0.);
 
   Face closest_face;
-  // Vector3 nf7({0,0,-1}); // bottom face
-  // Vector3 nf61({0.629,0.457,0.629}); 
-  // Vector3 nf62({0.809,0.587,0.}); 
-  // Vector3 nf51({-0.24,0.739,0.629});
-  // Vector3 nf52({-0.309, 0.951, 0.}); 
-  // Vector3 nf41({-0.777, 0., 0.629}); 
-  // Vector3 nf42({-1., 0., 0.}); 
-  // Vector3 nf31({-0.24, -0.739, 0.629}); 
-  // Vector3 nf32({-0.309, -0.951, 0.}); 
-  // Vector3 nf21({0.629, -0.456, 0.629}); 
-  // Vector3 nf22({0.809, -0.587, 0.}); 
 
-  // wide tent
+  // circus tent
+  Vector3 nf7({0,0,-1}); // bottom face
+  Vector3 nf61({0.629,0.457,0.629}); 
+  Vector3 nf62({0.809,0.587,0.}); 
+  Vector3 nf51({-0.24,0.739,0.629});
+  Vector3 nf52({-0.309, 0.951, 0.}); 
+  Vector3 nf41({-0.777, 0., 0.629}); 
+  Vector3 nf42({-1., 0., 0.}); 
+  Vector3 nf31({-0.24, -0.739, 0.629}); 
+  Vector3 nf32({-0.309, -0.951, 0.}); 
+  Vector3 nf21({0.629, -0.456, 0.629}); 
+  Vector3 nf22({0.809, -0.587, 0.}); 
+
+  // // wide tent
   // Vector3  nf7({0, 0, -1}); // bottom face
   // Vector3 nf61({0.803215, 0.26098, 0.535477});   // 0
   // Vector3 nf62({0.803215, -0.26098, 0.535477});  // 9
@@ -90,17 +92,17 @@ FaceData<double> get_double_dice_probs_for_circus(Forward3DSolver *tmp_solver){
   // Vector3 nf22({-0.803215, -0.26098, 0.535477}); // 5
 
   // atipodal tent
-  Vector3 nf7({0, 0, -1}); // bottom face
-  Vector3 nf61({0.803215, 0.26098, 0.535477});   // 0
-  Vector3 nf62({-0.803215, -0.26098, 0.535477}); // 5
-  Vector3 nf51({0.496414, 0.683255, 0.535477});  // 1
-  Vector3 nf52({-0.496414, -0.683255, 0.535477});// 6
-  Vector3 nf31({0, 0.84455, 0.535477});          // 2
-  Vector3 nf32({0, -0.84455, 0.535477});         // 7
-  Vector3 nf21({-0.496414, 0.683255, 0.535477}); // 3
-  Vector3 nf22({0.496414, -0.683255, 0.535477}); // 8
-  Vector3 nf41({-0.803215, 0.26098, 0.535477});  // 4
-  Vector3 nf42({0.803215, -0.26098, 0.535477});  // 9
+  // Vector3 nf7({0, 0, -1}); // bottom face
+  // Vector3 nf61({0.803215, 0.26098, 0.535477});   // 0
+  // Vector3 nf62({-0.803215, -0.26098, 0.535477}); // 5
+  // Vector3 nf51({0.496414, 0.683255, 0.535477});  // 1
+  // Vector3 nf52({-0.496414, -0.683255, 0.535477});// 6
+  // Vector3 nf31({0, 0.84455, 0.535477});          // 2
+  // Vector3 nf32({0, -0.84455, 0.535477});         // 7
+  // Vector3 nf21({-0.496414, 0.683255, 0.535477}); // 3
+  // Vector3 nf22({0.496414, -0.683255, 0.535477}); // 8
+  // Vector3 nf41({-0.803215, 0.26098, 0.535477});  // 4
+  // Vector3 nf42({0.803215, -0.26098, 0.535477});  // 9
 
   // Hendecahedron
   // Vector3 nf61({0, -0.707107, 0.707107}); // bottom 4 faces
@@ -974,7 +976,8 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
 
 // hull update stuff
 // frozen G so far
-double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec,
+double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
+                               double bary_reg,
                                std::string policy, FaceData<double> goal_probs, size_t dice_side_count, 
                                double step_size, double decay, bool frozen_G, size_t max_iter){
   
@@ -985,10 +988,10 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   }
   tmp_solver.initialize_pre_computes();
   
-  std::cout << "getting fair dice energy for the initial hull\n";
+  // std::cout << "getting fair dice energy for the initial hull\n";
   double min_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions, G_vec, 
-                                                                tmp_solver,
-                                                                policy, goal_probs, dice_side_count, true);
+                                                                tmp_solver, bary_reg,
+                                                                policy, goal_probs, dice_side_count, false);
   double s = step_size; //
 
   bool found_smth_optimal = false;
@@ -1010,16 +1013,16 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
     Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
     // TODO: remove the redundancy here once indices are figured out
     Forward3DSolver tmp_solver2(tmp_hull_positions, G_vec, true);
-    std::cout << "   ---   step "<< j <<" -----\n";
     tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec,
-                                                           tmp_solver2,
-                                                           policy, goal_probs, dice_side_count, true);
-    if (j%50 == 0){
-      printf("  *** temp fair dice energy %d: %f  , MIN: %f\n", j, tmp_dice_energy, min_dice_energy);
-      polyscope::registerSurfaceMesh("tmp_hull", tmp_solver2.hullGeometry->inputVertexPositions, tmp_solver2.hullMesh->getFaceVertexList());
-      polyscope::registerPointCloud("tmp_G", std::vector<Vector3>{tmp_solver2.get_G()});
-      polyscope::show();
-    }
+                                                           tmp_solver2, bary_reg,
+                                                           policy, goal_probs, dice_side_count, false);
+    // if (j%50 == 0){
+    //   std::cout << "   ---   step "<< j <<" -----\n";
+    //   printf("  *** temp fair dice energy %d: %f  , MIN: %f\n", j, tmp_dice_energy, min_dice_energy);
+    //   polyscope::registerSurfaceMesh("tmp_hull", tmp_solver2.hullGeometry->inputVertexPositions, tmp_solver2.hullMesh->getFaceVertexList());
+    //   polyscope::registerPointCloud("tmp_G", std::vector<Vector3>{tmp_solver2.get_G()});
+    //   polyscope::show();
+    // }
 
     if (tmp_dice_energy < min_dice_energy){
         found_smth_optimal = true;

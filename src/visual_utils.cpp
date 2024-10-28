@@ -313,7 +313,7 @@ void VisualUtils::draw_stable_face_normals_on_gauss_map(){
 
 
 
-void VisualUtils::plot_height_function(){
+void VisualUtils::plot_height_function(bool plot_surface){
   VertexData<double> heigh_func(*sphere_mesh);
   VertexData<Vector3> lifted_poses(*sphere_mesh);
   // printf("here! sphre mesh sizE: %d \n", sphere_mesh->nVertices());
@@ -326,14 +326,15 @@ void VisualUtils::plot_height_function(){
   polyscope::SurfaceVertexScalarQuantity *height_func_vis = 
               gm_sphere_mesh->addVertexScalarQuantity(" height function", heigh_func);
   // height_func_vis->setEnabled(true);
-
-  polyscope::SurfaceMesh* height_function_mesh = polyscope::registerSurfaceMesh("height surface_func", 
-                                                  lifted_poses, 
-                                                  sphere_mesh->getFaceVertexList());
-  height_function_mesh->setSmoothShade(true);
-  polyscope::SurfaceVertexScalarQuantity *height_func_vis_surface = 
-              height_function_mesh->addVertexScalarQuantity(" height function surface", heigh_func);
-  // height_func_vis_surface->setEnabled(true);
+  if (plot_surface){
+    polyscope::SurfaceMesh* height_function_mesh = polyscope::registerSurfaceMesh("height surface_func", 
+                                                    lifted_poses, 
+                                                    sphere_mesh->getFaceVertexList());
+    height_function_mesh->setSmoothShade(true);
+    polyscope::SurfaceVertexScalarQuantity *height_func_vis_surface = 
+                height_function_mesh->addVertexScalarQuantity(" height function surface", heigh_func);
+    // height_func_vis_surface->setEnabled(true);
+  }
 }
 
 

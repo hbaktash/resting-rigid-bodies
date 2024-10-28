@@ -78,7 +78,8 @@ bool do_sobolev_dice_grads = false,
 float sobolev_lambda = 2.,
       sobolev_lambda_decay = 0.95,
       dice_energy_step = 0.01,
-      dice_search_decay = 0.98;
+      dice_search_decay = 0.98,
+      bary_reg = 0.1;
 int sobolev_p = 2;
 // optimization stuff
 
@@ -86,7 +87,7 @@ int sobolev_p = 2;
 
 // example choice
 std::vector<std::string> all_input_names = {std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("tet"), std::string("tet2"), std::string("cube")}; //{std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
-std::string input_name = "triangular";
+std::string input_name = "circus";
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false, 
                                       BoundaryBuilder *bnd_builder = boundary_builder,
@@ -145,7 +146,7 @@ void update_solver(){ // only doing this for convex input
 
 void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
     // readManifoldSurfaceMesh()
-//   std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
+  // std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
   std::tie(mesh_ptr, geometry_ptr) = generate_11_sided_polyhedron(poly_str);
   mesh = mesh_ptr.release();
   geometry = geometry_ptr.release();
@@ -159,7 +160,7 @@ void update_visuals(Forward3DSolver *tmp_solver = nullptr, BoundaryBuilder *bnd_
   vis_utils.forwardSolver = tmp_solver;
   vis_utils.draw_gauss_map();
   vis_utils.draw_G();
-  vis_utils.plot_height_function();
+  vis_utils.plot_height_function(false);
   draw_stable_patches_on_gauss_map(false, bnd_builder);
 }
 
@@ -221,7 +222,7 @@ std::vector<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Eigen::Matri
 }
 
 
-void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec,
+void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, double bary_reg,
                            Eigen::MatrixX3d &df_dv, Eigen::Vector3d &df_dG, double &dice_energy,
                            bool use_autodiff, bool frozen_G, std::string policy, FaceData<double> goal_probs, int fair_sides){
     
@@ -269,8 +270,8 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
       Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
       size_t flat_n = hull_poses_G_append_vec.rows();
       Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-      return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, 
-                                                  tmp_solver, policy, goal_probs, fair_sides, false);
+      return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, 
+                                                  bary_reg, policy, goal_probs, fair_sides, false);
     };
     Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
     Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
@@ -298,7 +299,7 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
 }
 
 
-void dice_energy_opt(std::string policy, bool frozen_G, size_t step_count = 20){
+void dice_energy_opt(std::string policy, double bary_reg, bool frozen_G, size_t step_count){
   polyscope::getSurfaceMesh("hull mesh")->setTransparency(0.5);
 
   Forward3DSolver tmp_solver(mesh, geometry, G, true);
@@ -320,7 +321,8 @@ void dice_energy_opt(std::string policy, bool frozen_G, size_t step_count = 20){
     
     printf("getting grads\n");
     FaceData<double> goal_probs;
-    get_dice_energy_grads(hull_positions, G_vec, dfdV, dfdG, dice_e, 
+    get_dice_energy_grads(hull_positions, G_vec, bary_reg, 
+                          dfdV, dfdG, dice_e, 
                           use_autodiff_for_dice_grad, frozen_G,
                           policy, goal_probs, fair_sides_count);
     // update_visuals_with_G(&tmp_solver, &tmp_bnd_builder);
@@ -328,8 +330,10 @@ void dice_energy_opt(std::string policy, bool frozen_G, size_t step_count = 20){
     polyscope::getPointCloud("Center of Mass")->updatePointPositions(std::vector<Vector3>{tmp_solver.get_G()});
     auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
     curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
-    FaceData<double> my_probs = get_double_dice_probs_for_circus(&tmp_solver);
-    curr_hull_psmesh->addFaceScalarQuantity("Goal probs", my_probs)->setColorMap("reds")->setEnabled(true);
+    if (policy == "manual"){
+      FaceData<double> my_probs = get_double_dice_probs_for_circus(&tmp_solver);
+      curr_hull_psmesh->addFaceScalarQuantity("Goal probs", my_probs)->setColorMap("reds")->setEnabled(true);    
+    }
 
     // show grads
     curr_hull_psmesh->addVertexVectorQuantity("ad total grads", -1.*dfdV)->setEnabled(true);
@@ -355,7 +359,8 @@ void dice_energy_opt(std::string policy, bool frozen_G, size_t step_count = 20){
     polyscope::show();
 
     // printf("line search\n");
-    double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, policy, goal_probs, fair_sides_count, 
+    double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg,
+                                                   policy, goal_probs, fair_sides_count, 
                                                    dice_energy_step, dice_search_decay, frozen_G, 1000);
     std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
     if (opt_step_size == 0){
@@ -384,20 +389,23 @@ void dice_energy_opt(std::string policy, bool frozen_G, size_t step_count = 20){
   // DEBUG for 11 sided double dice sum example
   FaceData<double> goal_probs = get_double_dice_probs_for_circus(&tmp_solver);
   FaceData<double> curr_probs_acum(*tmp_solver.hullMesh, 0.);
+  double no_reg_DE = 0.;
   for (Face f: tmp_solver.hullMesh->faces()){
     curr_probs_acum[f] = tmp_bnd_builder.face_region_area[tmp_solver.face_last_face[f]]/(4.*PI);
-    if (goal_probs[f] > 0.){
+    if (tmp_bnd_builder.face_region_area[f] > 0.){
       std::cout << "face " << f.getIndex() << "\tprob: " << tmp_bnd_builder.face_region_area[f]/(4.*PI) << "\tgoal:" << goal_probs[f] << " | " <<goal_probs[f]*36<<"/36 " << "\n";
+      double diff = tmp_bnd_builder.face_region_area[f] - goal_probs[f] * (4.*PI);
+      no_reg_DE += diff * diff;
     }
   }
+  std::cout << " no reg DE: " << no_reg_DE << std::endl;
   // polyscope::removeAllStructures();
   // polyscope::registerSurfaceMesh("initial hull", geometry->inputVertexPositions, mesh->getFaceVertexList())->setTransparency(0.1);
   // polyscope::registerSurfaceMesh("optimized hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList())->setTransparency(1.);
   polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>({tmp_solver.get_G()}))->setPointRadius(0.05);
-  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity(" current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setEnabled(true);
+  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity(" current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(true);
   optimized_mesh = tmp_solver.hullMesh;
-  optimized_geometry = tmp_solver.hullGeometry;
-  
+  optimized_geometry = tmp_solver.hullGeometry; 
 }
 
 
@@ -423,12 +431,14 @@ void myCallback() {
   ImGui::SliderFloat("DE step size", &dice_energy_step, 0, 0.5);
   ImGui::SliderFloat("DE step decay", &dice_search_decay, 0.1, 1.);
   
+  ImGui::SliderFloat("barycenter distance regularizer", &bary_reg, 0., 1.);
   if (ImGui::Button("dice energy opt")){
-    dice_energy_opt("manual", false, DE_step_count);
+    // dice_energy_opt("manual", bary_reg, false, DE_step_count);
+    dice_energy_opt("manual", bary_reg, false, DE_step_count);
   }
   if (ImGui::Button("save optimized hull")){
-    std::string output_name = "hendecahedon_double_dice_sum";
-    writeSurfaceMesh(*optimized_mesh, *optimized_geometry, "../meshes/" + std::string(output_name) +".obj");
+    std::string output_name = input_name + "_optimized_dice";
+    writeSurfaceMesh(*optimized_mesh, *optimized_geometry, "../meshes/hulls/" + std::string(output_name) +".obj");
   }
 }
 
@@ -452,4 +462,4 @@ int main(int argc, char **argv) {
 }
 
 
-// 
+//

@@ -88,7 +88,7 @@ class VisualUtils{
         void draw_edge_arcs_on_gauss_map();
         void draw_stable_vertices_on_gauss_map();
         void draw_stable_face_normals_on_gauss_map();
-        void plot_height_function();
+        void plot_height_function(bool plot_surface = true);
         void draw_gauss_map();
         void draw_guess_pc(std::vector<std::pair<size_t, size_t>> edge_inds, std::vector<Vector3> boundary_normals);
         void show_edge_equilibria_on_gauss_map();

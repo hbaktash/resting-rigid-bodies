@@ -983,7 +983,7 @@ void process_single_shape_for_experiment(std::string full_shape_path,
       if (outputFile.is_open()) {
         for (Face f: forwardSolver->hullMesh->faces()){
           if (forwardSolver->face_is_stable(f)){
-            outputFile << " -- f" << f.getIndex() << "\t-> my_prob : " << boundary_builder->face_region_area[f]/(4.*PI) <<"\n";
+            outputFile << " -- f" << f.getIndex() << " " << forwardSolver->hullGeometry->faceNormal(f) << "\t-> my_prob : " << boundary_builder->face_region_area[f]/(4.*PI) <<"\n";
           }
         }
         outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
