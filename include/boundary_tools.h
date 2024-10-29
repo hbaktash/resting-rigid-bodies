@@ -141,7 +141,7 @@ class BoundaryBuilder {
         // TODO template
         template <typename Scalar>
         static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                  Forward3DSolver &tmp_solver, double bary_reg,
+                                  Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg,
                                   std::string policy, FaceData<double> goal_probs, 
                                   size_t side_count, bool verbose);
         template <typename Scalar>
@@ -153,7 +153,7 @@ class BoundaryBuilder {
 };
 
 double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
-                                double bary_reg,
+                               double bary_reg, double coplanar_reg, 
                                std::string policy, FaceData<double> goal_probs, size_t dice_side_count, double step_size, double decay, bool frozen_G, 
                                size_t max_iter);
 

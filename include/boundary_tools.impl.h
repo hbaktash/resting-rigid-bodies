@@ -3,7 +3,7 @@
 
 template <typename Scalar>
 Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                    Forward3DSolver &tmp_solver, double bary_reg,
+                                    Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg,
                                     std::string policy, FaceData<double> goal_probs, 
                                     size_t side_count, bool verbose
                                     ){
@@ -155,7 +155,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
     }
     
 
-    //// regularizer
+    //// regularizers
     // compute distance to bary centers
     Scalar bary_energy = 0.;
     for (Face f: tmp_solver.hullMesh->faces()){
@@ -170,9 +170,19 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             bary_energy += bary_reg * distance_to_barycenters[f] * distance_to_barycenters[f];
         }
     }
+    // penalize non-coplanar faces in the rolling DAG
+    Scalar co_planar_energy = 0.;
+    for (Face f: tmp_solver.hullMesh->faces()){
+        if (face_last_face[f] != f){
+            Eigen::Vector3<Scalar> f_normal = face_normals[f];
+            Eigen::Vector3<Scalar> last_f_normal = face_normals[face_last_face[f]];
+            Scalar normal_diff = (f_normal- last_f_normal).squaredNorm();
+            co_planar_energy += co_planar_reg * normal_diff;
+        }
+    }
 
     Scalar energy = 0.;
-    energy += bary_energy;
+    energy += bary_energy + co_planar_energy;
     if (std::strcmp(policy.c_str(), "fair") == 0){
         // sort for dice energy
         Scalar total_area = 0.;

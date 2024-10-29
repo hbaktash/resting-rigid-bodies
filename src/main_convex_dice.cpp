@@ -79,7 +79,8 @@ float sobolev_lambda = 2.,
       sobolev_lambda_decay = 0.95,
       dice_energy_step = 0.01,
       dice_search_decay = 0.98,
-      bary_reg = 0.1;
+      bary_reg = 0.1,
+      coplanar_reg = 0.1;
 int sobolev_p = 2;
 // optimization stuff
 
@@ -222,7 +223,7 @@ std::vector<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Eigen::Matri
 }
 
 
-void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, double bary_reg,
+void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, double bary_reg, double coplanar_reg,
                            Eigen::MatrixX3d &df_dv, Eigen::Vector3d &df_dG, double &dice_energy,
                            bool use_autodiff, bool frozen_G, std::string policy, FaceData<double> goal_probs, int fair_sides){
     
@@ -271,7 +272,7 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
       size_t flat_n = hull_poses_G_append_vec.rows();
       Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
       return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, 
-                                                  bary_reg, policy, goal_probs, fair_sides, false);
+                                                  bary_reg, coplanar_reg, policy, goal_probs, fair_sides, false);
     };
     Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
     Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
@@ -299,7 +300,7 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
 }
 
 
-void dice_energy_opt(std::string policy, double bary_reg, bool frozen_G, size_t step_count){
+void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, bool frozen_G, size_t step_count){
   polyscope::getSurfaceMesh("hull mesh")->setTransparency(0.5);
 
   Forward3DSolver tmp_solver(mesh, geometry, G, true);
@@ -321,7 +322,7 @@ void dice_energy_opt(std::string policy, double bary_reg, bool frozen_G, size_t 
     
     printf("getting grads\n");
     FaceData<double> goal_probs;
-    get_dice_energy_grads(hull_positions, G_vec, bary_reg, 
+    get_dice_energy_grads(hull_positions, G_vec, bary_reg, coplanar_reg,
                           dfdV, dfdG, dice_e, 
                           use_autodiff_for_dice_grad, frozen_G,
                           policy, goal_probs, fair_sides_count);
@@ -353,13 +354,13 @@ void dice_energy_opt(std::string policy, double bary_reg, bool frozen_G, size_t 
     //DEBUG
     // polyscope::frameTick();
     // polyscope::screenshot(false);
-    BoundaryBuilder tmp_bnd_builder(&tmp_solver);
-    tmp_bnd_builder.build_boundary_normals();
-    update_visuals(&tmp_solver, &tmp_bnd_builder);
-    polyscope::show();
+    // BoundaryBuilder tmp_bnd_builder(&tmp_solver);
+    // tmp_bnd_builder.build_boundary_normals();
+    // update_visuals(&tmp_solver, &tmp_bnd_builder);
+    // polyscope::show();
 
     // printf("line search\n");
-    double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg,
+    double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg,
                                                    policy, goal_probs, fair_sides_count, 
                                                    dice_energy_step, dice_search_decay, frozen_G, 1000);
     std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
@@ -402,8 +403,11 @@ void dice_energy_opt(std::string policy, double bary_reg, bool frozen_G, size_t 
   // polyscope::removeAllStructures();
   // polyscope::registerSurfaceMesh("initial hull", geometry->inputVertexPositions, mesh->getFaceVertexList())->setTransparency(0.1);
   // polyscope::registerSurfaceMesh("optimized hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList())->setTransparency(1.);
+  polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
   polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>({tmp_solver.get_G()}))->setPointRadius(0.05);
-  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity(" current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(true);
+  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity(" current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(false);
+  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity(" current probs accum", curr_probs_acum)->setColorMap("reds")->setEnabled(true);
+  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity(" goal probs", goal_probs)->setColorMap("reds")->setEnabled(false);
   optimized_mesh = tmp_solver.hullMesh;
   optimized_geometry = tmp_solver.hullGeometry; 
 }
@@ -432,9 +436,10 @@ void myCallback() {
   ImGui::SliderFloat("DE step decay", &dice_search_decay, 0.1, 1.);
   
   ImGui::SliderFloat("barycenter distance regularizer", &bary_reg, 0., 1.);
+  ImGui::SliderFloat("coplanar regularizer", &coplanar_reg, 0., 1.);
   if (ImGui::Button("dice energy opt")){
     // dice_energy_opt("manual", bary_reg, false, DE_step_count);
-    dice_energy_opt("manual", bary_reg, false, DE_step_count);
+    dice_energy_opt("manual", bary_reg, coplanar_reg, false, DE_step_count);
   }
   if (ImGui::Button("save optimized hull")){
     std::string output_name = input_name + "_optimized_dice";
