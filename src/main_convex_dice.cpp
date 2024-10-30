@@ -88,7 +88,7 @@ int sobolev_p = 2;
 
 // example choice
 std::vector<std::string> all_input_names = {std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("tet"), std::string("tet2"), std::string("cube")}; //{std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
-std::string input_name = "circus";
+std::string input_name = "hendecahedron";
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false, 
                                       BoundaryBuilder *bnd_builder = boundary_builder,
@@ -332,7 +332,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
     curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
     if (policy == "manual"){
-      FaceData<double> my_probs = get_double_dice_probs_for_circus(&tmp_solver);
+      FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver);
       curr_hull_psmesh->addFaceScalarQuantity("Goal probs", my_probs)->setColorMap("reds")->setEnabled(true);    
     }
 
@@ -357,6 +357,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     // BoundaryBuilder tmp_bnd_builder(&tmp_solver);
     // tmp_bnd_builder.build_boundary_normals();
     // update_visuals(&tmp_solver, &tmp_bnd_builder);
+    // curr_hull_psmesh->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(true);    
     // polyscope::show();
 
     // printf("line search\n");
@@ -388,7 +389,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
 
 
   // DEBUG for 11 sided double dice sum example
-  FaceData<double> goal_probs = get_double_dice_probs_for_circus(&tmp_solver);
+  FaceData<double> goal_probs = manual_stable_only_face_prob_assignment(&tmp_solver);
   FaceData<double> curr_probs_acum(*tmp_solver.hullMesh, 0.);
   double no_reg_DE = 0.;
   for (Face f: tmp_solver.hullMesh->faces()){
@@ -435,11 +436,11 @@ void myCallback() {
   ImGui::SliderFloat("DE step size", &dice_energy_step, 0, 0.5);
   ImGui::SliderFloat("DE step decay", &dice_search_decay, 0.1, 1.);
   
-  ImGui::SliderFloat("barycenter distance regularizer", &bary_reg, 0., 1.);
-  ImGui::SliderFloat("coplanar regularizer", &coplanar_reg, 0., 1.);
+  ImGui::SliderFloat("barycenter distance regularizer", &bary_reg, 0., 100.);
+  ImGui::SliderFloat("coplanar regularizer", &coplanar_reg, 0., 100.);
   if (ImGui::Button("dice energy opt")){
-    // dice_energy_opt("manual", bary_reg, false, DE_step_count);
-    dice_energy_opt("manual", bary_reg, coplanar_reg, false, DE_step_count);
+    std::string policy = "manual cluster"; // "fair", "manual cluster", "manual"
+    dice_energy_opt(policy, bary_reg, coplanar_reg, false, DE_step_count);
   }
   if (ImGui::Button("save optimized hull")){
     std::string output_name = input_name + "_optimized_dice";

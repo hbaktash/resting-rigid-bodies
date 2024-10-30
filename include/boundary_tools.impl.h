@@ -158,32 +158,34 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
     //// regularizers
     // compute distance to bary centers
     Scalar bary_energy = 0.;
-    for (Face f: tmp_solver.hullMesh->faces()){
-        if (face_region_area[f] > 0){
-            Eigen::Vector3<Scalar> barycenter = Eigen::Vector3<Scalar>::Zero();
-            for (Vertex v: face_region_boundary_vertices[f]){
-                barycenter += (hull_positions.row(v.getIndex())- G.transpose()).normalized(); // vertex-G normals
-            }
-            barycenter /= face_region_boundary_vertices[f].size();
-            barycenter = barycenter.normalized();
-            distance_to_barycenters[f] = (barycenter - face_normals[f]).norm();
-            bary_energy += bary_reg * distance_to_barycenters[f] * distance_to_barycenters[f];
-        }
-    }
-    // penalize non-coplanar faces in the rolling DAG
     Scalar co_planar_energy = 0.;
-    for (Face f: tmp_solver.hullMesh->faces()){
-        if (face_last_face[f] != f){
-            Eigen::Vector3<Scalar> f_normal = face_normals[f];
-            Eigen::Vector3<Scalar> last_f_normal = face_normals[face_last_face[f]];
-            Scalar normal_diff = (f_normal- last_f_normal).squaredNorm();
-            co_planar_energy += co_planar_reg * normal_diff;
+    if (policy == "fair" || policy == "manual"){
+        for (Face f: tmp_solver.hullMesh->faces()){
+            if (face_region_area[f] > 0){
+                Eigen::Vector3<Scalar> barycenter = Eigen::Vector3<Scalar>::Zero();
+                for (Vertex v: face_region_boundary_vertices[f]){
+                    barycenter += (hull_positions.row(v.getIndex())- G.transpose()).normalized(); // vertex-G normals
+                }
+                barycenter /= face_region_boundary_vertices[f].size();
+                barycenter = barycenter.normalized();
+                distance_to_barycenters[f] = (barycenter - face_normals[f]).norm();
+                bary_energy += bary_reg * distance_to_barycenters[f] * distance_to_barycenters[f];
+            }
+        }
+        // penalize non-coplanar faces in the rolling DAG
+        for (Face f: tmp_solver.hullMesh->faces()){
+            if (face_last_face[f] != f){
+                Eigen::Vector3<Scalar> f_normal = face_normals[f];
+                Eigen::Vector3<Scalar> last_f_normal = face_normals[face_last_face[f]];
+                Scalar normal_diff = (f_normal- last_f_normal).squaredNorm();
+                co_planar_energy += co_planar_reg * normal_diff;
+            }
         }
     }
 
     Scalar energy = 0.;
     energy += bary_energy + co_planar_energy;
-    if (std::strcmp(policy.c_str(), "fair") == 0){
+    if (policy == "fair"){
         // sort for dice energy
         Scalar total_area = 0.;
         std::vector<std::pair<Face, Scalar>> probs;
@@ -225,26 +227,50 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
 
         // return probs[0].second; // DEBUG: max prob
     }
-    else if (std::strcmp(policy.c_str(), "manual") == 0){
-        FaceData<double> my_probs = get_double_dice_probs_for_circus(&tmp_solver);
+    else if (policy == "manual"){
+        FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver);
         for (Face f: tmp_solver.hullMesh->faces()){
-            // // TODO: norm 2
+            // // norm 2
             Scalar diff = face_region_area[f] - my_probs[f] * 4. * PI;
             energy += diff * diff;
-            // // TODO: KL div
-            // if (face_region_area[f] > 0 && my_probs[f] > 0){
-            //     if(verbose){
-            //         std::cout << "  -f" << f.getIndex() 
-            //                     << "(" 
-            //                     << f.halfedge().vertex().getIndex() << ", "
-            //                     << f.halfedge().tipVertex().getIndex()<< ", "
-            //                     << f.halfedge().next().tipVertex().getIndex()
-            //                     << ")" << " : " << face_region_area[f]/(4. * PI) << " goal: "<< my_probs[f] << std::endl; 
-            //     }
+            // // KL divergence
             //     double goal_area = my_probs[f] * 4. * PI;
             //     energy += goal_area * log(goal_area / face_region_area[f]);
             // }
         }
+        std::cout << "  - bary energy: " << bary_energy << "\t co-planar energy: " << co_planar_energy << std::endl;
+        std::cout << "  - pure dice energy: " << energy - bary_energy - co_planar_energy << std::endl;
+    }
+    else if (policy == "manual cluster"){
+        std::vector<std::pair<std::vector<Face>, double>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver);
+        Scalar total_coplanar_energy = 0.,
+               pure_dice_energy = 0.;
+        
+        for (auto cluster: clustered_probs){
+            Scalar cluster_area_sum = 0.;
+            for (Face f: cluster.first){
+                if (face_region_area[f] > 0){
+                    // sum of face areas in the cluster
+                    cluster_area_sum += face_region_area[f];
+                }
+            }
+            Scalar diff = cluster_area_sum - cluster.second * 4. * PI;
+            pure_dice_energy += diff * diff;
+
+            Scalar cluster_coplanar_energy = 0.;
+            for (Face f1: cluster.first){
+                for (Face f2: cluster.first){
+                    if (f1 != f2){
+                        Scalar normal_diff = (face_normals[f1] - face_normals[f2]).squaredNorm();
+                        cluster_coplanar_energy += normal_diff;
+                    }
+                }
+            }
+            total_coplanar_energy += cluster_coplanar_energy;
+        }
+        energy += pure_dice_energy + co_planar_reg * total_coplanar_energy;
+        std::cout << "  - coplanar energy: " << co_planar_reg * total_coplanar_energy << std::endl;
+        std::cout << "  - pure dice energy: " << pure_dice_energy << std::endl;
     }
     else {
         throw std::invalid_argument("policy not recognized");
