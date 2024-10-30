@@ -254,7 +254,8 @@ void init_visuals(){
     "init hull mesh",
     forwardSolver->hullGeometry->inputVertexPositions, forwardSolver->hullMesh->getFaceVertexList(),
     polyscopePermutations(*forwardSolver->hullMesh));
-  psHullMesh->setEnabled(false);
+  psHullMesh->setEnabled(true);
+  psHullMesh->setTransparency(0.95);
   vis_utils.draw_G();
   visualize_colored_polyhedra();
   visualize_gauss_map();
@@ -1198,6 +1199,8 @@ int main(int argc, char* argv[])
     // writeSurfaceMesh(*mesh, *geometry, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m0_p0_normalized.obj");
     update_solver();
     init_visuals();
+    
+    polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("probabilities", boundary_builder->face_region_area/(4.*PI), polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(true);
 
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
     polyscope::state::userCallback = myCallback;

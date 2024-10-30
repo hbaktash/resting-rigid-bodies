@@ -314,13 +314,19 @@ generate_polyhedra(std::string poly_str){
     }
     else { // read from file
       try {
-        std::string filename = "../meshes/" + poly_str + ".obj";
+        std::string filename = poly_str;
         std::tie(mesh, geometry) = readManifoldSurfaceMesh(filename);
       }
       catch(const std::exception& e) {
-          std::string filename = "../meshes/" + poly_str + ".stl";
+        try {
+          std::string filename = "../meshes/" + poly_str + ".obj";
           std::tie(mesh, geometry) = readManifoldSurfaceMesh(filename);
-      }
+        }
+        catch(const std::exception& e) {
+            std::string filename = "../meshes/" + poly_str + ".stl";
+            std::tie(mesh, geometry) = readManifoldSurfaceMesh(filename);
+        }
+        }
       return std::make_tuple(std::move(mesh), std::move(geometry));
     }
     // std::unique_ptr<ManifoldSurfaceMesh> poly_triangulated;

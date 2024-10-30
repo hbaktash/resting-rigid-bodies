@@ -87,8 +87,8 @@ int sobolev_p = 2;
 
 
 // example choice
-std::vector<std::string> all_input_names = {std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("tet"), std::string("tet2"), std::string("cube")}; //{std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
-std::string input_name = "hendecahedron";
+std::vector<std::string> all_input_names = {std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
+std::string input_name = "dodecahedron";
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false, 
                                       BoundaryBuilder *bnd_builder = boundary_builder,
@@ -354,11 +354,11 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     //DEBUG
     // polyscope::frameTick();
     // polyscope::screenshot(false);
-    // BoundaryBuilder tmp_bnd_builder(&tmp_solver);
-    // tmp_bnd_builder.build_boundary_normals();
-    // update_visuals(&tmp_solver, &tmp_bnd_builder);
-    // curr_hull_psmesh->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(true);    
-    // polyscope::show();
+    BoundaryBuilder tmp_bnd_builder(&tmp_solver);
+    tmp_bnd_builder.build_boundary_normals();
+    update_visuals(&tmp_solver, &tmp_bnd_builder);
+    curr_hull_psmesh->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(true);    
+    polyscope::show();
 
     // printf("line search\n");
     double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg,

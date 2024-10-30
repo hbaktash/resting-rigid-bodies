@@ -91,7 +91,57 @@ std::vector<std::pair<Vector3, double>> normal_prob_assignment(std::string shape
       {Vector3({-0.447214, 0, 0.894427})      , 1./36.}  // triangle
     };
   }
-  
+  else if (shape_name == "icosahedron binomial"){
+    normal_to_prob_pairs = {
+      {Vector3({ 0.57735 , -0.57735,  0.57735}),   binomial_dist(19, 0 )},
+      {Vector3({-0.57735 ,  0.57735, -0.57735}),   binomial_dist(19, 19)},
+      {Vector3({0., -0.934172,  0.356822}),        binomial_dist(19, 1 )},
+      {Vector3({0.,  0.934172, -0.356822}),        binomial_dist(19, 18)},
+      {Vector3({-0.934172 ,  0.356822 , 0}),       binomial_dist(19, 2)},
+      {Vector3({ 0.934172 , -0.356822 , 0}),       binomial_dist(19, 17)},
+      {Vector3({-0.57735 , -0.57735,  0.57735}),   binomial_dist(19, 3 )},
+      {Vector3({ 0.57735 ,  0.57735, -0.57735}),   binomial_dist(19, 16)},
+      {Vector3({ 0.356822 , 0,  0.934172}),        binomial_dist(19, 4 )},
+      {Vector3({-0.356822 , 0, -0.934172}),        binomial_dist(19, 15)},
+      {Vector3({-0.356822 , 0,  0.934172}),        binomial_dist(19, 5 )},
+      {Vector3({ 0.356822 , 0, -0.934172}),        binomial_dist(19, 14)},
+      {Vector3({-0.57735 ,  0.57735,  0.57735}),   binomial_dist(19, 6 )},
+      {Vector3({ 0.57735 , -0.57735, -0.57735}),   binomial_dist(19, 13)},
+      {Vector3({-0.57735 , -0.57735, -0.57735}),   binomial_dist(19, 7 )},
+      {Vector3({ 0.57735 ,  0.57735,  0.57735}),   binomial_dist(19, 12)},
+      {Vector3({-0.934172, -0.356822 , 0}),        binomial_dist(19, 8 )},
+      {Vector3({ 0.934172,  0.356822 , 0}),        binomial_dist(19, 11)},
+      {Vector3({0 ,  0.934172 ,  0.356822}),       binomial_dist(19, 9 )},
+      {Vector3({0 , -0.934172 , -0.356822}),       binomial_dist(19, 10)},
+    };
+  }
+  else if (shape_name == "cube binomial"){
+    normal_to_prob_pairs = {
+      {Vector3({0,  0 ,-1}), binomial_dist(5, 0)},
+      {Vector3({0,  0 , 1}), binomial_dist(5, 5)},
+      {Vector3({0, -1,  0}), binomial_dist(5, 4)},
+      {Vector3({0,  1,  0}), binomial_dist(5, 1)},
+      {Vector3({ 1, 0,  0}), binomial_dist(5, 2)},
+      {Vector3({-1, 0,  0}), binomial_dist(5, 3)}
+    };
+  }
+  else if (shape_name == "dodecahedron binomial"){
+    normal_to_prob_pairs = {
+      {Vector3({-0.525731,  0.850651, 0}),  binomial_dist(11, 5)},
+      {Vector3({ 0.525731, -0.850651, 0}),  binomial_dist(11, 6)},
+      {Vector3({ 0.850651, 0, -0.525731}),  binomial_dist(11, 0)},
+      {Vector3({-0.850651, 0,  0.525731}),  binomial_dist(11, 11)},
+      {Vector3({ 0, -0.525731, -0.850651}), binomial_dist(11, 4)},
+      {Vector3({ 0,  0.525731,  0.850651}), binomial_dist(11, 7)},
+      {Vector3({ 0.525731,  0.850651, 0}),  binomial_dist(11, 1)},
+      {Vector3({-0.525731, -0.850651, 0}),  binomial_dist(11, 10)},
+      {Vector3({ 0,  0.525731, -0.850651}), binomial_dist(11, 2)},
+      {Vector3({ 0, -0.525731,  0.850651}), binomial_dist(11, 9)},
+      {Vector3({ 0.850651, 0,  0.525731}),  binomial_dist(11, 3)},
+      {Vector3({-0.850651, 0, -0.525731}),  binomial_dist(11, 8)},
+    };
+  }
+
   return normal_to_prob_pairs;
 
   // // wide tent
@@ -125,8 +175,8 @@ FaceData<double> manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_so
   // TODO move to args
   FaceData<double> goal_probs(*tmp_solver->hullMesh, 0.);
 
-  std::string shape_name = "hendecahedron"; // "circus", "hendecahedron", "wide tent", "atipodal tent"
-  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment("hendecahedron");
+  std::string shape_name = "dodecahedron binomial"; // "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial"
+  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment(shape_name);
   
   for (auto normal_prob_pair: normal_to_prob_pairs){
     Vector3 normal = normal_prob_pair.first;
@@ -148,8 +198,8 @@ FaceData<double> manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_so
 
 std::vector<std::pair<std::vector<Face>, double>> manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver){
   // TODO move to args
-  std::string shape_name = "hendecahedron"; // "circus", "hendecahedron", "wide tent", "atipodal tent"
-  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment("hendecahedron");
+  std::string shape_name = "dodecahedron binomial"; // "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial"
+  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment(shape_name);
   
   FaceData<Vector3> closest_normals(*tmp_solver->hullMesh);
   for (Face f: tmp_solver->hullMesh->faces()){

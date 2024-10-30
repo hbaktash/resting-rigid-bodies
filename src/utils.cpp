@@ -117,3 +117,13 @@ geometrycentral::surface::VertexData<geometrycentral::Vector3> vertex_matrix_to_
     return ans;
 }
 
+double binomial_dist(int n, int k) {
+    if (k > n - k)  // Take advantage of symmetry
+        k = n - k;
+    double result = 1.0;
+    for (int i = 1; i <= k; ++i) {
+        result *= (double)(n - k + i)/(double)(2.*i);
+    }
+    result *= std::ldexp(1.0, -(n - k));
+    return result;
+}

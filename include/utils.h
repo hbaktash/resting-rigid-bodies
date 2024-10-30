@@ -39,3 +39,4 @@ geometrycentral::DenseMatrix<double> vertex_data_to_matrix(geometrycentral::surf
 geometrycentral::surface::VertexData<geometrycentral::Vector3> vertex_matrix_to_data(Eigen::MatrixXd positions, geometrycentral::surface::ManifoldSurfaceMesh& mesh);
 geometrycentral::DenseMatrix<double> face_data_to_matrix(geometrycentral::surface::FaceData<geometrycentral::Vector3> fdata);
 // Eigen::SparseMatrix<double> tinyADify_constraint_mat(Eigen::MatrixXd A);
+double binomial_dist(int n, int k);
