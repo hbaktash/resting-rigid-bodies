@@ -87,8 +87,8 @@ int sobolev_p = 2;
 
 
 // example choice
-std::vector<std::string> all_input_names = {std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
-std::string input_name = "dodecahedron";
+std::vector<std::string> all_input_names = {std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
+std::string input_name = "octahedron";
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false, 
                                       BoundaryBuilder *bnd_builder = boundary_builder,
@@ -431,15 +431,15 @@ void myCallback() {
       }
       ImGui::EndCombo();
   }
-  ImGui::SliderInt("ITERS", &DE_step_count, 1, 200);
-  ImGui::SliderInt("fair sides", &fair_sides_count, 4, 20);
-  ImGui::SliderFloat("DE step size", &dice_energy_step, 0, 0.5);
+  ImGui::SliderInt("ITERS",           &DE_step_count, 1, 200);
+  ImGui::SliderInt("fair sides",      &fair_sides_count, 4, 20);
+  ImGui::SliderFloat("DE step size",  &dice_energy_step, 0, 0.5);
   ImGui::SliderFloat("DE step decay", &dice_search_decay, 0.1, 1.);
-  
+
   ImGui::SliderFloat("barycenter distance regularizer", &bary_reg, 0., 100.);
   ImGui::SliderFloat("coplanar regularizer", &coplanar_reg, 0., 100.);
   if (ImGui::Button("dice energy opt")){
-    std::string policy = "manual cluster"; // "fair", "manual cluster", "manual"
+    std::string policy = "manual"; // "fair", "manual cluster", "manual"
     dice_energy_opt(policy, bary_reg, coplanar_reg, false, DE_step_count);
   }
   if (ImGui::Button("save optimized hull")){

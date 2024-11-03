@@ -143,6 +143,29 @@ generate_polyhedra(std::string poly_str){
       faces.push_back({6, 7, 3});
       faces.push_back({6, 3, 2});
     }
+    else if (std::strcmp(poly_str.c_str(), "octahedron") == 0){
+      
+      // top vert
+      positions.push_back(Vector3({0, 0,  sqrt(2)}));
+      // side verts
+      positions.push_back(Vector3({ 1, 1,  0}));
+      positions.push_back(Vector3({-1, 1,  0}));
+      positions.push_back(Vector3({-1,-1,  0}));
+      positions.push_back(Vector3({ 1,-1,  0}));
+      // bot vert
+      positions.push_back(Vector3({0, 0, -sqrt(2)}));
+      
+      // top faces
+      faces.push_back({0, 1, 2});
+      faces.push_back({0, 2, 3});
+      faces.push_back({0, 3, 4});
+      faces.push_back({0, 4, 1});
+      // bot faces
+      faces.push_back({5, 2, 1});
+      faces.push_back({5, 3, 2});
+      faces.push_back({5, 4, 3});
+      faces.push_back({5, 1, 4});
+    }
     else if (std::strcmp(poly_str.c_str(), "tet2") == 0){
       n = 4;
       faces = {{0, 1, 2},

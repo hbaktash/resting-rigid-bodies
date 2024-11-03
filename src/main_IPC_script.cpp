@@ -1200,6 +1200,10 @@ int main(int argc, char* argv[])
     update_solver();
     init_visuals();
     
+    FaceData<double> accum_probs(*forwardSolver->hullMesh);
+    for (Face f: forwardSolver->hullMesh->faces()){
+      accum_probs[f] = boundary_builder->face_region_area[forwardSolver->face_last_face[f]]/(4.*PI);
+    }
     polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("probabilities", boundary_builder->face_region_area/(4.*PI), polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(true);
 
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
