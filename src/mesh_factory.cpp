@@ -483,6 +483,10 @@ generate_11_sided_polyhedron(std::string type){
     std::tie(mesh_ptr, geometry_ptr) = readManifoldSurfaceMesh("../meshes/hendecahedron.stl");
     return std::make_tuple(std::move(mesh_ptr), std::move(geometry_ptr));
   }
+  else if (type.substr(type.find(" ") + 1) == "prism"){
+    size_t prism_sides = std::stoi(type.substr(0, type.find(" ")));
+    return generate_pointy_prism(prism_sides);
+  }
   else {
     printf("type %s not recognized\n", type.c_str());
     return generate_polyhedra(type);
@@ -506,3 +510,47 @@ generate_11_sided_polyhedron(std::string type){
 }
 
 
+// ###### for 11-sided dice #######
+std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
+generate_pointy_prism(size_t n){
+  std::vector<std::vector<size_t>> faces;
+  std::vector<Vector3> positions;
+  std::unique_ptr<ManifoldSurfaceMesh> mesh;
+  std::unique_ptr<VertexPositionGeometry> geometry;
+
+  // top
+  positions.push_back(Vector3({0., 0., 2.})); // v0
+  double alpha = 2.*PI/(double)n;
+  for (size_t i = 0; i < n; i++){ // vi's level 1
+    double theta = 2.*PI * (double)i/(double)n ;
+    positions.push_back(Vector3({cos(theta), sin(theta), 1.}));
+    faces.push_back({0, i+1, (i+2 == n+1) ? 1 : i+2}); // top triangles
+  }
+  for (size_t i = 0; i < n; i++){ // vi's level 2
+    double theta = 2.*PI * (double)i/(double)n ;
+    positions.push_back(Vector3({cos(theta), sin(theta), 0.}));
+    faces.push_back({(i+2 == n + 1) ? 1 : i+2, i+1,  i+1 + n}); // mid quad face 1
+    faces.push_back({(i+2 == n + 1) ? 1: i+2, i+1 + n, (i+2 == n + 1) ? n + 1: i+2 + n}); // mid quad face 2
+  }
+  // bottom
+  positions.push_back(Vector3({0, 0, -1.})); 
+  for (size_t i = 0; i < n; i++){ // vi's level 3
+    faces.push_back({2*n+1, (i+2 == n + 1) ? n + 1 : i+2 + n, i+1 + n}); // bottom triangles
+  }
+
+  printf("faces are: \n");
+  for (std::vector<size_t> f: faces){
+    for (size_t ind: f){
+      printf(" %d,", ind);
+    }
+    printf("\n");
+  }
+  // offload
+  mesh.reset(new ManifoldSurfaceMesh(faces));
+  geometry = std::unique_ptr<VertexPositionGeometry>(new VertexPositionGeometry(*mesh));
+  for (Vertex v : mesh->vertices()) {
+      // Use the low-level indexers here since we're constructing
+      (*geometry).inputVertexPositions[v] = positions[v.getIndex()];
+  }
+  return std::make_tuple(std::move(mesh), std::move(geometry));
+}

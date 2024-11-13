@@ -41,3 +41,6 @@ void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry
 
 // sphere tesselation generation
 std::vector<Vector3> generate_normals_icosahedral(int resolution);
+
+std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionGeometry>> 
+generate_pointy_prism(size_t n);

@@ -91,30 +91,6 @@ std::vector<std::pair<Vector3, double>> normal_prob_assignment(std::string shape
       {Vector3({-0.447214, 0, 0.894427})      , 1./36.}  // triangle
     };
   }
-  else if (shape_name == "icosahedron binomial"){
-    normal_to_prob_pairs = {
-      {Vector3({ 0.57735 , -0.57735,  0.57735}),   binomial_dist(19, 0 )},
-      {Vector3({-0.57735 ,  0.57735, -0.57735}),   binomial_dist(19, 19)},
-      {Vector3({0., -0.934172,  0.356822}),        binomial_dist(19, 1 )},
-      {Vector3({0.,  0.934172, -0.356822}),        binomial_dist(19, 18)},
-      {Vector3({-0.934172 ,  0.356822 , 0}),       binomial_dist(19, 2)},
-      {Vector3({ 0.934172 , -0.356822 , 0}),       binomial_dist(19, 17)},
-      {Vector3({-0.57735 , -0.57735,  0.57735}),   binomial_dist(19, 3 )},
-      {Vector3({ 0.57735 ,  0.57735, -0.57735}),   binomial_dist(19, 16)},
-      {Vector3({ 0.356822 , 0,  0.934172}),        binomial_dist(19, 4 )},
-      {Vector3({-0.356822 , 0, -0.934172}),        binomial_dist(19, 15)},
-      {Vector3({-0.356822 , 0,  0.934172}),        binomial_dist(19, 5 )},
-      {Vector3({ 0.356822 , 0, -0.934172}),        binomial_dist(19, 14)},
-      {Vector3({-0.57735 ,  0.57735,  0.57735}),   binomial_dist(19, 6 )},
-      {Vector3({ 0.57735 , -0.57735, -0.57735}),   binomial_dist(19, 13)},
-      {Vector3({-0.57735 , -0.57735, -0.57735}),   binomial_dist(19, 7 )},
-      {Vector3({ 0.57735 ,  0.57735,  0.57735}),   binomial_dist(19, 12)},
-      {Vector3({-0.934172, -0.356822 , 0}),        binomial_dist(19, 8 )},
-      {Vector3({ 0.934172,  0.356822 , 0}),        binomial_dist(19, 11)},
-      {Vector3({0 ,  0.934172 ,  0.356822}),       binomial_dist(19, 9 )},
-      {Vector3({0 , -0.934172 , -0.356822}),       binomial_dist(19, 10)},
-    };
-  }
   else if (shape_name == "cube binomial"){
     normal_to_prob_pairs = {
       {Vector3({0,  0 ,-1}), binomial_dist(5, 0)},
@@ -127,29 +103,43 @@ std::vector<std::pair<Vector3, double>> normal_prob_assignment(std::string shape
   }
   else if (shape_name == "dodecahedron binomial"){
     normal_to_prob_pairs = {
-      {Vector3({-0.525731,  0.850651, 0}),  binomial_dist(11, 5)},
-      {Vector3({ 0.525731, -0.850651, 0}),  binomial_dist(11, 6)},
-      {Vector3({ 0.850651, 0, -0.525731}),  binomial_dist(11, 0)},
-      {Vector3({-0.850651, 0,  0.525731}),  binomial_dist(11, 11)},
-      {Vector3({ 0, -0.525731, -0.850651}), binomial_dist(11, 4)},
-      {Vector3({ 0,  0.525731,  0.850651}), binomial_dist(11, 7)},
-      {Vector3({ 0.525731,  0.850651, 0}),  binomial_dist(11, 1)},
-      {Vector3({-0.525731, -0.850651, 0}),  binomial_dist(11, 10)},
-      {Vector3({ 0,  0.525731, -0.850651}), binomial_dist(11, 2)},
-      {Vector3({ 0, -0.525731,  0.850651}), binomial_dist(11, 9)},
-      {Vector3({ 0.850651, 0,  0.525731}),  binomial_dist(11, 3)},
-      {Vector3({-0.850651, 0, -0.525731}),  binomial_dist(11, 8)},
+      // antipodal
+      // {Vector3({-0.525731,  0.850651, 0}),  binomial_dist(11, 5)},
+      // {Vector3({ 0.525731, -0.850651, 0}),  binomial_dist(11, 6)},
+      // {Vector3({ 0.850651, 0, -0.525731}),  binomial_dist(11, 4)},
+      // {Vector3({-0.850651, 0,  0.525731}),  binomial_dist(11, 7)},
+      // {Vector3({ 0, -0.525731, -0.850651}), binomial_dist(11, 0)},
+      // {Vector3({ 0,  0.525731,  0.850651}), binomial_dist(11, 11)},
+      // {Vector3({ 0.525731,  0.850651, 0}),  binomial_dist(11, 1)},
+      // {Vector3({-0.525731, -0.850651, 0}),  binomial_dist(11, 10)},
+      // {Vector3({ 0,  0.525731, -0.850651}), binomial_dist(11, 2)},
+      // {Vector3({ 0, -0.525731,  0.850651}), binomial_dist(11, 9)},
+      // {Vector3({ 0.850651, 0,  0.525731}),  binomial_dist(11, 3)},
+      // {Vector3({-0.850651, 0, -0.525731}),  binomial_dist(11, 8)}
+      // DwarfRing formation
+      {Vector3({ 0.525731, -0.850651, 0}),  binomial_dist(11, 5)},
+      {Vector3({ 0, -0.525731, -0.850651}), binomial_dist(11, 6)},
+      {Vector3({ 0.850651, 0, -0.525731}),  binomial_dist(11, 4)},
+      {Vector3({-0.525731, -0.850651, 0}),  binomial_dist(11, 7)},
+      {Vector3({-0.525731,  0.850651, 0}),  binomial_dist(11, 3)},
+      {Vector3({ 0,  0.525731,  0.850651}), binomial_dist(11, 8)},
+      {Vector3({ 0.525731,  0.850651, 0}),  binomial_dist(11, 2)},
+      {Vector3({-0.850651, 0,  0.525731}),  binomial_dist(11, 9)},
+      {Vector3({ 0.850651, 0,  0.525731}),  binomial_dist(11, 1)},
+      {Vector3({ 0, -0.525731,  0.850651}), binomial_dist(11, 10)},
+      {Vector3({-0.850651, 0, -0.525731}),  binomial_dist(11, 0)},
+      {Vector3({ 0,  0.525731, -0.850651}), binomial_dist(11, 11)},
     };
   }
   else if (shape_name == "octahedron binomial"){
     normal_to_prob_pairs = {
       {Vector3({ 0.816497, 0, -0.57735}),  binomial_dist(7, 3)},
-      {Vector3({-0.816497, 0, -0.57735}),  binomial_dist(7, 4)},
-      {Vector3({0, -0.816497, -0.57735}),  binomial_dist(7, 2)},
+      {Vector3({-0.816497, 0, -0.57735}),  binomial_dist(7, 2)},
+      {Vector3({0, -0.816497, -0.57735}),  binomial_dist(7, 4)},
       {Vector3({0,  0.816497, -0.57735}),  binomial_dist(7, 5)},
       {Vector3({0, -0.816497,  0.57735}),  binomial_dist(7, 1)},
-      {Vector3({0,  0.816497,  0.57735}),  binomial_dist(7, 6)},
-      {Vector3({ 0.816497, 0,  0.57735}),  binomial_dist(7, 0)},
+      {Vector3({0,  0.816497,  0.57735}),  binomial_dist(7, 0)},
+      {Vector3({ 0.816497, 0,  0.57735}),  binomial_dist(7, 6)},
       {Vector3({-0.816497, 0,  0.57735}),  binomial_dist(7, 7)},
     };
   }
@@ -183,12 +173,10 @@ std::vector<std::pair<Vector3, double>> normal_prob_assignment(std::string shape
   // Vector3 nf42({0.803215, -0.26098, 0.535477});  // 9
 }
 
-FaceData<double> manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver){
-  // TODO move to args
+FaceData<double> manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape){
   FaceData<double> goal_probs(*tmp_solver->hullMesh, 0.);
 
-  std::string shape_name = "octahedron binomial"; // "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", "dodecahedron binomial"
-  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment(shape_name);
+  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment(policy_shape);
   
   for (auto normal_prob_pair: normal_to_prob_pairs){
     Vector3 normal = normal_prob_pair.first;
@@ -208,10 +196,9 @@ FaceData<double> manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_so
   return goal_probs;
 }
 
-std::vector<std::pair<std::vector<Face>, double>> manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver){
-  // TODO move to args
-  std::string shape_name = "octahedron binomial"; // "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
-  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment(shape_name);
+std::vector<std::pair<std::vector<Face>, double>> manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape){
+  // std::string shape_name = "octahedron binomial"; // "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
+  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment(policy_shape);
   
   FaceData<Vector3> closest_normals(*tmp_solver->hullMesh);
   for (Face f: tmp_solver->hullMesh->faces()){
@@ -498,7 +485,6 @@ bool BoundaryBuilder::flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edg
     face_region_area[bnd_normal->f2] += f2_area_sign * triangle_patch_area_on_sphere(f2_normal, bnd_normal->normal, next_normal);
     // printf(" -ret- ");
     return true;
-    // TODO: take care of when f1,f2 on the same side when starting from saddle 
 }
 
 
@@ -599,18 +585,42 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
     tmp_solver.initialize_pre_computes();
     // re-assign since qhull inside solver reshuffles points
     Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
-    // TODO: remove the redundancy here once indices are figured out
     Forward3DSolver tmp_solver2(tmp_hull_positions, G_vec, true);
+    bool verbose = false;
+    if ((j == 499)){
+      verbose = true;
+      printf("   ---   LS step %d -----\n", j);
+    }
     tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec,
                                                            tmp_solver2, bary_reg, coplanar_reg,
-                                                           policy, goal_probs, dice_side_count, false);
-    // if (j%50 == 0){
-    //   std::cout << "   ---   step "<< j <<" -----\n";
-    //   printf("  *** temp fair dice energy %d: %f  , MIN: %f\n", j, tmp_dice_energy, min_dice_energy);
-    //   polyscope::registerSurfaceMesh("tmp_hull", tmp_solver2.hullGeometry->inputVertexPositions, tmp_solver2.hullMesh->getFaceVertexList());
-    //   polyscope::registerPointCloud("tmp_G", std::vector<Vector3>{tmp_solver2.get_G()});
-    //   polyscope::show();
-    // }
+                                                           policy, goal_probs, dice_side_count, verbose);
+    if (j == 499){
+      std::cout << "   ---   step "<< j <<" -----\n";
+      printf("  *** temp fair dice energy %d: %f  , MIN: %f\n", j, tmp_dice_energy, min_dice_energy);
+      polyscope::registerSurfaceMesh("tmp_hull LS", tmp_solver2.hullGeometry->inputVertexPositions, tmp_solver2.hullMesh->getFaceVertexList());
+      polyscope::registerPointCloud("tmp_G", std::vector<Vector3>{tmp_solver2.get_G()});
+
+      std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
+      std::vector<std::pair<std::vector<Face>, double>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver2, policy_shape);
+      FaceData<double> my_probs(*tmp_solver2.hullMesh, 0.);
+      for (auto cluster: clustered_probs){
+        for (Face f: cluster.first){
+          my_probs[f] = cluster.second;
+        }
+      }
+      polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("Goal cluster probs", my_probs)->setColorMap("reds")->setEnabled(true); 
+      BoundaryBuilder tmp_bnd_builder(&tmp_solver2);
+      tmp_bnd_builder.build_boundary_normals();
+      FaceData<double> curr_probs_acum(*tmp_solver2.hullMesh, 0.);
+      double no_reg_DE = 0.;
+      for (Face f: tmp_solver2.hullMesh->faces()){
+        curr_probs_acum[f] = tmp_bnd_builder.face_region_area[tmp_solver2.face_last_face[f]]/(4.*PI);
+      }
+      polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(false);       
+      polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("current probs accum", curr_probs_acum)->setColorMap("reds")->setEnabled(true);
+
+      polyscope::show();
+    }
 
     if (tmp_dice_energy < min_dice_energy){
         found_smth_optimal = true;
@@ -629,3 +639,30 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
 
 
 
+
+
+// Graveyard
+// else if (shape_name == "icosahedron binomial"){
+//     normal_to_prob_pairs = {
+//       {Vector3({ 0.57735 , -0.57735,  0.57735}),   binomial_dist(19, 0 )},
+//       {Vector3({-0.57735 ,  0.57735, -0.57735}),   binomial_dist(19, 19)},
+//       {Vector3({0., -0.934172,  0.356822}),        binomial_dist(19, 1 )},
+//       {Vector3({0.,  0.934172, -0.356822}),        binomial_dist(19, 18)},
+//       {Vector3({-0.934172 ,  0.356822 , 0}),       binomial_dist(19, 2)},
+//       {Vector3({ 0.934172 , -0.356822 , 0}),       binomial_dist(19, 17)},
+//       {Vector3({-0.57735 , -0.57735,  0.57735}),   binomial_dist(19, 3 )},
+//       {Vector3({ 0.57735 ,  0.57735, -0.57735}),   binomial_dist(19, 16)},
+//       {Vector3({ 0.356822 , 0,  0.934172}),        binomial_dist(19, 4 )},
+//       {Vector3({-0.356822 , 0, -0.934172}),        binomial_dist(19, 15)},
+//       {Vector3({-0.356822 , 0,  0.934172}),        binomial_dist(19, 5 )},
+//       {Vector3({ 0.356822 , 0, -0.934172}),        binomial_dist(19, 14)},
+//       {Vector3({-0.57735 ,  0.57735,  0.57735}),   binomial_dist(19, 6 )},
+//       {Vector3({ 0.57735 , -0.57735, -0.57735}),   binomial_dist(19, 13)},
+//       {Vector3({-0.57735 , -0.57735, -0.57735}),   binomial_dist(19, 7 )},
+//       {Vector3({ 0.57735 ,  0.57735,  0.57735}),   binomial_dist(19, 12)},
+//       {Vector3({-0.934172, -0.356822 , 0}),        binomial_dist(19, 8 )},
+//       {Vector3({ 0.934172,  0.356822 , 0}),        binomial_dist(19, 11)},
+//       {Vector3({0 ,  0.934172 ,  0.356822}),       binomial_dist(19, 9 )},
+//       {Vector3({0 , -0.934172 , -0.356822}),       binomial_dist(19, 10)},
+//     };
+//   }

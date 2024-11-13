@@ -40,8 +40,8 @@ using namespace geometrycentral::surface;
 
 
 std::vector<std::pair<Vector3, double>> normal_prob_assignment(std::string shape_name);
-FaceData<double> manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver);
-std::vector<std::pair<std::vector<Face>, double>> manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver);
+FaceData<double> manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape);
+std::vector<std::pair<std::vector<Face>, double>> manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape);
 
 // boundary of regions leading to different faces
 class BoundaryNormal {

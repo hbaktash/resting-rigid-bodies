@@ -74,7 +74,9 @@ polyscope::PointCloud *test_pc;
 int fair_sides_count = 11, // for optimization
     DE_step_count = 40;
 bool do_sobolev_dice_grads = false,
-     use_autodiff_for_dice_grad = true;
+     use_autodiff_for_dice_grad = true,
+     visualize_steps = true,
+     adaptive_reg = true;
 float sobolev_lambda = 2.,
       sobolev_lambda_decay = 0.95,
       dice_energy_step = 0.01,
@@ -88,7 +90,7 @@ int sobolev_p = 2;
 
 // example choice
 std::vector<std::string> all_input_names = {std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
-std::string input_name = "octahedron";
+std::string input_name = "dodecahedron";
 
 void draw_stable_patches_on_gauss_map(bool on_height_surface = false, 
                                       BoundaryBuilder *bnd_builder = boundary_builder,
@@ -146,7 +148,7 @@ void update_solver(){ // only doing this for convex input
 
 
 void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
-    // readManifoldSurfaceMesh()
+  // readManifoldSurfaceMesh()
   // std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
   std::tie(mesh_ptr, geometry_ptr) = generate_11_sided_polyhedron(poly_str);
   mesh = mesh_ptr.release();
@@ -272,7 +274,7 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
       size_t flat_n = hull_poses_G_append_vec.rows();
       Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
       return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, 
-                                                  bary_reg, coplanar_reg, policy, goal_probs, fair_sides, false);
+                                                  bary_reg, coplanar_reg, policy, goal_probs, fair_sides, true);
     };
     Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
     Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
@@ -331,9 +333,21 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     polyscope::getPointCloud("Center of Mass")->updatePointPositions(std::vector<Vector3>{tmp_solver.get_G()});
     auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
     curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
-    if (policy == "manual"){
-      FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver);
+    if (policy.substr(0, policy.find(" ")) == "manual"){ // first word
+      std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
+      FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver, policy_shape);
       curr_hull_psmesh->addFaceScalarQuantity("Goal probs", my_probs)->setColorMap("reds")->setEnabled(true);    
+    }
+    else if (policy.substr(0, policy.find(" ")) == "manualCluster"){ // first word
+      std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
+      std::vector<std::pair<std::vector<Face>, double>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver, policy_shape);
+      FaceData<double> my_probs(*tmp_solver.hullMesh, 0.);
+      for (auto cluster: clustered_probs){
+        for (Face f: cluster.first){
+          my_probs[f] = cluster.second;
+        }
+      }
+      curr_hull_psmesh->addFaceScalarQuantity("Goal cluster probs", my_probs)->setColorMap("reds")->setEnabled(true);    
     }
 
     // show grads
@@ -354,20 +368,33 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     //DEBUG
     // polyscope::frameTick();
     // polyscope::screenshot(false);
-    BoundaryBuilder tmp_bnd_builder(&tmp_solver);
-    tmp_bnd_builder.build_boundary_normals();
-    update_visuals(&tmp_solver, &tmp_bnd_builder);
-    curr_hull_psmesh->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(true);    
-    polyscope::show();
+    if (visualize_steps){
+      BoundaryBuilder tmp_bnd_builder(&tmp_solver);
+      tmp_bnd_builder.build_boundary_normals();
+      update_visuals(&tmp_solver, &tmp_bnd_builder);
+      curr_hull_psmesh->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(true);    
+      polyscope::show();
+    }
 
     // printf("line search\n");
     double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg,
                                                    policy, goal_probs, fair_sides_count, 
                                                    dice_energy_step, dice_search_decay, frozen_G, 1000);
     std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
-    if (opt_step_size == 0){
-      std::cout << ANSI_FG_RED << "  line search step size too small; breaking" << ANSI_RESET << "\n";
-      break;
+    if (opt_step_size < 1e-7){
+      if (!adaptive_reg){
+        std::cout << ANSI_FG_RED << "  line search step size too small; breaking" << ANSI_RESET << "\n";
+        break;
+      }
+      else{
+        std::cout << ANSI_FG_RED << "  line search step size too small; modifying reg coeffs" << ANSI_RESET << "\n";
+        bary_reg *= dice_search_decay;
+        // coplanar_reg /= dice_search_decay;
+        if (bary_reg < 1e-3 || coplanar_reg < 1e-3 || bary_reg > 1e2 || coplanar_reg > 1e2){
+          std::cout << ANSI_FG_RED << "  regularizers too small/big; breaking" << ANSI_RESET << "\n";
+          break;
+        }
+      }
     }
     hull_positions = hull_positions - opt_step_size * dfdV;
     tmp_solver = Forward3DSolver(hull_positions, G_vec, false); // could have been convaved
@@ -389,7 +416,8 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
 
 
   // DEBUG for 11 sided double dice sum example
-  FaceData<double> goal_probs = manual_stable_only_face_prob_assignment(&tmp_solver);
+  std::string policy_shape = policy.substr(policy.find(" ") + 1);
+  FaceData<double> goal_probs = manual_stable_only_face_prob_assignment(&tmp_solver, policy_shape);
   FaceData<double> curr_probs_acum(*tmp_solver.hullMesh, 0.);
   double no_reg_DE = 0.;
   for (Face f: tmp_solver.hullMesh->faces()){
@@ -411,6 +439,16 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity(" goal probs", goal_probs)->setColorMap("reds")->setEnabled(false);
   optimized_mesh = tmp_solver.hullMesh;
   optimized_geometry = tmp_solver.hullGeometry; 
+
+  // DEBUG grad vecs
+  double dice_e;
+         Eigen::Vector3d dfdG;
+         Eigen::MatrixX3d dfdV(hull_positions.rows(), 3);
+  get_dice_energy_grads(hull_positions, G_vec, bary_reg, coplanar_reg,
+                          dfdV, dfdG, dice_e, 
+                          use_autodiff_for_dice_grad, frozen_G,
+                          policy, goal_probs, fair_sides_count);
+  polyscope::getSurfaceMesh("current hull")->addVertexVectorQuantity("ad total grads", -1.*dfdV)->setEnabled(true);
 }
 
 
@@ -438,8 +476,12 @@ void myCallback() {
 
   ImGui::SliderFloat("barycenter distance regularizer", &bary_reg, 0., 100.);
   ImGui::SliderFloat("coplanar regularizer", &coplanar_reg, 0., 100.);
+  ImGui::Checkbox("adaptive reg", &adaptive_reg);
+  ImGui::Checkbox("visualize steps", &visualize_steps);
   if (ImGui::Button("dice energy opt")){
-    std::string policy = "manual"; // "fair", "manual cluster", "manual"
+    std::string policy_general = "manualCluster"; // "fair", "manualCluster ", "manual"
+    std::string policy_shape = "dodecahedron binomial"; // "octahedron binomial", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
+    std::string policy = policy_general + " " + policy_shape;
     dice_energy_opt(policy, bary_reg, coplanar_reg, false, DE_step_count);
   }
   if (ImGui::Button("save optimized hull")){

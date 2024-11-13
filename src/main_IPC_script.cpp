@@ -257,7 +257,7 @@ void init_visuals(){
   psHullMesh->setEnabled(true);
   psHullMesh->setTransparency(0.95);
   vis_utils.draw_G();
-  visualize_colored_polyhedra();
+  // visualize_colored_polyhedra();
   visualize_gauss_map();
 
 
@@ -1103,13 +1103,13 @@ int main(int argc, char* argv[])
 
   args::ArgumentParser parser(   "This is a test program.", "This goes after the options.");
   args::HelpFlag help(parser,    "help", "Display this help menu", {'h', "help"});
-  args::Flag verbose_arg(parser, "verbose", "print stuff per sample or not", {'v', 'verbose'});
-  args::Flag do_bullet(parser,   "do_bullet_sim", "do bullet sim", {'l', 'bullet'});
-  args::Flag do_IPC(parser,      "do_IPC_sim", "do IPC sim", {'p', 'ipc'});
-  args::Flag do_just_ours(parser, "do_just_ours", "do just ours", {'j', 'just'});
-  args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {'s', 'samples'}, 10);
-  args::ValueFlag<std::string> IPC_repo_dir(parser, "absolute_IPC_repo_dir", "abs path to IPC repo (built and ready to run)", {'i', "ipc_dir"}, IPC_REPO_DIR);
-  args::ValueFlag<std::string> BB_base_dir(parser, "absolute_BB_path", "abs path to BB meshes folder", {'b', "bb_dir"}, BB_BASE_DIR);
+  args::Flag verbose_arg(parser, "verbose", "print stuff per sample or not", {'v', "verbose"});
+  args::Flag do_bullet(parser,   "do_bullet_sim", "do bullet sim", {"bullet"});
+  args::Flag do_IPC(parser,      "do_IPC_sim", "do IPC sim", {"ipc"});
+  args::Flag do_just_ours(parser, "do_just_ours", "do just ours", {"just_ours"});
+  args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {"samples"});
+  args::ValueFlag<std::string> IPC_repo_dir(parser, "absolute_IPC_repo_dir", "abs path to IPC repo (built and ready to run)", {"ipc_dir"}, IPC_REPO_DIR);
+  args::ValueFlag<std::string> BB_base_dir(parser, "absolute_BB_path", "abs path to BB meshes folder", {"bb_dir"}, BB_BASE_DIR);
   args::ValueFlag<std::string> single_mesh_path(parser, "absolute_single_mesh_path", "abs path to single_mesh", {'m', "mesh_dir"}, SINGLE_MESH_PATH);
 
   try {
@@ -1204,10 +1204,13 @@ int main(int argc, char* argv[])
     for (Face f: forwardSolver->hullMesh->faces()){
       accum_probs[f] = boundary_builder->face_region_area[forwardSolver->face_last_face[f]]/(4.*PI);
     }
-    polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("probabilities", boundary_builder->face_region_area/(4.*PI), polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(true);
+    polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("probabilities", accum_probs, polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(true);
+
+    
 
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
     polyscope::state::userCallback = myCallback;
+    // polyscope::view::lookAt(glm::vec3{4., 4., 0.}, glm::vec3{0., 0., 0.});
     polyscope::show();
   }
   return EXIT_SUCCESS;	
