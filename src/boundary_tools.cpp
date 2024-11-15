@@ -143,6 +143,26 @@ std::vector<std::pair<Vector3, double>> normal_prob_assignment(std::string shape
       {Vector3({-0.816497, 0,  0.57735}),  binomial_dist(7, 7)},
     };
   }
+  else if (shape_name.substr(shape_name.find(" ") + 1) == "prism"){
+    size_t sides = std::stoi(shape_name.substr(0, shape_name.find(" ")));
+    for (size_t i = 0; i < sides; i++){
+      double angle1 = 2.*PI*(double)i/(double)sides,
+             angle2 = 2.*PI*(double)((i + 1) % sides)/(double)sides;
+      Vector3 p1 = Vector3({cos(angle1), sin(angle1), 0}),
+              p2 = Vector3({cos(angle2), sin(angle2), 0});
+      Vector3 normal = (p1 + p2).normalize();
+      
+      int binom_k = -1,
+          n = sides - 1;
+      // antipodal assignment
+      // if (i <= n/2)
+      //   binom_k = i;
+      // else
+      //   binom_k = i - n/2 - 1;
+      binom_k = i; //  wide approach
+      normal_to_prob_pairs.push_back({normal, binomial_dist(sides - 1, binom_k)});
+    }
+  }
 
   return normal_to_prob_pairs;
 
@@ -551,7 +571,7 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
 // hull update stuff
 // frozen G so far
 double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
-                               double bary_reg, double coplanar_reg,
+                               double bary_reg, double coplanar_reg, double cluster_distance_reg,
                                std::string policy, FaceData<double> goal_probs, size_t dice_side_count, 
                                double step_size, double decay, bool frozen_G, size_t max_iter){
   
@@ -564,7 +584,7 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   
   // std::cout << "getting fair dice energy for the initial hull\n";
   double min_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions, G_vec, 
-                                                                tmp_solver, bary_reg, coplanar_reg,
+                                                                tmp_solver, bary_reg, coplanar_reg, cluster_distance_reg,
                                                                 policy, goal_probs, dice_side_count, false);
   double s = step_size; //
 
@@ -592,35 +612,35 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
       printf("   ---   LS step %d -----\n", j);
     }
     tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec,
-                                                           tmp_solver2, bary_reg, coplanar_reg,
+                                                           tmp_solver2, bary_reg, coplanar_reg, cluster_distance_reg,
                                                            policy, goal_probs, dice_side_count, verbose);
-    if (j == 499){
-      std::cout << "   ---   step "<< j <<" -----\n";
-      printf("  *** temp fair dice energy %d: %f  , MIN: %f\n", j, tmp_dice_energy, min_dice_energy);
-      polyscope::registerSurfaceMesh("tmp_hull LS", tmp_solver2.hullGeometry->inputVertexPositions, tmp_solver2.hullMesh->getFaceVertexList());
-      polyscope::registerPointCloud("tmp_G", std::vector<Vector3>{tmp_solver2.get_G()});
+    // if (j == 499){
+    //   std::cout << "   ---   step "<< j <<" -----\n";
+    //   printf("  *** temp fair dice energy %d: %f  , MIN: %f\n", j, tmp_dice_energy, min_dice_energy);
+    //   polyscope::registerSurfaceMesh("tmp_hull LS", tmp_solver2.hullGeometry->inputVertexPositions, tmp_solver2.hullMesh->getFaceVertexList());
+    //   polyscope::registerPointCloud("tmp_G", std::vector<Vector3>{tmp_solver2.get_G()});
 
-      std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
-      std::vector<std::pair<std::vector<Face>, double>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver2, policy_shape);
-      FaceData<double> my_probs(*tmp_solver2.hullMesh, 0.);
-      for (auto cluster: clustered_probs){
-        for (Face f: cluster.first){
-          my_probs[f] = cluster.second;
-        }
-      }
-      polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("Goal cluster probs", my_probs)->setColorMap("reds")->setEnabled(true); 
-      BoundaryBuilder tmp_bnd_builder(&tmp_solver2);
-      tmp_bnd_builder.build_boundary_normals();
-      FaceData<double> curr_probs_acum(*tmp_solver2.hullMesh, 0.);
-      double no_reg_DE = 0.;
-      for (Face f: tmp_solver2.hullMesh->faces()){
-        curr_probs_acum[f] = tmp_bnd_builder.face_region_area[tmp_solver2.face_last_face[f]]/(4.*PI);
-      }
-      polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(false);       
-      polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("current probs accum", curr_probs_acum)->setColorMap("reds")->setEnabled(true);
+    //   std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
+    //   std::vector<std::pair<std::vector<Face>, double>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver2, policy_shape);
+    //   FaceData<double> my_probs(*tmp_solver2.hullMesh, 0.);
+    //   for (auto cluster: clustered_probs){
+    //     for (Face f: cluster.first){
+    //       my_probs[f] = cluster.second;
+    //     }
+    //   }
+    //   polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("Goal cluster probs", my_probs)->setColorMap("reds")->setEnabled(true); 
+    //   BoundaryBuilder tmp_bnd_builder(&tmp_solver2);
+    //   tmp_bnd_builder.build_boundary_normals();
+    //   FaceData<double> curr_probs_acum(*tmp_solver2.hullMesh, 0.);
+    //   double no_reg_DE = 0.;
+    //   for (Face f: tmp_solver2.hullMesh->faces()){
+    //     curr_probs_acum[f] = tmp_bnd_builder.face_region_area[tmp_solver2.face_last_face[f]]/(4.*PI);
+    //   }
+    //   polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(false);       
+    //   polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("current probs accum", curr_probs_acum)->setColorMap("reds")->setEnabled(true);
 
-      polyscope::show();
-    }
+    //   polyscope::show();
+    // }
 
     if (tmp_dice_energy < min_dice_energy){
         found_smth_optimal = true;
