@@ -38,9 +38,6 @@ using namespace geometrycentral::surface;
 
 class VisualUtils{
     public:
-        Forward3DSolver* forwardSolver;
-        ManifoldSurfaceMesh* sphere_mesh;
-        VertexPositionGeometry* sphere_geometry;
         polyscope::SurfaceMesh* gm_sphere_mesh;
         polyscope::PointCloud* psG;
         // polyscope::PointCloud *face_normals_p;
@@ -79,30 +76,29 @@ class VisualUtils{
             colored_shift = Vector3({gm_distance, gm_distance, 0.});
             center = Vector3({0., gm_distance, 0.});
         }
-        VisualUtils(Forward3DSolver* forwardSolver){
-                        this->forwardSolver = forwardSolver;
-            colored_shift = Vector3({gm_distance, gm_distance, 0.});
-            center = Vector3({0., gm_distance, 0.});
-        }
 
-        void draw_edge_arcs_on_gauss_map();
-        void draw_stable_vertices_on_gauss_map();
-        void draw_stable_face_normals_on_gauss_map();
-        void plot_height_function(bool plot_surface = true);
-        void draw_gauss_map();
-        void draw_guess_pc(std::vector<std::pair<size_t, size_t>> edge_inds, std::vector<Vector3> boundary_normals);
-        void show_edge_equilibria_on_gauss_map();
-        void draw_G();
+        void draw_edge_arcs_on_gauss_map(Forward3DSolver* forwardSolver);
+        void draw_stable_vertices_on_gauss_map(Forward3DSolver* forwardSolver);
+        void draw_stable_face_normals_on_gauss_map(Forward3DSolver* forwardSolver);
+        void plot_height_function(Forward3DSolver* forwardSolver, ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry, bool plot_surface = true);
+        void draw_gauss_map(Forward3DSolver* forwardSolver, ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry);
+        void draw_guess_pc(Forward3DSolver* forwardSolver, std::vector<std::pair<size_t, size_t>> edge_inds, std::vector<Vector3> boundary_normals);
+        void show_edge_equilibria_on_gauss_map(Forward3DSolver* forwardSolver);
+        void draw_G(Forward3DSolver* forwardSolver);
 
         // polyhedra domain
-        void visualize_stable_vertices();
-        void visualize_edge_stability();
-        void visualize_face_stability();
-        void visualize_colored_polyhedra(FaceData<Vector3> face_colors);
+        void visualize_stable_vertices(Forward3DSolver* forwardSolver);
+        void visualize_edge_stability(Forward3DSolver* forwardSolver);
+        void visualize_face_stability(Forward3DSolver* forwardSolver);
+        void visualize_colored_polyhedra(Forward3DSolver* forwardSolver, FaceData<Vector3> face_colors);
 
-        void visualize_all_stable_orientations();
+        void visualize_all_stable_orientations(Forward3DSolver* forwardSolver);
 
+        void draw_stable_patches_on_gauss_map(bool on_height_surface, 
+                                            BoundaryBuilder *bnd_builder, bool on_ambient_mesh);        
 
+        void update_visuals(Forward3DSolver *tmp_solver, BoundaryBuilder *bnd_builder,
+                            ManifoldSurfaceMesh *sphere_mesh, VertexPositionGeometry *sphere_geometry);
         // void draw_arc_on_sphere();
         // void draw_arc_network_on_sphere();
         // void draw_arc_network_on_lifted_suface();
@@ -134,5 +130,3 @@ std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>>
     build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
                                       Vector3 center, double radius, size_t seg_count,
                                       bool on_height_surface = false);
-
-

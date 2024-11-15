@@ -519,21 +519,22 @@ generate_pointy_prism(size_t n){
   std::unique_ptr<VertexPositionGeometry> geometry;
 
   // top
-  positions.push_back(Vector3({0., 0., 2.52})); // v0
+  positions.push_back(Vector3({0., 0., 3.52})); // v0
   double alpha = 2.*PI/(double)n;
+  double r = 1.;
   for (size_t i = 0; i < n; i++){ // vi's level 1
     double theta = 2.*PI * (double)i/(double)n ;
-    positions.push_back(Vector3({cos(theta), sin(theta), 1.515}));
+    positions.push_back(Vector3({r*cos(theta), r*sin(theta), 2.515}));
     faces.push_back({0, i+1, (i+2 == n+1) ? 1 : i+2}); // top triangles
   }
   for (size_t i = 0; i < n; i++){ // vi's level 2
     double theta = 2.*PI * (double)i/(double)n ;
-    positions.push_back(Vector3({cos(theta), sin(theta), -0.01}));
+    positions.push_back(Vector3({r*cos(theta), r*sin(theta), -0.01}));
     faces.push_back({(i+2 == n + 1) ? 1 : i+2, i+1,  i+1 + n}); // mid quad face 1
     faces.push_back({(i+2 == n + 1) ? 1: i+2, i+1 + n, (i+2 == n + 1) ? n + 1: i+2 + n}); // mid quad face 2
   }
   // bottom
-  positions.push_back(Vector3({0, 0, -1.03})); 
+  positions.push_back(Vector3({0, 0, -2.03})); 
   for (size_t i = 0; i < n; i++){ // vi's level 3
     faces.push_back({2*n+1, (i+2 == n + 1) ? n + 1 : i+2 + n, i+1 + n}); // bottom triangles
   }

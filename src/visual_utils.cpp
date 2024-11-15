@@ -208,7 +208,7 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
 }
 
 
-void VisualUtils::draw_edge_arcs_on_gauss_map(){
+void VisualUtils::draw_edge_arcs_on_gauss_map(Forward3DSolver* forwardSolver){
   //    add arc per edge
   std::vector<std::pair<size_t, size_t>> non_singular_edge_inds, stable_only_edge_inds ,both_edge_inds, all_edge_inds;
   size_t nFaces = forwardSolver->hullMesh->nFaces();
@@ -258,7 +258,7 @@ void VisualUtils::draw_edge_arcs_on_gauss_map(){
 }
 
 
-void VisualUtils::draw_stable_vertices_on_gauss_map(){
+void VisualUtils::draw_stable_vertices_on_gauss_map(Forward3DSolver* forwardSolver){
   std::vector<Vector3> stable_vertices, hidden_stable_vertices;
   for (Vertex v: forwardSolver->hullMesh->vertices()){
     if (forwardSolver->vertex_is_stablizable(v)){
@@ -291,7 +291,7 @@ void VisualUtils::draw_stable_vertices_on_gauss_map(){
 
 
 
-void VisualUtils::draw_stable_face_normals_on_gauss_map(){
+void VisualUtils::draw_stable_face_normals_on_gauss_map(Forward3DSolver* forwardSolver){
   std::vector<Vector3> stable_face_normals, face_normal_points;
   for (Face f: forwardSolver->hullMesh->faces()){
     Vector3 normal_pos_on_gm = forwardSolver->hullGeometry->faceNormal(f) + center;
@@ -313,7 +313,18 @@ void VisualUtils::draw_stable_face_normals_on_gauss_map(){
 
 
 
-void VisualUtils::plot_height_function(bool plot_surface){
+void VisualUtils::plot_height_function(Forward3DSolver* forwardSolver, ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry,
+                                       bool plot_surface){
+  VertexData<Vector3> shifted_poses(*sphere_mesh);
+  for (Vertex v: sphere_mesh->vertices()){
+    Vector3 pos = sphere_geometry->inputVertexPositions[v];
+    shifted_poses[v] = pos.normalize() + center;
+  }
+  gm_sphere_mesh = polyscope::registerSurfaceMesh("gm_sphere_mesh", 
+                                                  shifted_poses, 
+                                                  sphere_mesh->getFaceVertexList());
+  gm_sphere_mesh->setSmoothShade(true);
+  gm_sphere_mesh->setSurfaceColor({0.74,0.7,0.9});
   VertexData<double> heigh_func(*sphere_mesh);
   VertexData<Vector3> lifted_poses(*sphere_mesh);
   // printf("here! sphre mesh sizE: %d \n", sphere_mesh->nVertices());
@@ -338,41 +349,32 @@ void VisualUtils::plot_height_function(bool plot_surface){
 }
 
 
-void VisualUtils::draw_gauss_map(){
+void VisualUtils::draw_gauss_map(Forward3DSolver* forwardSolver,ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry){
   // just draw the sphere next to the main surface
   // std::vector<Vector3> sphere_pos = {gm_shift};
   // gauss_map_pc = polyscope::registerPointCloud("Gauss Map", sphere_pos);
   // gauss_map_pc->setPointColor({0.74,0.7,0.9});
   // gauss_map_pc->setPointRadius(gm_radi, false);
   // gauss_map_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
-  VertexData<Vector3> shifted_poses(*sphere_mesh);
-  for (Vertex v: sphere_mesh->vertices()){
-    Vector3 pos = sphere_geometry->inputVertexPositions[v];
-    shifted_poses[v] = pos.normalize() + center;
-  }
-  gm_sphere_mesh = polyscope::registerSurfaceMesh("gm_sphere_mesh", 
-                                                  shifted_poses, 
-                                                  sphere_mesh->getFaceVertexList());
-  gm_sphere_mesh->setSmoothShade(true);
-  gm_sphere_mesh->setSurfaceColor({0.74,0.7,0.9});
+  
   // surface and colormap
-  plot_height_function(false);
+  plot_height_function(forwardSolver, sphere_mesh, sphere_geometry, false);
   
   // face normals on Gauss map
-  draw_stable_face_normals_on_gauss_map();
+  draw_stable_face_normals_on_gauss_map(forwardSolver);
 
   // point cloud for stable vertices
-  draw_stable_vertices_on_gauss_map();
+  draw_stable_vertices_on_gauss_map(forwardSolver);
 
   // arcs for edge-normals set
-  draw_edge_arcs_on_gauss_map();
+  draw_edge_arcs_on_gauss_map(forwardSolver);
 
   // edge equilibria
-  show_edge_equilibria_on_gauss_map();
+  show_edge_equilibria_on_gauss_map(forwardSolver);
 }
 
 
-void VisualUtils::show_edge_equilibria_on_gauss_map(){
+void VisualUtils::show_edge_equilibria_on_gauss_map(Forward3DSolver* forwardSolver){
   std::vector<Vector3> edge_equilibria_points, stabilizable_edge_equilibria_points, stable_edge_equilibria_points;
   Vector3 G = forwardSolver->get_G();
   for (Edge e: forwardSolver->hullMesh->edges()){
@@ -426,7 +428,8 @@ void VisualUtils::show_edge_equilibria_on_gauss_map(){
   }
 }
 
-void VisualUtils::draw_guess_pc(std::vector<std::pair<size_t, size_t>> neigh_inds, 
+void VisualUtils::draw_guess_pc(Forward3DSolver* forwardSolver,
+                                std::vector<std::pair<size_t, size_t>> neigh_inds, 
                                 std::vector<Vector3> boundary_normals){
   std::vector<Vector3> positions;
   std::vector<std::array<size_t, 2>> edgeInds;
@@ -465,7 +468,7 @@ void VisualUtils::draw_guess_pc(std::vector<std::pair<size_t, size_t>> neigh_ind
 
 
 // visualize center of mass
-void VisualUtils::draw_G() {
+void VisualUtils::draw_G(Forward3DSolver* forwardSolver) {
   std::vector<Vector3> G_position = {forwardSolver->get_G()};
   psG = polyscope::registerPointCloud("Center of Mass", G_position);
   psG->setPointColor({0., 0., 0.});
@@ -477,7 +480,7 @@ void VisualUtils::draw_G() {
 // polyhedra domain
 
 // void visualize_edge_probabilities(){}
-void VisualUtils::visualize_stable_vertices(){
+void VisualUtils::visualize_stable_vertices(Forward3DSolver* forwardSolver){
   std::vector<Vector3> positions;// = {forwardSolver->hullGeometry->inputVertexPositions[v]};
   for (Vertex v: forwardSolver->hullMesh->vertices()){
     if (forwardSolver->vertex_is_stablizable(v)){
@@ -494,7 +497,7 @@ void VisualUtils::visualize_stable_vertices(){
 
 
 
-void VisualUtils::visualize_edge_stability(){
+void VisualUtils::visualize_edge_stability(Forward3DSolver* forwardSolver){
   std::vector<std::array<size_t, 2>> stable_edgeInds, stablilizable_edgeInds, both_edgeInds;
   std::vector<Vector3> stable_positions, stablilizable_positions, both_positions;
   size_t stable_counter = 0, stablizable_counter = 0, both_counter = 0;
@@ -535,7 +538,7 @@ void VisualUtils::visualize_edge_stability(){
 }
 
 
-void VisualUtils::visualize_face_stability(){
+void VisualUtils::visualize_face_stability(Forward3DSolver* forwardSolver){
   std::vector<std::array<double, 3>> fColor(forwardSolver->hullMesh->nFaces());
   for (Face f: forwardSolver->hullMesh->faces()){
     if (forwardSolver->face_is_stable(f))
@@ -548,7 +551,7 @@ void VisualUtils::visualize_face_stability(){
   faceQnty->setEnabled(true);
 }
 
-void VisualUtils::visualize_colored_polyhedra(FaceData<Vector3> face_colors){
+void VisualUtils::visualize_colored_polyhedra(Forward3DSolver* forwardSolver, FaceData<Vector3> face_colors){
   VertexData<Vector3> shifted_positions(*forwardSolver->hullMesh);
   for (Vertex v: forwardSolver->hullMesh->vertices()){
     shifted_positions[v] = forwardSolver->hullGeometry->inputVertexPositions[v] + colored_shift;
@@ -564,7 +567,7 @@ void VisualUtils::visualize_colored_polyhedra(FaceData<Vector3> face_colors){
 }
 
 
-void VisualUtils::visualize_all_stable_orientations(){
+void VisualUtils::visualize_all_stable_orientations(Forward3DSolver* forwardSolver){
   forwardSolver->set_uniform_G();
   forwardSolver->initialize_pre_computes();
   BoundaryBuilder *bnd_builder = new BoundaryBuilder(forwardSolver);
@@ -596,4 +599,24 @@ void VisualUtils::visualize_all_stable_orientations(){
     i++;
   }
 
+}
+
+
+void VisualUtils::draw_stable_patches_on_gauss_map(bool on_height_surface, 
+                                      BoundaryBuilder *bnd_builder,
+                                      bool on_ambient_mesh){
+  auto net_pair = build_and_draw_stable_patches_on_gauss_map(bnd_builder, center, gm_radi, arcs_seg_count, on_height_surface);
+  if (on_ambient_mesh)
+    draw_guess_pc(bnd_builder->forward_solver, net_pair.first, net_pair.second);
+}
+
+
+void VisualUtils::update_visuals(Forward3DSolver *tmp_solver, BoundaryBuilder *bnd_builder, 
+                                 ManifoldSurfaceMesh *sphere_mesh, VertexPositionGeometry *sphere_geometry){
+  // VisualUtils vis_utils(tmp_solver);
+  VisualUtils vis_utils;
+  draw_gauss_map(tmp_solver, sphere_mesh, sphere_geometry);
+  draw_G(tmp_solver);
+  plot_height_function(tmp_solver, sphere_mesh, sphere_geometry, false);
+  draw_stable_patches_on_gauss_map(false, bnd_builder, false);
 }

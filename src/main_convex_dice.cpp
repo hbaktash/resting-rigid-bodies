@@ -93,17 +93,8 @@ int sobolev_p = 2;
 std::vector<std::string> all_input_names = {std::string("5 prism"), std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
 std::string input_name = "5 prism";
 
-void draw_stable_patches_on_gauss_map(bool on_height_surface = false, 
-                                      BoundaryBuilder *bnd_builder = boundary_builder,
-                                      Forward3DSolver *tmp_solver = forwardSolver,
-                                      bool on_ambient_mesh = false){
-  auto net_pair = build_and_draw_stable_patches_on_gauss_map(bnd_builder, vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, on_height_surface);
-  if (on_ambient_mesh)
-    vis_utils.draw_guess_pc(net_pair.first, net_pair.second);
-}
 
-
-void visualize_gauss_map(){
+void visualize_gauss_map(Forward3DSolver* forwardSolver){
   std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
   std::unique_ptr<VertexPositionGeometry> sphere_geometry_ptr;
   std::tie(sphere_mesh_ptr, sphere_geometry_ptr) = generate_polyhedra("sphere");
@@ -111,10 +102,7 @@ void visualize_gauss_map(){
   sphere_geometry = sphere_geometry_ptr.release();
   
   //update vis utils
-  vis_utils.sphere_geometry = sphere_geometry;
-  vis_utils.sphere_mesh = sphere_mesh;
-
-  vis_utils.draw_gauss_map();
+  vis_utils.draw_gauss_map(forwardSolver, sphere_mesh, sphere_geometry);
 }
 
 
@@ -132,8 +120,7 @@ void init_visuals(){
   forwardSolver->hullGeometry->requireFaceNormals();
   psHullMesh->addFaceVectorQuantity("face normals", forwardSolver->hullGeometry->faceNormals);
   psHullMesh->setEnabled(true);
-  vis_utils.forwardSolver = forwardSolver;
-  vis_utils.draw_G();
+  vis_utils.draw_G(forwardSolver);
 }
 
 void update_solver(){ // only doing this for convex input
@@ -144,7 +131,6 @@ void update_solver(){ // only doing this for convex input
   forwardSolver->initialize_pre_computes();
   boundary_builder = new BoundaryBuilder(forwardSolver);
   boundary_builder->build_boundary_normals();
-  vis_utils.forwardSolver = forwardSolver;
 }
 
 
@@ -156,18 +142,6 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
   geometry = geometry_ptr.release();
   preprocess_mesh(mesh, geometry, triangulate, false, 1.);
 }
-
-
-
-void update_visuals(Forward3DSolver *tmp_solver = nullptr, BoundaryBuilder *bnd_builder = boundary_builder){
-  // VisualUtils vis_utils(tmp_solver);
-  vis_utils.forwardSolver = tmp_solver;
-  vis_utils.draw_gauss_map();
-  vis_utils.draw_G();
-  vis_utils.plot_height_function(false);
-  draw_stable_patches_on_gauss_map(false, bnd_builder);
-}
-
 
 
 void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, std::string policy, bool show){
@@ -207,7 +181,7 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, std::string p
 
   BoundaryBuilder tmp_bnd_builder(&tmp_solver);
   tmp_bnd_builder.build_boundary_normals();
-  update_visuals(&tmp_solver, &tmp_bnd_builder);
+  vis_utils.update_visuals(&tmp_solver, &tmp_bnd_builder, sphere_mesh, sphere_geometry);
   FaceData<double> current_accum_probs(*tmp_solver.hullMesh, 0.);
   for (Face f: tmp_solver.hullMesh->faces()){
     current_accum_probs[f] = tmp_bnd_builder.face_region_area[tmp_solver.face_last_face[f]]/(4.*PI);
@@ -228,9 +202,9 @@ void initialize_state(std::string input_name){
     generate_polyhedron_example(input_name);
     update_solver();
     init_visuals();
-    visualize_gauss_map();//
+    visualize_gauss_map(forwardSolver);//
     boundary_builder->print_area_of_boundary_loops();
-    update_visuals(forwardSolver, boundary_builder);
+    vis_utils.update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
 
     // TODO : temporary
     Forward3DSolver tmp_solver(vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions), 
