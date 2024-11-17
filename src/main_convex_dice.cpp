@@ -91,7 +91,7 @@ int sobolev_p = 2;
 
 // example choice
 std::vector<std::string> all_input_names = {std::string("5 prism"), std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
-std::string input_name = "5 prism";
+std::string input_name = "dodecahedron";
 
 
 void visualize_gauss_map(Forward3DSolver* forwardSolver){
@@ -156,22 +156,24 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, std::string p
   }
   else if (policy.substr(0, policy.find(" ")) == "manualCluster"){ // first word
     std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
-    std::vector<std::pair<std::vector<Face>, double>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver, policy_shape);
+    std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver, policy_shape);
     FaceData<double> goal_cluster_probs(*tmp_solver.hullMesh, 0.),
                      current_cluster_probs(*tmp_solver.hullMesh, 0.);
     for (auto cluster: clustered_probs){
       double current_cluster_prob = 0.;
-      for (Face f: cluster.first){
+      std::vector<Face> faces = std::get<0>(cluster);
+      double cluster_prob = std::get<1>(cluster);
+      for (Face f: faces){
         if (tmp_solver.face_last_face[f] == f){
           current_cluster_prob += tmp_solver.hullGeometry->faceArea(f)/(4.*PI);
           for (Face f2: tmp_solver.hullMesh->faces()){
             if (tmp_solver.face_last_face[f2] == f){
-              goal_cluster_probs[f2] = cluster.second;
+              goal_cluster_probs[f2] = cluster_prob;
             }
           }
         }
       }
-      for (Face f: cluster.first){
+      for (Face f: faces){
         current_cluster_probs[f] = current_cluster_prob;
       }
     }
@@ -465,8 +467,8 @@ void myCallback() {
   ImGui::Checkbox("visualize steps", &visualize_steps);
   if (ImGui::Button("dice energy opt")){
     std::string policy_general = "manualCluster"; // "fair", "manualCluster ", "manual"
-    // std::string policy_shape = "4 prism"; // "dodecahedron binomial", "octahedron binomial", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
-    std::string policy_shape = input_name;
+    std::string policy_shape = "dodecahedron binomial"; // "dodecahedron binomial", "octahedron binomial", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
+    // std::string policy_shape = input_name;
     std::string policy = policy_general + " " + policy_shape;
     dice_energy_opt(policy, bary_reg, coplanar_reg, false, DE_step_count);
   }

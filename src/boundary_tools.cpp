@@ -58,7 +58,8 @@ void tmp_arc_vis(Vector3 p1, Vector3 p2, Vector3 center, double radius,
   psArcCurveNet->setEnabled(true);
 }
 
-std::vector<std::pair<Vector3, double>> normal_prob_assignment(std::string shape_name){
+std::vector<std::pair<Vector3, double>> 
+normal_prob_assignment(std::string shape_name){
   std::vector<std::pair<Vector3, double>> normal_to_prob_pairs;
   
   if (shape_name == "circus"){
@@ -193,7 +194,8 @@ std::vector<std::pair<Vector3, double>> normal_prob_assignment(std::string shape
   // Vector3 nf42({0.803215, -0.26098, 0.535477});  // 9
 }
 
-FaceData<double> manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape){
+FaceData<double> 
+manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape){
   FaceData<double> goal_probs(*tmp_solver->hullMesh, 0.);
 
   std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment(policy_shape);
@@ -216,7 +218,8 @@ FaceData<double> manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_so
   return goal_probs;
 }
 
-std::vector<std::pair<std::vector<Face>, double>> manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape){
+std::vector<std::tuple<std::vector<Face>, double, Vector3>> 
+manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape){
   // std::string shape_name = "octahedron binomial"; // "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
   std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment(policy_shape);
   
@@ -235,7 +238,7 @@ std::vector<std::pair<std::vector<Face>, double>> manual_clustered_face_prob_ass
     closest_normals[f] = closest_normal;
   }
 
-  std::vector<std::pair<std::vector<Face>, double>> clustered_prob_assignment; // to be populated and returned
+  std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_prob_assignment; // to be populated and returned
   for (auto normal_prob_pair: normal_to_prob_pairs){
     
     Vector3 normal = normal_prob_pair.first;
@@ -247,7 +250,7 @@ std::vector<std::pair<std::vector<Face>, double>> manual_clustered_face_prob_ass
         assigned_faces.push_back(f);
       }
     }
-    clustered_prob_assignment.push_back({assigned_faces, goal_prob});
+    clustered_prob_assignment.push_back(std::make_tuple(assigned_faces, goal_prob, normal));
   }
   return clustered_prob_assignment;
 }
@@ -610,6 +613,17 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
     if ((j == 499)){
       verbose = true;
       printf("   ---   LS step %d -----\n", j);
+      // VisualUtils vis; 
+      // *** TODO do this temporary thing at main; ***
+      // BoundaryBuilder tmp_bnd_builder(&tmp_solver2);
+      // tmp_bnd_builder.build_boundary_normals();
+      // std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
+      // std::unique_ptr<VertexPositionGeometry> sphere_geometry_ptr;
+      // std::tie(sphere_mesh_ptr, sphere_geometry_ptr) = generate_polyhedra("sphere");
+      // ManifoldSurfaceMesh *sphere_mesh = sphere_mesh_ptr.release();
+      // VertexPositionGeometry *sphere_geometry = sphere_geometry_ptr.release();
+      // vis.update_visuals(&tmp_solver2, &tmp_bnd_builder, sphere_mesh, sphere_geometry);
+      // polyscope::show();
     }
     tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec,
                                                            tmp_solver2, bary_reg, coplanar_reg, cluster_distance_reg,
@@ -655,13 +669,11 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   return s;
 }
 
-// ========================================================================================== STATIC FUNCTIONS
 
 
 
 
-
-// Graveyard
+// ========================== Graveyard ========================== 
 // else if (shape_name == "icosahedron binomial"){
 //     normal_to_prob_pairs = {
 //       {Vector3({ 0.57735 , -0.57735,  0.57735}),   binomial_dist(19, 0 )},

@@ -247,7 +247,8 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         }
     }
     else if (policy_general == "manualCluster"){
-        std::vector<std::pair<std::vector<Face>, double>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver, policy_shape);
+        std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_probs = 
+                    manual_clustered_face_prob_assignment(&tmp_solver, policy_shape);
         Scalar total_coplanar_energy = 0.,
                pure_dice_energy = 0.,
                total_bary_energy = 0.,
@@ -256,50 +257,35 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
 
         size_t non_zero_clusters = 0;
         for (auto cluster: clustered_probs){
-
-            if (cluster.first.size() > 0)
+            std::vector<Face> cluster_faces = std::get<0>(cluster);
+            double cluster_prob = std::get<1>(cluster);
+            if (cluster_faces.size() > 0)
                 non_zero_clusters++;
             else
                 continue;
             // Pure dice energy
             Scalar cluster_area_sum = 0.;
-            for (Face f: cluster.first){
+            for (Face f: cluster_faces){
                 if (face_region_area[f] > 0){
                     // sum of stable face areas in the cluster
                     cluster_area_sum += face_region_area[f];
                 }
             }
-            Scalar diff = cluster_area_sum - cluster.second * 4. * PI;
+            Scalar diff = cluster_area_sum - cluster_prob * 4. * PI;
             pure_dice_energy += diff * diff;
 
             // Co-planar energy
-            // TODO either stables only or all faces in the cluster
-            Scalar cluster_coplanar_energy = 0.;
-            std::vector<Face> cluster_faces = cluster.first;
-            for (Face f1: cluster_faces){
-                Face ff1 = face_last_face[f1];
-                if (ff1 == f1) // Could remove
-                    if (std::find(cluster_faces.begin(), cluster_faces.end(), ff1) != cluster_faces.end()){ // final face is in the same cluster
-                        for (Face f2: cluster_faces){
-                            Face ff2 = face_last_face[f2];
-                            if (ff2 == f2) // Could remove
-                                if (std::find(cluster_faces.begin(), cluster_faces.end(), ff2) != cluster_faces.end()){ // final face is in the same cluster
-                                    Scalar normal_diff = (face_normals[f1] - face_normals[f2]).squaredNorm();
-                                    cluster_coplanar_energy += normal_diff;
-                                }
-                        }
-                    }
-            }
-            total_coplanar_energy += cluster_coplanar_energy;
+            
+            total_coplanar_energy += single_cluster_coplanar_e<Scalar>(cluster_faces, face_normals, face_last_face);
             
             // Bary energy
             std::set<Vertex> cluster_boundary_vertices;
             Eigen::Vector3<Scalar> stable_faces_cluster_barycenter = Eigen::Vector3<Scalar>::Zero();
             double stable_face_count = 0;
-            if (cluster.first.size() == 0){ // avoiding nan
+            if (cluster_faces.size() == 0){ // avoiding nan
                 continue;
             }
-            for (Face cluster_f: cluster.first){
+            for (Face cluster_f: cluster_faces){
                 if (face_last_face[cluster_f] == cluster_f){ // stable cluster faces
                     cluster_boundary_vertices.insert(face_region_boundary_vertices[cluster_f].begin(), face_region_boundary_vertices[cluster_f].end());
                     stable_faces_cluster_barycenter += face_normals[cluster_f];
@@ -317,7 +303,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             cluster_barycenter = cluster_barycenter.normalized();
             Scalar stable_face_distances_sum_to_barycenter = 0.;
             // -- Penalize very stable face distance to bary center; could de-motivate splitting; // sum (fi - bary)^2
-            // for (Face cluster_f: cluster.first)
+            // for (Face cluster_f: cluster_faces)
             //     if (face_region_area[cluster_f] > 0) // stable cluster faces
             //         stable_face_distances_sum_to_barycenter += (cluster_barycenter - face_normals[cluster_f]).norm();
             // -- Penalize only stable barycenters distance to cluster barycenter; might leave splits alone // [mean (fi) - bary]^2
@@ -385,4 +371,27 @@ Scalar BoundaryBuilder::triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scal
     Scalar Adotbc = A.dot(B.cross(C));
     Scalar denom = A.norm()*B.norm()*C.norm() + A.dot(B)*C.norm() + B.dot(C)*A.norm() + C.dot(A)*B.norm();
     return 2. * atan2(Adotbc, denom);
+}
+
+
+template <typename Scalar>
+Scalar BoundaryBuilder::single_cluster_coplanar_e(std::vector<Face> faces, 
+                                        FaceData<Eigen::Vector3<Scalar>> face_normals,
+                                        FaceData<Face> face_last_face){
+    Scalar local_energy = 0.;
+    for (Face f1: faces){
+        Face ff1 = face_last_face[f1];
+        if (ff1 == f1) // Could remove
+            if (std::find(faces.begin(), faces.end(), ff1) != faces.end()){ // final face is in the same cluster
+                for (Face f2: faces){
+                    Face ff2 = face_last_face[f2];
+                    if (ff2 == f2) // Could remove
+                        if (std::find(faces.begin(), faces.end(), ff2) != faces.end()){ // final face is in the same cluster
+                            Scalar normal_diff = (face_normals[f1] - face_normals[f2]).squaredNorm();
+                            local_energy += normal_diff;
+                        }
+                }
+            }
+    }
+    return local_energy;
 }

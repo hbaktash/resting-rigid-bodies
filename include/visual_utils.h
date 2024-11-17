@@ -30,6 +30,7 @@
 #include "forward3D.h"
 #include "boundary_tools.h"
 #include "geometry_utils.h"
+#include "mesh_factory.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -95,7 +96,7 @@ class VisualUtils{
         void visualize_all_stable_orientations(Forward3DSolver* forwardSolver);
 
         void draw_stable_patches_on_gauss_map(bool on_height_surface, 
-                                            BoundaryBuilder *bnd_builder, bool on_ambient_mesh);        
+                                              BoundaryBuilder *bnd_builder, bool on_ambient_mesh);        
 
         void update_visuals(Forward3DSolver *tmp_solver, BoundaryBuilder *bnd_builder,
                             ManifoldSurfaceMesh *sphere_mesh, VertexPositionGeometry *sphere_geometry);

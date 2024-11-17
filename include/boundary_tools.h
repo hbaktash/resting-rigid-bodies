@@ -30,6 +30,7 @@
 #include "polyscope/point_cloud.h"
 #include "polyscope/curve_network.h"
 
+// #include "visual_utils.h"
 
 // Add missing include path for autodiff library
 // #include <autodiff/reverse/var/eigen.hpp>
@@ -41,7 +42,7 @@ using namespace geometrycentral::surface;
 
 std::vector<std::pair<Vector3, double>> normal_prob_assignment(std::string shape_name);
 FaceData<double> manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape);
-std::vector<std::pair<std::vector<Face>, double>> manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape);
+std::vector<std::tuple<std::vector<Face>, double, Vector3>> manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape);
 
 // boundary of regions leading to different faces
 class BoundaryNormal {
@@ -150,6 +151,12 @@ class BoundaryBuilder {
         static Eigen::Vector3<Scalar> intersect_arcs(Eigen::Vector3<Scalar> v_normal, Eigen::Vector3<Scalar> R2, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B);
         template <typename Scalar>
         static Scalar triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B, Eigen::Vector3<Scalar> C);
+
+        // regularizers
+        template <typename Scalar>
+        static Scalar single_cluster_coplanar_e(std::vector<Face> faces, 
+                                                FaceData<Eigen::Vector3<Scalar>> face_normals,
+                                                FaceData<Face> face_last_face);
 };
 
 double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
