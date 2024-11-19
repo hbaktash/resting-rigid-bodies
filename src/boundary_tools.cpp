@@ -195,10 +195,10 @@ normal_prob_assignment(std::string shape_name){
 }
 
 FaceData<double> 
-manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape){
+manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<std::pair<Vector3, double>> normal_prob_pairs){
   FaceData<double> goal_probs(*tmp_solver->hullMesh, 0.);
 
-  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment(policy_shape);
+  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_pairs;
   
   for (auto normal_prob_pair: normal_to_prob_pairs){
     Vector3 normal = normal_prob_pair.first;
@@ -219,15 +219,14 @@ manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::string
 }
 
 std::vector<std::tuple<std::vector<Face>, double, Vector3>> 
-manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::string policy_shape){
+manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<std::pair<Vector3, double>> normal_prob_pairs){
   // std::string shape_name = "octahedron binomial"; // "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
-  std::vector<std::pair<Vector3, double>> normal_to_prob_pairs = normal_prob_assignment(policy_shape);
   
   FaceData<Vector3> closest_normals(*tmp_solver->hullMesh);
   for (Face f: tmp_solver->hullMesh->faces()){
     Vector3 closest_normal;
     double smallest_normal_diff = 1000.;
-    for (auto normal_prob_pair: normal_to_prob_pairs){ // assign a probable normal to each face (stable/unstable)
+    for (auto normal_prob_pair: normal_prob_pairs){ // assign a probable normal to each face (stable/unstable)
       Vector3 normal = normal_prob_pair.first;
       double normal_diff = (tmp_solver->hullGeometry->faceNormal(f) - normal).norm();
       if (normal_diff < smallest_normal_diff){
@@ -239,7 +238,7 @@ manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::string p
   }
 
   std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_prob_assignment; // to be populated and returned
-  for (auto normal_prob_pair: normal_to_prob_pairs){
+  for (auto normal_prob_pair: normal_prob_pairs){
     
     Vector3 normal = normal_prob_pair.first;
     std::vector<Face> assigned_faces;
@@ -254,6 +253,27 @@ manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::string p
   }
   return clustered_prob_assignment;
 }
+
+std::vector<std::pair<Vector3, double>> 
+update_normal_prob_assignment(Forward3DSolver *tmp_solver,
+                              std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals){
+  std::vector<std::pair<Vector3, double>> updated_assignment;
+  for (auto cluster: clustered_face_normals){
+    std::vector<Face> faces = std::get<0>(cluster);
+    double cluster_goal_prob = std::get<1>(cluster);
+    Vector3 normal = std::get<2>(cluster);
+    Vector3 cluster_stables_avg{0., 0., 0.};
+    for (Face f: faces){
+      if (tmp_solver->face_last_face[f] == f){
+        cluster_stables_avg += tmp_solver->hullGeometry->faceNormal(f);
+      }
+    }
+    cluster_stables_avg = cluster_stables_avg.normalize();
+    updated_assignment.push_back({cluster_stables_avg, cluster_goal_prob});
+  }
+  return updated_assignment;
+}
+
 
 size_t BoundaryNormal::counter = 0;
 // constructor
@@ -575,7 +595,8 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
 // frozen G so far
 double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
                                double bary_reg, double coplanar_reg, double cluster_distance_reg,
-                               std::string policy, FaceData<double> goal_probs, size_t dice_side_count, 
+                               std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
+                               size_t dice_side_count, 
                                double step_size, double decay, bool frozen_G, size_t max_iter){
   
   Forward3DSolver tmp_solver(hull_positions, G_vec, true); // assuming input is convex; will be asserted internally in the constructor
@@ -588,7 +609,8 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   // std::cout << "getting fair dice energy for the initial hull\n";
   double min_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions, G_vec, 
                                                                 tmp_solver, bary_reg, coplanar_reg, cluster_distance_reg,
-                                                                policy, goal_probs, dice_side_count, false);
+                                                                policy_general, normal_prob_assignment, 
+                                                                dice_side_count, false);
   double s = step_size; //
 
   bool found_smth_optimal = false;
@@ -627,34 +649,8 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
     }
     tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec,
                                                            tmp_solver2, bary_reg, coplanar_reg, cluster_distance_reg,
-                                                           policy, goal_probs, dice_side_count, verbose);
-    // if (j == 499){
-    //   std::cout << "   ---   step "<< j <<" -----\n";
-    //   printf("  *** temp fair dice energy %d: %f  , MIN: %f\n", j, tmp_dice_energy, min_dice_energy);
-    //   polyscope::registerSurfaceMesh("tmp_hull LS", tmp_solver2.hullGeometry->inputVertexPositions, tmp_solver2.hullMesh->getFaceVertexList());
-    //   polyscope::registerPointCloud("tmp_G", std::vector<Vector3>{tmp_solver2.get_G()});
-
-    //   std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
-    //   std::vector<std::pair<std::vector<Face>, double>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver2, policy_shape);
-    //   FaceData<double> my_probs(*tmp_solver2.hullMesh, 0.);
-    //   for (auto cluster: clustered_probs){
-    //     for (Face f: cluster.first){
-    //       my_probs[f] = cluster.second;
-    //     }
-    //   }
-    //   polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("Goal cluster probs", my_probs)->setColorMap("reds")->setEnabled(true); 
-    //   BoundaryBuilder tmp_bnd_builder(&tmp_solver2);
-    //   tmp_bnd_builder.build_boundary_normals();
-    //   FaceData<double> curr_probs_acum(*tmp_solver2.hullMesh, 0.);
-    //   double no_reg_DE = 0.;
-    //   for (Face f: tmp_solver2.hullMesh->faces()){
-    //     curr_probs_acum[f] = tmp_bnd_builder.face_region_area[tmp_solver2.face_last_face[f]]/(4.*PI);
-    //   }
-    //   polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(false);       
-    //   polyscope::getSurfaceMesh("tmp_hull LS")->addFaceScalarQuantity("current probs accum", curr_probs_acum)->setColorMap("reds")->setEnabled(true);
-
-    //   polyscope::show();
-    // }
+                                                           policy_general, normal_prob_assignment, 
+                                                           dice_side_count, verbose);
 
     if (tmp_dice_energy < min_dice_energy){
         found_smth_optimal = true;

@@ -4,7 +4,7 @@
 template <typename Scalar>
 Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
                                     Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg, double cluster_distance_reg,
-                                    std::string policy, FaceData<double> goal_probs, 
+                                    std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
                                     size_t side_count, bool verbose
                                     ){
     // Eigen::MatrixX3d hull_positions_d = static_cast<Eigen::MatrixX3d>(hull_positions);//.template cast<double>();
@@ -159,9 +159,9 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
     // compute distance to bary centers
     Scalar bary_energy = 0.;
     Scalar co_planar_energy = 0.;
-    // split policy
-    std::string policy_shape = policy.substr(policy.find(" ") + 1), // second word
-                policy_general = policy.substr(0, policy.find(" ")); // first word
+    // parse policy string
+    // std::string policy_shape = policy.substr(policy.find(" ") + 1), // second word
+    //             policy_general = policy.substr(0, policy.find(" ")); // first word
     if (policy_general == "fair" || policy_general == "manual"){
         for (Face f: tmp_solver.hullMesh->faces()){
             if (face_region_area[f] > 0){
@@ -231,7 +231,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         // return probs[0].second; // DEBUG: max prob
     }
     else if (policy_general == "manual"){
-        FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver, policy_shape);
+        FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver, normal_prob_assignment);
         for (Face f: tmp_solver.hullMesh->faces()){
             // // norm 2
             Scalar diff = face_region_area[f] - my_probs[f] * 4. * PI;
@@ -248,7 +248,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
     }
     else if (policy_general == "manualCluster"){
         std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_probs = 
-                    manual_clustered_face_prob_assignment(&tmp_solver, policy_shape);
+                    manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_assignment);
         Scalar total_coplanar_energy = 0.,
                pure_dice_energy = 0.,
                total_bary_energy = 0.,
@@ -263,6 +263,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
                 non_zero_clusters++;
             else
                 continue;
+
             // Pure dice energy
             Scalar cluster_area_sum = 0.;
             for (Face f: cluster_faces){
@@ -275,59 +276,41 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             pure_dice_energy += diff * diff;
 
             // Co-planar energy
-            
             total_coplanar_energy += single_cluster_coplanar_e<Scalar>(cluster_faces, face_normals, face_last_face);
             
             // Bary energy
-            std::set<Vertex> cluster_boundary_vertices;
-            Eigen::Vector3<Scalar> stable_faces_cluster_barycenter = Eigen::Vector3<Scalar>::Zero();
-            double stable_face_count = 0;
-            if (cluster_faces.size() == 0){ // avoiding nan
-                continue;
-            }
-            for (Face cluster_f: cluster_faces){
-                if (face_last_face[cluster_f] == cluster_f){ // stable cluster faces
-                    cluster_boundary_vertices.insert(face_region_boundary_vertices[cluster_f].begin(), face_region_boundary_vertices[cluster_f].end());
-                    stable_faces_cluster_barycenter += face_normals[cluster_f];
-                    stable_face_count += 1.;
-                }
-            }
-            if (stable_face_count == 0){ // avoiding nan
-                continue;
-            }
-            stable_faces_cluster_barycenter = stable_faces_cluster_barycenter.normalized();
-            Eigen::Vector3<Scalar> cluster_barycenter = Eigen::Vector3<Scalar>::Zero();
-            for (Vertex v: cluster_boundary_vertices)
-                cluster_barycenter += (hull_positions.row(v.getIndex()) - G.transpose()).normalized(); // vertex-G normals
-            cluster_barycenter /= (double)cluster_boundary_vertices.size();
-            cluster_barycenter = cluster_barycenter.normalized();
-            Scalar stable_face_distances_sum_to_barycenter = 0.;
-            // -- Penalize very stable face distance to bary center; could de-motivate splitting; // sum (fi - bary)^2
-            // for (Face cluster_f: cluster_faces)
-            //     if (face_region_area[cluster_f] > 0) // stable cluster faces
-            //         stable_face_distances_sum_to_barycenter += (cluster_barycenter - face_normals[cluster_f]).norm();
-            // -- Penalize only stable barycenters distance to cluster barycenter; might leave splits alone // [mean (fi) - bary]^2
-            stable_face_distances_sum_to_barycenter = (cluster_barycenter - stable_faces_cluster_barycenter).norm();
-            total_bary_energy += stable_face_distances_sum_to_barycenter * stable_face_distances_sum_to_barycenter;
+            Eigen::Vector3<Scalar> stable_cluster_faces_barycenter = Eigen::Vector3<Scalar>::Zero(),
+                                   cluster_barycenter = Eigen::Vector3<Scalar>::Zero();
+            std::tie(cluster_barycenter, stable_cluster_faces_barycenter) = 
+            region_and_stables_barycenters(cluster_faces, face_last_face, 
+                                           hull_positions, G,
+                                           face_normals, face_region_boundary_vertices);
+            total_bary_energy += (cluster_barycenter - stable_cluster_faces_barycenter).squaredNorm();
             
             // cluster distance term
-            cluster_barycenters.push_back(stable_faces_cluster_barycenter);
+            cluster_barycenters.push_back(stable_cluster_faces_barycenter);
         }
         // cluster distance term
         for (int i = 0; i < cluster_barycenters.size(); i++){
             for (int j = i+1; j < cluster_barycenters.size(); j++){
-                Scalar diff = (cluster_barycenters[i] - cluster_barycenters[j]).norm();
-                total_cluster_distance_energy += 1./(diff * diff);
+                Scalar diff_sqr = (cluster_barycenters[i] - cluster_barycenters[j]).squaredNorm();
+                total_cluster_distance_energy += 1./(diff_sqr);
             }
         }
         // total energy
         energy += pure_dice_energy + 
                   co_planar_reg * total_coplanar_energy + bary_reg * total_bary_energy + cluster_distance_reg * total_cluster_distance_energy;
         if (verbose){
-            // for (int i = 0; i < cluster_barycenters.size(); i++){
-            //     std::cout << "  - cluster " << i << " barycenter: " << cluster_barycenters[i].transpose() << std::endl;
-            //     if (i < cluster_barycenters.size())
-            //         std::cout << "cluster goal prob: " << clustered_probs[i].second << std::endl;
+            // for (auto cluster: clustered_probs){
+            //     std::vector<Face> cluster_faces = std::get<0>(cluster);
+            //     double cluster_prob = std::get<1>(cluster);
+            //     Vector3 assigned_normal = std::get<2>(cluster);
+            //     std::cout << "  - cluster prob: " << cluster_prob << std::endl;
+            //     std::cout << "    - assigned normal: " << assigned_normal << std::endl;
+            //     for (Face f: cluster_faces){
+            //         std::cout << "    - f" << f.getIndex() << "  ";
+            //     }
+            //     std::cout << " ** \n ** \n";
             // }
             std::cout << "  - barycenter dist energy : " << bary_reg << " * " <<  total_bary_energy << std::endl;
             std::cout << "  - coplanar energy        : " << co_planar_reg << " * " << total_coplanar_energy << std::endl;
@@ -381,11 +364,11 @@ Scalar BoundaryBuilder::single_cluster_coplanar_e(std::vector<Face> faces,
     Scalar local_energy = 0.;
     for (Face f1: faces){
         Face ff1 = face_last_face[f1];
-        if (ff1 == f1) // Could remove
+        // if (ff1 == f1) // Could remove
             if (std::find(faces.begin(), faces.end(), ff1) != faces.end()){ // final face is in the same cluster
                 for (Face f2: faces){
                     Face ff2 = face_last_face[f2];
-                    if (ff2 == f2) // Could remove
+                    // if (ff2 == f2) // Could remove
                         if (std::find(faces.begin(), faces.end(), ff2) != faces.end()){ // final face is in the same cluster
                             Scalar normal_diff = (face_normals[f1] - face_normals[f2]).squaredNorm();
                             local_energy += normal_diff;
@@ -394,4 +377,63 @@ Scalar BoundaryBuilder::single_cluster_coplanar_e(std::vector<Face> faces,
             }
     }
     return local_energy;
+}
+
+
+template <typename Scalar> 
+Scalar BoundaryBuilder::single_cluster_bary_e(std::vector<Face> faces, FaceData<Face> face_last_face,
+                                            Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
+                                            FaceData<Eigen::Vector3<Scalar>> face_normals,
+                                            FaceData<std::set<Vertex>> face_region_boundary_vertices){
+    Eigen::Vector3<Scalar> stable_cluster_faces_barycenter = Eigen::Vector3<Scalar>::Zero();
+    Eigen::Vector3<Scalar> cluster_barycenter = Eigen::Vector3<Scalar>::Zero();
+
+    std::tie(cluster_barycenter, stable_cluster_faces_barycenter) = 
+    region_and_stables_barycenters(faces, face_last_face, 
+                                   hull_positions, G, 
+                                   face_normals, face_region_boundary_vertices);
+
+    Scalar stable_face_distances_to_barycenter = 0.;
+    
+    // -- Penalize very stable face distance to bary center; could de-motivate splitting; // sum (fi - bary)^2
+    // for (Face cluster_f: cluster_faces)
+    //     if (face_region_area[cluster_f] > 0) // stable cluster faces
+    //         stable_face_distances_to_barycenter += (cluster_barycenter - face_normals[cluster_f]).squaredNorm();
+    
+    // -- Penalize only stable barycenters distance to cluster barycenter; might leave splits alone // [mean (fi) - bary]^2
+    stable_face_distances_to_barycenter = (cluster_barycenter - stable_cluster_faces_barycenter).squaredNorm();
+    
+    return stable_face_distances_to_barycenter;
+}
+
+
+template <typename Scalar>
+std::pair<Eigen::Vector3<Scalar>, Eigen::Vector3<Scalar>> 
+BoundaryBuilder::region_and_stables_barycenters(std::vector<Face> faces, FaceData<Face> face_last_face,
+                              Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
+                              FaceData<Eigen::Vector3<Scalar>> face_normals,
+                              FaceData<std::set<Vertex>> face_region_boundary_vertices){
+    Eigen::Vector3<Scalar> stable_cluster_faces_barycenter = Eigen::Vector3<Scalar>::Zero();
+    Eigen::Vector3<Scalar> cluster_barycenter = Eigen::Vector3<Scalar>::Zero();
+    std::set<Vertex> cluster_boundary_vertices;
+    
+    double stable_face_count = 0;
+    if (faces.size() > 0){
+        for (Face cluster_f: faces){
+            if (face_last_face[cluster_f] == cluster_f){ // stable face in cluster
+                cluster_boundary_vertices.insert(face_region_boundary_vertices[cluster_f].begin(), face_region_boundary_vertices[cluster_f].end());
+                stable_cluster_faces_barycenter += face_normals[cluster_f];
+                stable_face_count += 1.;
+            }
+        }
+        if (stable_face_count > 0){
+            stable_cluster_faces_barycenter = stable_cluster_faces_barycenter.normalized();
+            for (Vertex v: cluster_boundary_vertices)
+                cluster_barycenter += (hull_positions.row(v.getIndex()) - G.transpose()).normalized(); // vertex-G normals
+            cluster_barycenter /= (double)cluster_boundary_vertices.size();
+            cluster_barycenter = cluster_barycenter.normalized();
+        }
+    }
+
+    return {cluster_barycenter, stable_cluster_faces_barycenter};
 }

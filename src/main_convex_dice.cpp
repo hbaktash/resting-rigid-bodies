@@ -144,25 +144,27 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
 }
 
 
-void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, std::string policy, bool show){
+void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, 
+                                       std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
+                                       bool show, bool print_probs = false){
   polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>{tmp_solver.get_G()});
   auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
   
   curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
-  if (policy.substr(0, policy.find(" ")) == "manual"){ // first word
-    std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
-    FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver, policy_shape);
+  if (policy_general == "manual"){ // first word
+    FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver, normal_prob_assignment);
     curr_hull_psmesh->addFaceScalarQuantity("Goal probs", my_probs)->setColorMap("reds")->setEnabled(false);    
   }
-  else if (policy.substr(0, policy.find(" ")) == "manualCluster"){ // first word
-    std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
-    std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver, policy_shape);
+  else if (policy_general == "manualCluster"){ // first word
+    std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_assignment);
     FaceData<double> goal_cluster_probs(*tmp_solver.hullMesh, 0.),
                      current_cluster_probs(*tmp_solver.hullMesh, 0.);
+    std::vector<Vector3> assignees;
     for (auto cluster: clustered_probs){
       double current_cluster_prob = 0.;
       std::vector<Face> faces = std::get<0>(cluster);
       double cluster_prob = std::get<1>(cluster);
+      assignees.push_back(std::get<2>(cluster) + Vector3{0, 2, 0});
       for (Face f: faces){
         if (tmp_solver.face_last_face[f] == f){
           current_cluster_prob += tmp_solver.hullGeometry->faceArea(f)/(4.*PI);
@@ -178,7 +180,8 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, std::string p
       }
     }
     curr_hull_psmesh->addFaceScalarQuantity("Goal cluster probs", goal_cluster_probs)->setColorMap("reds")->setEnabled(false);    
-    curr_hull_psmesh->addFaceScalarQuantity("current cluster accum probs", current_cluster_probs)->setColorMap("reds")->setEnabled(true);    
+    curr_hull_psmesh->addFaceScalarQuantity("current cluster accum probs", current_cluster_probs)->setColorMap("reds")->setEnabled(true); 
+    polyscope::registerPointCloud("Cluster assignees", assignees);
   }
 
   BoundaryBuilder tmp_bnd_builder(&tmp_solver);
@@ -191,13 +194,18 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, std::string p
   polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(false);    
   polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current accum probs", current_accum_probs)->setColorMap("reds")->setEnabled(true);    
   
-  //DEBUG
+  // Visuals/Logs
+  if (print_probs){
+    tmp_bnd_builder.print_area_of_boundary_loops();
+  }
   if (show){
     // polyscope::frameTick();
     polyscope::screenshot(false);
     polyscope::show();
   }
 }
+
+
 
 
 void initialize_state(std::string input_name){
@@ -260,7 +268,9 @@ std::vector<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Eigen::Matri
 
 void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, double bary_reg, double coplanar_reg, double cluster_distance_reg,
                            Eigen::MatrixX3d &df_dv, Eigen::Vector3d &df_dG, double &dice_energy,
-                           bool use_autodiff, bool frozen_G, std::string policy, FaceData<double> goal_probs, int fair_sides){
+                           bool use_autodiff, bool frozen_G, 
+                           std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_pairs, 
+                           int fair_sides){
     
   if (!use_autodiff){
     Forward3DSolver fwd_solver(hull_positions, G_vec, true); // when getting grads, the input must be convex
@@ -308,7 +318,7 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
       Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
       return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, 
                                                   bary_reg, coplanar_reg, cluster_distance_reg,
-                                                  policy, goal_probs, fair_sides, true);
+                                                  policy_general, normal_prob_pairs, fair_sides, true);
     };
     Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
     Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
@@ -347,6 +357,12 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   Eigen::Vector3d G_vec{G.x, G.y, G.z};
   Eigen::MatrixX3d hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
   
+  // inital assignment
+  // policy shape
+  std::string policy_general = policy.substr(0, policy.find(" ")); // first word
+  std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
+  std::vector<std::pair<Vector3, double>> normal_prob_pairs = normal_prob_assignment(policy_shape);
+  
   // BoundaryBuilder tmp_bnd_builder(&tmp_solver);
   
   double current_sobolev_lambda = sobolev_lambda;
@@ -361,12 +377,12 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     get_dice_energy_grads(hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg,
                           dfdV, dfdG, dice_e, 
                           use_autodiff_for_dice_grad, frozen_G,
-                          policy, goal_probs, fair_sides_count);
+                          policy_general, normal_prob_pairs, fair_sides_count);
     // update_visuals_with_G(&tmp_solver, &tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << "i: "<< iter << "\tDE: " << dice_e << ANSI_RESET << "\n";
 
     // DEBUG/visuals
-    visualize_current_probs_and_goals(tmp_solver, policy, visualize_steps);
+    visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, visualize_steps);
     // show grads
     polyscope::getSurfaceMesh("current hull")->addVertexVectorQuantity("ad total grads", -1.*dfdV)->setEnabled(true);
       
@@ -385,7 +401,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
 
     // printf("line search\n");
     double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg,
-                                                   policy, goal_probs, fair_sides_count, 
+                                                   policy_general, normal_prob_pairs, fair_sides_count, 
                                                    dice_energy_step, dice_search_decay, frozen_G, 1000);
     std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
     if (opt_step_size < 1e-7){
@@ -412,16 +428,12 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     // IMPORTANT step; tmo solver's conv hull will shuffle the order of vertices
     hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
     tmp_solver.initialize_pre_computes();
+    std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals = manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_pairs);
+    normal_prob_pairs = update_normal_prob_assignment(&tmp_solver, clustered_face_normals);
   }
-  // Sorry; use boundary builder for visuals only
 
-
-  // DEBUG for 11 sided double dice sum example
-  // polyscope::removeAllStructures();
-  // polyscope::registerSurfaceMesh("initial hull", geometry->inputVertexPositions, mesh->getFaceVertexList())->setTransparency(0.1);
-  // polyscope::registerSurfaceMesh("optimized hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList())->setTransparency(1.);
-  
-  visualize_current_probs_and_goals(tmp_solver, policy, false);
+  // DEBUG/visuals
+  visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, false);
 
   optimized_mesh = tmp_solver.hullMesh;
   optimized_geometry = tmp_solver.hullGeometry; 
@@ -433,7 +445,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   // get_dice_energy_grads(hull_positions, G_vec, bary_reg, coplanar_reg,
   //                       dfdV, dfdG, dice_e, 
   //                       use_autodiff_for_dice_grad, frozen_G,
-  //                       policy, FaceData<double>(*tmp_solver.hullMesh, 0), fair_sides_count);
+  //                       policy_general, normal_prob_pairs, fair_sides_count));
   // polyscope::getSurfaceMesh("current hull")->addVertexVectorQuantity("ad total grads", -1.*dfdV)->setEnabled(true);
 }
 
