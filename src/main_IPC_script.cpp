@@ -1196,10 +1196,19 @@ int main(int argc, char* argv[])
     
     FaceData<double> accum_probs(*forwardSolver->hullMesh);
     for (Face f: forwardSolver->hullMesh->faces()){
-      accum_probs[f] = boundary_builder->face_region_area[forwardSolver->face_last_face[f]]/(4.*PI);
+      double accum_prob = 0.;
+      for (Face f2: forwardSolver->hullMesh->faces()){
+        Vector3 n1 = forwardSolver->hullGeometry->faceNormal(f),
+                n2 = forwardSolver->hullGeometry->faceNormal(f2);
+        // std::cout << " diff norm: " << (n1 - n2).norm() << "\n";
+        if (forwardSolver->face_last_face[f2] == f2 && (n1 - n2).norm() < 1e-1){
+          accum_prob += boundary_builder->face_region_area[f2]/(4.*PI);
+        }
+      }
+      accum_probs[f] = accum_prob;
     }
-    polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("accum probabilities", accum_probs, polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(false);
-    polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("single face probabilities", boundary_builder->face_region_area/(4.*PI), polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(true);
+    polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("single face probabilities", boundary_builder->face_region_area/(4.*PI), polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(false);
+    polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("accum probabilities", accum_probs, polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(true);
 
     
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;

@@ -1,6 +1,5 @@
 // Forward declarations
 
-
 template <typename Scalar>
 Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
                                     Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg, double cluster_distance_reg,
