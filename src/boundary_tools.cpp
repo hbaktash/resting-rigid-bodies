@@ -104,32 +104,36 @@ normal_prob_assignment(std::string shape_name){
   }
   else if (shape_name == "dodecahedron binomial"){
     normal_to_prob_pairs = {
-      // antipodal
-      // {Vector3({-0.525731,  0.850651, 0}),  binomial_dist(11, 5)},
-      // {Vector3({ 0.525731, -0.850651, 0}),  binomial_dist(11, 6)},
-      // {Vector3({ 0.850651, 0, -0.525731}),  binomial_dist(11, 4)},
-      // {Vector3({-0.850651, 0,  0.525731}),  binomial_dist(11, 7)},
-      // {Vector3({ 0, -0.525731, -0.850651}), binomial_dist(11, 0)},
-      // {Vector3({ 0,  0.525731,  0.850651}), binomial_dist(11, 11)},
-      // {Vector3({ 0.525731,  0.850651, 0}),  binomial_dist(11, 1)},
-      // {Vector3({-0.525731, -0.850651, 0}),  binomial_dist(11, 10)},
-      // {Vector3({ 0,  0.525731, -0.850651}), binomial_dist(11, 2)},
-      // {Vector3({ 0, -0.525731,  0.850651}), binomial_dist(11, 9)},
-      // {Vector3({ 0.850651, 0,  0.525731}),  binomial_dist(11, 3)},
-      // {Vector3({-0.850651, 0, -0.525731}),  binomial_dist(11, 8)}
-      // DwarfRing formation
+      // antipodal formation
+      {Vector3({-0.525731,  0.850651, 0}),  binomial_dist(11, 5)},
       {Vector3({ 0.525731, -0.850651, 0}),  binomial_dist(11, 5)},
-      {Vector3({ 0, -0.525731, -0.850651}), binomial_dist(11, 6)},
       {Vector3({ 0.850651, 0, -0.525731}),  binomial_dist(11, 4)},
-      {Vector3({-0.525731, -0.850651, 0}),  binomial_dist(11, 7)},
-      {Vector3({-0.525731,  0.850651, 0}),  binomial_dist(11, 3)},
-      {Vector3({ 0,  0.525731,  0.850651}), binomial_dist(11, 8)},
-      {Vector3({ 0.525731,  0.850651, 0}),  binomial_dist(11, 2)},
-      {Vector3({-0.850651, 0,  0.525731}),  binomial_dist(11, 9)},
-      {Vector3({ 0.850651, 0,  0.525731}),  binomial_dist(11, 1)},
-      {Vector3({ 0, -0.525731,  0.850651}), binomial_dist(11, 10)},
-      {Vector3({-0.850651, 0, -0.525731}),  binomial_dist(11, 0)},
-      {Vector3({ 0,  0.525731, -0.850651}), binomial_dist(11, 11)},
+      {Vector3({-0.850651, 0,  0.525731}),  binomial_dist(11, 4)},
+      {Vector3({ 0, -0.525731, -0.850651}), binomial_dist(11, 0)},
+      {Vector3({ 0,  0.525731,  0.850651}), binomial_dist(11, 0)},
+      {Vector3({ 0.525731,  0.850651, 0}),  binomial_dist(11, 1)},
+      {Vector3({-0.525731, -0.850651, 0}),  binomial_dist(11, 1)},
+      {Vector3({ 0,  0.525731, -0.850651}), binomial_dist(11, 3)},
+      {Vector3({ 0, -0.525731,  0.850651}), binomial_dist(11, 3)},
+      {Vector3({ 0.850651, 0,  0.525731}),  binomial_dist(11, 2)},
+      {Vector3({-0.850651, 0, -0.525731}),  binomial_dist(11, 2)}
+      // DwarfRing formation
+      // {Vector3({ 0.525731, -0.850651, 0}),  binomial_dist(11, 5)},
+      // {Vector3({ 0, -0.525731, -0.850651}), binomial_dist(11, 6)},
+      // {Vector3({ 0.850651, 0, -0.525731}),  binomial_dist(11, 4)},
+      // {Vector3({-0.525731, -0.850651, 0}),  binomial_dist(11, 7)},
+
+      // {Vector3({ 0.850651, 0,  0.525731}),  binomial_dist(11, 3)},
+      // {Vector3({ 0, -0.525731,  0.850651}), binomial_dist(11, 8)},
+
+      // {Vector3({-0.525731,  0.850651, 0}),  binomial_dist(11, 0)},
+      // {Vector3({ 0,  0.525731,  0.850651}), binomial_dist(11, 11)},
+
+      // {Vector3({ 0.525731,  0.850651, 0}),  binomial_dist(11, 1)},
+      // {Vector3({-0.850651, 0,  0.525731}),  binomial_dist(11, 10)},
+
+      // {Vector3({-0.850651, 0, -0.525731}),  binomial_dist(11, 2)},
+      // {Vector3({ 0,  0.525731, -0.850651}), binomial_dist(11, 9)},
     };
   }
   else if (shape_name == "octahedron binomial"){
@@ -597,7 +601,7 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
                                double bary_reg, double coplanar_reg, double cluster_distance_reg,
                                std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
                                size_t dice_side_count, 
-                               double step_size, double decay, bool frozen_G, size_t max_iter){
+                               double step_size, double decay, bool frozen_G, size_t max_iter, double step_tol){
   
   Forward3DSolver tmp_solver(hull_positions, G_vec, true); // assuming input is convex; will be asserted internally in the constructor
   if (!frozen_G){
@@ -632,20 +636,9 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
     Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
     Forward3DSolver tmp_solver2(tmp_hull_positions, G_vec, true);
     bool verbose = false;
-    if ((j == 499)){
+    if (s < step_tol){
       verbose = true;
       printf("   ---   LS step %d -----\n", j);
-      // VisualUtils vis; 
-      // *** TODO do this temporary thing at main; ***
-      // BoundaryBuilder tmp_bnd_builder(&tmp_solver2);
-      // tmp_bnd_builder.build_boundary_normals();
-      // std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
-      // std::unique_ptr<VertexPositionGeometry> sphere_geometry_ptr;
-      // std::tie(sphere_mesh_ptr, sphere_geometry_ptr) = generate_polyhedra("sphere");
-      // ManifoldSurfaceMesh *sphere_mesh = sphere_mesh_ptr.release();
-      // VertexPositionGeometry *sphere_geometry = sphere_geometry_ptr.release();
-      // vis.update_visuals(&tmp_solver2, &tmp_bnd_builder, sphere_mesh, sphere_geometry);
-      // polyscope::show();
     }
     tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec,
                                                            tmp_solver2, bary_reg, coplanar_reg, cluster_distance_reg,
@@ -656,8 +649,10 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
         found_smth_optimal = true;
         break; //  x new is good
     }
-    else
+    else if(s >= step_tol)
         s *= decay;
+    else
+      break;
   }
   s = found_smth_optimal ? s : 0.;
   printf("line search for dice ended at iter %d, s: %.10f, \n", j, s);

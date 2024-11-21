@@ -166,7 +166,7 @@ class BoundaryBuilder {
         static Scalar 
         single_cluster_coplanar_e(std::vector<Face> faces, 
                                     FaceData<Eigen::Vector3<Scalar>> face_normals,
-                                    FaceData<Face> face_last_face);
+                                    FaceData<Face> face_last_face, bool verbose);
         template <typename Scalar>
         static Scalar 
         single_cluster_bary_e(std::vector<Face> faces, FaceData<Face> face_last_face,
@@ -185,6 +185,6 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
                                double bary_reg, double coplanar_reg, double cluster_distance_reg, 
                                std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
                                size_t dice_side_count, double step_size, double decay, bool frozen_G, 
-                               size_t max_iter);
+                               size_t max_iter, double step_tol);
 
 #include "boundary_tools.impl.h"

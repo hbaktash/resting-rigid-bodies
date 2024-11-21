@@ -188,7 +188,6 @@ void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = 
 void update_solver(){
   forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
   forwardSolver->initialize_pre_computes();
-  vis_utils.forwardSolver = forwardSolver;
   boundary_builder = new BoundaryBuilder(forwardSolver);
   boundary_builder->build_boundary_normals();
 }
@@ -225,8 +224,8 @@ void visualize_colored_polyhedra(){
   faceQnty2->setEnabled(true);
 }
 
-void visualize_gauss_map(){
-  // just draw the sphere next to the main surface
+
+void visualize_gauss_map(Forward3DSolver* forwardSolver){
   std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
   std::unique_ptr<VertexPositionGeometry> sphere_geometry_ptr;
   std::tie(sphere_mesh_ptr, sphere_geometry_ptr) = generate_polyhedra("sphere");
@@ -234,12 +233,7 @@ void visualize_gauss_map(){
   sphere_geometry = sphere_geometry_ptr.release();
   
   //update vis utils
-  vis_utils.sphere_geometry = sphere_geometry;
-  vis_utils.sphere_mesh = sphere_mesh;
-
-  vis_utils.draw_gauss_map();
-  polyscope::getSurfaceMesh("height surface_func")->setEnabled(false);
-  gm_is_drawn = true;
+  vis_utils.draw_gauss_map(forwardSolver, sphere_mesh, sphere_geometry);
 }
 
 
@@ -256,9 +250,9 @@ void init_visuals(){
     polyscopePermutations(*forwardSolver->hullMesh));
   psHullMesh->setEnabled(true);
   psHullMesh->setTransparency(0.95);
-  vis_utils.draw_G();
   // visualize_colored_polyhedra();
-  visualize_gauss_map();
+  vis_utils.draw_G(forwardSolver);
+  visualize_gauss_map(forwardSolver);//
 
 
   // DEBUG
@@ -1061,7 +1055,7 @@ void myCallback() {
               init_visuals();
 
               // visualize_colored_polyhedra();
-              visualize_gauss_map();
+              visualize_gauss_map(forwardSolver);
           }
           if (is_selected)
               ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
@@ -1204,10 +1198,10 @@ int main(int argc, char* argv[])
     for (Face f: forwardSolver->hullMesh->faces()){
       accum_probs[f] = boundary_builder->face_region_area[forwardSolver->face_last_face[f]]/(4.*PI);
     }
-    polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("probabilities", accum_probs, polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(true);
+    polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("accum probabilities", accum_probs, polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(false);
+    polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("single face probabilities", boundary_builder->face_region_area/(4.*PI), polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(true);
 
     
-
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
     polyscope::state::userCallback = myCallback;
     // polyscope::view::lookAt(glm::vec3{4., 4., 0.}, glm::vec3{0., 0., 0.});

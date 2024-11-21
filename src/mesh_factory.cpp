@@ -50,9 +50,9 @@ generate_polyhedra(std::string poly_str){
     if (std::strcmp(poly_str.c_str(), "tet") == 0){
       n = 4;
       faces = {{0, 2, 1},
-                              {0, 1, 3},
-                              {0, 3, 2},
-                              {2, 3, 1}};
+               {0, 1, 3},
+               {0, 3, 2},
+               {2, 3, 1}};
       double theta0 = 0., theta1 = 2.*PI/3., theta2 = 4.*PI/3.,
              phi0 = PI/6.,
              theta3 = 0., 
@@ -519,23 +519,27 @@ generate_pointy_prism(size_t n){
   std::unique_ptr<VertexPositionGeometry> geometry;
 
   // top
-  positions.push_back(Vector3({0., 0., 3.52})); // v0
+  double z3 = 2.82,
+         z2 = 1.52,
+         z1 = -0.01,
+         z0 = -1.32;
+  positions.push_back(Vector3({0., 0., z3})); // top point
   double alpha = 2.*PI/(double)n;
   double r = 1.;
-  for (size_t i = 0; i < n; i++){ // vi's level 1
+  for (size_t i = 0; i < n; i++){ // quads top verts
     double theta = 2.*PI * (double)i/(double)n ;
-    positions.push_back(Vector3({r*cos(theta), r*sin(theta), 2.515}));
+    positions.push_back(Vector3({r*cos(theta), r*sin(theta), z2}));
     faces.push_back({0, i+1, (i+2 == n+1) ? 1 : i+2}); // top triangles
   }
-  for (size_t i = 0; i < n; i++){ // vi's level 2
+  for (size_t i = 0; i < n; i++){ // quads bottom verts
     double theta = 2.*PI * (double)i/(double)n ;
-    positions.push_back(Vector3({r*cos(theta), r*sin(theta), -0.01}));
+    positions.push_back(Vector3({r*cos(theta), r*sin(theta), z1}));
     faces.push_back({(i+2 == n + 1) ? 1 : i+2, i+1,  i+1 + n}); // mid quad face 1
     faces.push_back({(i+2 == n + 1) ? 1: i+2, i+1 + n, (i+2 == n + 1) ? n + 1: i+2 + n}); // mid quad face 2
   }
   // bottom
-  positions.push_back(Vector3({0, 0, -2.03})); 
-  for (size_t i = 0; i < n; i++){ // vi's level 3
+  positions.push_back(Vector3({0, 0, z0})); 
+  for (size_t i = 0; i < n; i++){ // bottom point
     faces.push_back({2*n+1, (i+2 == n + 1) ? n + 1 : i+2 + n, i+1 + n}); // bottom triangles
   }
 

@@ -90,8 +90,8 @@ int sobolev_p = 2;
 
 
 // example choice
-std::vector<std::string> all_input_names = {std::string("5 prism"), std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
-std::string input_name = "dodecahedron";
+std::vector<std::string> all_input_names = {std::string("6 prism"), std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
+std::string input_name = "7 prism";
 
 
 void visualize_gauss_map(Forward3DSolver* forwardSolver){
@@ -101,7 +101,7 @@ void visualize_gauss_map(Forward3DSolver* forwardSolver){
   sphere_mesh = sphere_mesh_ptr.release();
   sphere_geometry = sphere_geometry_ptr.release();
   
-  //update vis utils
+  // update vis utils
   vis_utils.draw_gauss_map(forwardSolver, sphere_mesh, sphere_geometry);
 }
 
@@ -122,6 +122,7 @@ void init_visuals(){
   psHullMesh->setEnabled(true);
   vis_utils.draw_G(forwardSolver);
 }
+
 
 void update_solver(){ // only doing this for convex input
   forwardSolver = new Forward3DSolver(mesh, geometry, G, false);
@@ -366,7 +367,8 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   // BoundaryBuilder tmp_bnd_builder(&tmp_solver);
   
   double current_sobolev_lambda = sobolev_lambda;
-
+  double init_LS_step = dice_energy_step;
+  double LS_step_tol = 1e-8;
   for (size_t iter = 0; iter < step_count; iter++){
     double dice_e;
     Eigen::Vector3d dfdG;
@@ -402,9 +404,9 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     // printf("line search\n");
     double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg,
                                                    policy_general, normal_prob_pairs, fair_sides_count, 
-                                                   dice_energy_step, dice_search_decay, frozen_G, 1000);
+                                                   init_LS_step, dice_search_decay, frozen_G, 1000, LS_step_tol);
     std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
-    if (opt_step_size < 1e-7){
+    if (opt_step_size < LS_step_tol){
       if (!adaptive_reg){
         std::cout << ANSI_FG_RED << "  line search step size too small; breaking" << ANSI_RESET << "\n";
         break;
@@ -420,6 +422,8 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
       }
     }
     hull_positions = hull_positions - opt_step_size * dfdV;
+    init_LS_step = opt_step_size;
+
     tmp_solver = Forward3DSolver(hull_positions, G_vec, false); // could have been convaved
     if (!frozen_G){
       tmp_solver.set_uniform_G();
@@ -433,7 +437,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   }
 
   // DEBUG/visuals
-  visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, false);
+  visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, false, true);
 
   optimized_mesh = tmp_solver.hullMesh;
   optimized_geometry = tmp_solver.hullGeometry; 
@@ -479,8 +483,8 @@ void myCallback() {
   ImGui::Checkbox("visualize steps", &visualize_steps);
   if (ImGui::Button("dice energy opt")){
     std::string policy_general = "manualCluster"; // "fair", "manualCluster ", "manual"
-    std::string policy_shape = "dodecahedron binomial"; // "dodecahedron binomial", "octahedron binomial", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
-    // std::string policy_shape = input_name;
+    // std::string policy_shape = "dodecahedron binomial"; // "dodecahedron binomial", "octahedron binomial", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
+    std::string policy_shape = input_name;
     std::string policy = policy_general + " " + policy_shape;
     dice_energy_opt(policy, bary_reg, coplanar_reg, false, DE_step_count);
   }

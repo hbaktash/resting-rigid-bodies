@@ -276,7 +276,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             pure_dice_energy += diff * diff;
 
             // Co-planar energy
-            total_coplanar_energy += single_cluster_coplanar_e<Scalar>(cluster_faces, face_normals, face_last_face);
+            total_coplanar_energy += single_cluster_coplanar_e<Scalar>(cluster_faces, face_normals, face_last_face, verbose);
             
             // Bary energy
             Eigen::Vector3<Scalar> stable_cluster_faces_barycenter = Eigen::Vector3<Scalar>::Zero(),
@@ -360,22 +360,37 @@ Scalar BoundaryBuilder::triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scal
 template <typename Scalar>
 Scalar BoundaryBuilder::single_cluster_coplanar_e(std::vector<Face> faces, 
                                         FaceData<Eigen::Vector3<Scalar>> face_normals,
-                                        FaceData<Face> face_last_face){
+                                        FaceData<Face> face_last_face, bool verbose){
     Scalar local_energy = 0.;
     for (Face f1: faces){
         Face ff1 = face_last_face[f1];
-        // if (ff1 == f1) // Could remove
+        if (ff1 == f1){ // Could remove
             if (std::find(faces.begin(), faces.end(), ff1) != faces.end()){ // final face is in the same cluster
                 for (Face f2: faces){
                     Face ff2 = face_last_face[f2];
-                    // if (ff2 == f2) // Could remove
+                    if (ff2 == f2 && f1 != f2) // Could remove
                         if (std::find(faces.begin(), faces.end(), ff2) != faces.end()){ // final face is in the same cluster
-                            Scalar normal_diff = (face_normals[f1] - face_normals[f2]).squaredNorm();
-                            local_energy += normal_diff;
+                            local_energy += (face_normals[f1] - face_normals[f2]).squaredNorm();
                         }
                 }
             }
+        }
+        else {
+            if ((face_normals[f1] - face_normals[ff1]).norm() < 0.1){ // close enough unstab // 0.1 up to 6 prism
+                // if (verbose)
+                //     std::cout << "  - f" << f1.getIndex() << "(" << f1.halfedge().vertex().getIndex() << ", " << f1.halfedge().tipVertex().getIndex() << ", " << f1.halfedge().next().tipVertex().getIndex() << ")" 
+                //     << " is close to f" << ff1.getIndex()<< "("<< ff1.halfedge().vertex().getIndex() << ", " << ff1.halfedge().tipVertex().getIndex() << ", " << ff1.halfedge().next().tipVertex().getIndex() << ")"
+                //     << std::endl;
+                local_energy += (face_normals[f1] - face_normals[ff1]).squaredNorm();
+            }
+        }
     }
+    // std::vector<std::pair<size_t, size_t>> face_ind_pairs{{0,4}, {2,3}, {7,8}};
+    // for (auto pair: face_ind_pairs){
+    //     size_t f1 = pair.first,
+    //            f2 = pair.second;
+    //     local_energy += (face_normals[f1] - face_normals[f2]).squaredNorm();
+    // }
     return local_energy;
 }
 
