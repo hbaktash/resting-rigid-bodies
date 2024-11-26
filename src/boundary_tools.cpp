@@ -92,7 +92,7 @@ normal_prob_assignment(std::string shape_name){
       {Vector3({-0.447214, 0, 0.894427})      , 1./36.}  // triangle
     };
   }
-  else if (shape_name == "cube binomial"){
+  else if (shape_name == "cube"){
     normal_to_prob_pairs = {
       {Vector3({0,  0 ,-1}), binomial_dist(5, 0)},
       {Vector3({0,  0 , 1}), binomial_dist(5, 5)},
@@ -102,7 +102,7 @@ normal_prob_assignment(std::string shape_name){
       {Vector3({-1, 0,  0}), binomial_dist(5, 3)}
     };
   }
-  else if (shape_name == "dodecahedron binomial"){
+  else if (shape_name == "dodecahedron"){
     normal_to_prob_pairs = {
       // antipodal formation
       {Vector3({-0.525731,  0.850651, 0}),  binomial_dist(11, 5)},
@@ -136,7 +136,7 @@ normal_prob_assignment(std::string shape_name){
       // {Vector3({ 0,  0.525731, -0.850651}), binomial_dist(11, 9)},
     };
   }
-  else if (shape_name == "octahedron binomial"){
+  else if (shape_name == "octahedron"){
     normal_to_prob_pairs = {
       {Vector3({ 0.816497, 0, -0.57735}),  binomial_dist(7, 3)},
       {Vector3({-0.816497, 0, -0.57735}),  binomial_dist(7, 2)},

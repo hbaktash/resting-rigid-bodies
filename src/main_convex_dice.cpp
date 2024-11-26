@@ -73,16 +73,17 @@ polyscope::PointCloud *test_pc;
 
 int fair_sides_count = 11, // for optimization
     DE_step_count = 40;
-bool do_sobolev_dice_grads = false,
+bool do_sobolev_dice_grads = true,
      use_autodiff_for_dice_grad = true,
      visualize_steps = true,
-     adaptive_reg = false;
+     adaptive_reg = false,
+     frozen_G = false;
 float sobolev_lambda = 2.,
       sobolev_lambda_decay = 0.95,
       dice_energy_step = 0.01,
       dice_search_decay = 0.98,
       bary_reg = 0.1,
-      coplanar_reg = 0.1,
+      coplanar_reg = 0.0,
       cluster_distance_reg = 0.0;
 int sobolev_p = 2;
 // optimization stuff
@@ -92,7 +93,10 @@ int sobolev_p = 2;
 // example choice
 std::vector<std::string> all_input_names = {std::string("6 prism"), std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
 std::string input_name = "7 prism";
-
+std::string policy_general = "manualCluster"; // "fair", "manualCluster ", "manual"
+// std::string policy_shape = "dodecahedron binomial"; // "dodecahedron binomial", "octahedron binomial", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
+std::string policy;
+    
 
 void visualize_gauss_map(Forward3DSolver* forwardSolver){
   std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
@@ -125,7 +129,7 @@ void init_visuals(){
 
 
 void update_solver(){ // only doing this for convex input
-  forwardSolver = new Forward3DSolver(mesh, geometry, G, false);
+  forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
   forwardSolver->set_uniform_G();
   // TODO: doing this for hull dice search only?
   G = forwardSolver->get_G();
@@ -216,7 +220,6 @@ void initialize_state(std::string input_name){
     visualize_gauss_map(forwardSolver);//
     boundary_builder->print_area_of_boundary_loops();
     vis_utils.update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
-
     // TODO : temporary
     Forward3DSolver tmp_solver(vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions), 
                                vec32vec(forwardSolver->get_G()), true);
@@ -362,6 +365,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   // policy shape
   std::string policy_general = policy.substr(0, policy.find(" ")); // first word
   std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
+  std::cout << ANSI_FG_YELLOW << "policy general: " << policy_general << " policy shape: " << policy_shape << ANSI_RESET << "\n";
   std::vector<std::pair<Vector3, double>> normal_prob_pairs = normal_prob_assignment(policy_shape);
   
   // BoundaryBuilder tmp_bnd_builder(&tmp_solver);
@@ -390,8 +394,8 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
       
     // diffused grads
     if (do_sobolev_dice_grads){    
-      current_sobolev_lambda *= sobolev_lambda_decay;
-      Eigen::MatrixXd diffused_dfdV = sobolev_diffuse_gradients(dfdV, *tmp_solver.hullMesh, sobolev_lambda, sobolev_p);
+      // current_sobolev_lambda *= sobolev_lambda_decay;
+      Eigen::MatrixXd diffused_dfdV = sobolev_diffuse_gradients(dfdV, *tmp_solver.hullMesh, current_sobolev_lambda, sobolev_p);
       
       double raw_norm = tinyAD_flatten(dfdV).norm(); // use eigen flaten
       double diffused_norm = tinyAD_flatten(diffused_dfdV).norm();
@@ -432,8 +436,10 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     // IMPORTANT step; tmo solver's conv hull will shuffle the order of vertices
     hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
     tmp_solver.initialize_pre_computes();
-    std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals = manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_pairs);
-    normal_prob_pairs = update_normal_prob_assignment(&tmp_solver, clustered_face_normals);
+    if (policy_general != "fair"){
+      std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals = manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_pairs);
+      normal_prob_pairs = update_normal_prob_assignment(&tmp_solver, clustered_face_normals);
+    }
   }
 
   // DEBUG/visuals
@@ -473,20 +479,18 @@ void myCallback() {
   }
   ImGui::SliderInt("ITERS",           &DE_step_count, 1, 200);
   ImGui::SliderInt("fair sides",      &fair_sides_count, 4, 20);
-  ImGui::SliderFloat("DE step size",  &dice_energy_step, 0, 0.5);
+  ImGui::SliderFloat("DE step size",  &dice_energy_step, 0, 0.05);
   ImGui::SliderFloat("DE step decay", &dice_search_decay, 0.1, 1.);
 
   ImGui::SliderFloat("barycenter distance regularizer", &bary_reg, 0., 100.);
   ImGui::SliderFloat("coplanar regularizer", &coplanar_reg, 0., 100.);
   ImGui::SliderFloat("cluster distance regularizer", &cluster_distance_reg, 0., 100.);
+  ImGui::Checkbox("sobolev grads", &do_sobolev_dice_grads);
+  ImGui::SliderFloat("sobolev lambda", &sobolev_lambda, 0., 50.);
   ImGui::Checkbox("adaptive reg", &adaptive_reg);
   ImGui::Checkbox("visualize steps", &visualize_steps);
   if (ImGui::Button("dice energy opt")){
-    std::string policy_general = "manualCluster"; // "fair", "manualCluster ", "manual"
-    // std::string policy_shape = "dodecahedron binomial"; // "dodecahedron binomial", "octahedron binomial", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
-    std::string policy_shape = input_name;
-    std::string policy = policy_general + " " + policy_shape;
-    dice_energy_opt(policy, bary_reg, coplanar_reg, false, DE_step_count);
+    dice_energy_opt(policy, bary_reg, coplanar_reg, frozen_G, DE_step_count);
   }
   if (ImGui::Button("save optimized hull")){
     std::string output_name = input_name + "_optimized_dice";
@@ -496,6 +500,46 @@ void myCallback() {
 
 
 int main(int argc, char **argv) {
+  // Parse args
+  args::ArgumentParser parser("Dice energy optimization for convex shapes");
+  // make parser for input name and other params
+  args::HelpFlag help(parser,    "help", "Display this help menu", {'h', "help"});
+  // args::Flag do_just_ours(parser, "do_just_ours", "do just ours", {"just_ours"});
+  // args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {"samples"});
+  args::ValueFlag<std::string> input_shape_arg(parser, "input_shape_str", "path to input shape", {'m', "mesh_dir"});
+  args::ValueFlag<std::string> policy_arg(parser, "policy_general", " general policy string: fair | manual | manualCluster ", {'p', "policy"}, "manualCluster");
+
+
+  try {
+    parser.ParseCLI(argc, argv);
+  }
+  catch (args::Help) {
+    std::cout << parser;
+    return 0;
+  }
+  catch (args::ParseError e) {
+    std::cerr << e.what() << std::endl;
+    std::cerr << parser;
+    return 1;
+  }
+  catch (args::ValidationError e) {
+    std::cerr << e.what() << std::endl;
+    std::cerr << parser;
+    return 1;
+  }
+
+  if(input_shape_arg){
+    input_name = args::get(input_shape_arg);
+  }
+  if(policy_arg){
+    policy_general = args::get(policy_arg);
+    // std::string policy_shape = "dodecahedron"; // "dodecahedron", "octahedron", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron", "cube"
+    policy = policy_general + " " + input_name;
+  }
+  std::cout << ANSI_FG_YELLOW << "policy: " << policy << ANSI_RESET << "\n";
+  std::cout << ANSI_FG_YELLOW << "input shape: " << input_name << ANSI_RESET << "\n";
+
+  
   // build mesh
   vis_utils = VisualUtils();
   polyscope::init();
