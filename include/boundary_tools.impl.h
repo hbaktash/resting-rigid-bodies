@@ -154,39 +154,13 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
     }
     
 
-    //// regularizers
-    // compute distance to bary centers
-    Scalar bary_energy = 0.;
-    Scalar co_planar_energy = 0.;
-    // parse policy string
-    // std::string policy_shape = policy.substr(policy.find(" ") + 1), // second word
-    //             policy_general = policy.substr(0, policy.find(" ")); // first word
-    if (policy_general == "fair" || policy_general == "manual"){
-        for (Face f: tmp_solver.hullMesh->faces()){
-            if (face_region_area[f] > 0){
-                Eigen::Vector3<Scalar> barycenter = Eigen::Vector3<Scalar>::Zero();
-                for (Vertex v: face_region_boundary_vertices[f]){
-                    barycenter += (hull_positions.row(v.getIndex())- G.transpose()).normalized(); // vertex-G normals
-                }
-                barycenter /= face_region_boundary_vertices[f].size();
-                barycenter = barycenter.normalized();
-                distance_to_barycenters[f] = (barycenter - face_normals[f]).norm();
-                bary_energy += bary_reg * distance_to_barycenters[f] * distance_to_barycenters[f];
-            }
-        }
-        // penalize non-coplanar faces in the rolling DAG
-        for (Face f: tmp_solver.hullMesh->faces()){
-            if (face_last_face[f] != f){
-                Eigen::Vector3<Scalar> f_normal = face_normals[f];
-                Eigen::Vector3<Scalar> last_f_normal = face_normals[face_last_face[f]];
-                Scalar normal_diff = (f_normal- last_f_normal).squaredNorm();
-                co_planar_energy += co_planar_reg * normal_diff;
-            }
-        }
-    }
-
+    //// separate energy terms
+    Scalar total_coplanar_energy = 0.,
+        pure_dice_energy = 0.,
+        total_bary_energy = 0.,
+        total_cluster_distance_energy = 0.;
+    size_t non_zero_clusters = 0;
     Scalar energy = 0.;
-    energy += bary_energy + co_planar_energy;
     if (policy_general == "fair"){
         // sort for dice energy
         Scalar total_area = 0.;
@@ -204,57 +178,72 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         size_t tmp_side_cnt = 0;
         double goal_prob = 1. / (double)side_count;
         for (auto pair: probs){ 
-            if(verbose){
-                std::cout << "  -f" << pair.first.getIndex() 
-                          << "(" 
-                          << pair.first.halfedge().vertex().getIndex() << ", "
-                          << pair.first.halfedge().tipVertex().getIndex()<< ", "
-                          << pair.first.halfedge().next().tipVertex().getIndex()
-                          << ")" << " : " << pair.second/(4. * PI) << std::endl; 
-            }
+            Face f = pair.first; // f is stable by construction
             if (tmp_side_cnt < side_count){ // goal 1/n
-                Scalar diff = face_region_area[pair.first] - goal_prob * 4. * PI;
-                energy += diff * diff;
+
+                Scalar current_cluster_accum_area = 0.;
+                // pure dice && coplanar energy
+                for (Face f2: tmp_solver.hullMesh->faces()){
+                    if (tmp_solver.face_last_face[f2] == f2 && // f2 is stable
+                        (face_normals[f2] - face_normals[f]).norm() < 1e-1){ // f2 is close enough to f
+                        // coplanar energy
+                        total_coplanar_energy += (face_normals[f2] - face_normals[f]).squaredNorm();
+                        // dice energy
+                        current_cluster_accum_area += face_region_area[f2];
+                    }
+                }
+                // pure dice energy
+                Scalar diff = current_cluster_accum_area - goal_prob * 4. * PI;
+                pure_dice_energy += diff * diff;
+
+                // barycentric energy term
+                total_bary_energy += single_DAG_cluster_bary_e<Scalar>(f, face_normals[f], hull_positions, G, face_region_boundary_vertices);
             }
             else { // goal zero
                 Scalar diff = face_region_area[pair.first];
-                energy += diff * diff;
+                pure_dice_energy += diff * diff;
             }
             tmp_side_cnt++;
         }
         if (tmp_side_cnt < side_count){
-            printf("  - not enough faces\n");
-            energy += (side_count - tmp_side_cnt) * goal_prob * goal_prob * 4. * PI * 4. * PI;
+            // printf("  - not enough faces\n");
+            pure_dice_energy += (side_count - tmp_side_cnt) * goal_prob * goal_prob * 4. * PI * 4. * PI;
         }
-
-        // return probs[0].second; // DEBUG: max prob
+        energy += pure_dice_energy + bary_reg * total_bary_energy + co_planar_reg * total_coplanar_energy;
     }
     else if (policy_general == "manual"){
-        FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver, normal_prob_assignment);
+        FaceData<double> goal_probs = manual_stable_only_face_prob_assignment(&tmp_solver, normal_prob_assignment);
         for (Face f: tmp_solver.hullMesh->faces()){
             // // norm 2
-            Scalar diff = face_region_area[f] - my_probs[f] * 4. * PI;
-            energy += diff * diff;
+            Scalar diff = face_region_area[f] - goal_probs[f] * 4. * PI;
+            pure_dice_energy += diff * diff;
             // // KL divergence
             //     double goal_area = my_probs[f] * 4. * PI;
             //     energy += goal_area * log(goal_area / face_region_area[f]);
             // }
+
+            // barycentric energy term
+            if (face_last_face[f] == f)
+                non_zero_clusters++;
+            if (face_region_area[f] > 0 && goal_probs[f] > 0){ // stable face that is supposed to be stable
+                total_bary_energy += single_DAG_cluster_bary_e<Scalar>(f, face_normals[f], hull_positions, G, face_region_boundary_vertices);
+            }
+
+            // penalize non-coplanar faces in the rolling DAG
+            if (face_last_face[f] != f){
+                Eigen::Vector3<Scalar> f_normal = face_normals[f];
+                Eigen::Vector3<Scalar> last_f_normal = face_normals[face_last_face[f]];
+                total_coplanar_energy += (f_normal- last_f_normal).squaredNorm();
+            }
         }
-        if (verbose){
-            std::cout << "  - bary energy: " << bary_energy << "\t co-planar energy: " << co_planar_energy << std::endl;
-            std::cout << "  - pure dice energy: " << energy - bary_energy - co_planar_energy << std::endl;
-        }
+        energy += pure_dice_energy + co_planar_reg * total_coplanar_energy + bary_reg * total_bary_energy;
     }
     else if (policy_general == "manualCluster"){
         std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_probs = 
                     manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_assignment);
-        Scalar total_coplanar_energy = 0.,
-               pure_dice_energy = 0.,
-               total_bary_energy = 0.,
-               total_cluster_distance_energy = 0.;
+        
         std::vector<Eigen::Vector3<Scalar>> cluster_barycenters;
 
-        size_t non_zero_clusters = 0;
         for (auto cluster: clustered_probs){
             std::vector<Face> cluster_faces = std::get<0>(cluster);
             double cluster_prob = std::get<1>(cluster);
@@ -265,9 +254,8 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
 
             // Pure dice energy
             Scalar cluster_area_sum = 0.;
-            for (Face f: cluster_faces){
+            for (Face f: cluster_faces){ // sum of stable face areas in the cluster
                 if (face_region_area[f] > 0){
-                    // sum of stable face areas in the cluster
                     cluster_area_sum += face_region_area[f];
                 }
             }
@@ -277,7 +265,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             // Co-planar energy
             total_coplanar_energy += single_cluster_coplanar_e<Scalar>(cluster_faces, face_normals, face_last_face, verbose);
             
-            // Bary energy
+            // Barycentric energy
             Eigen::Vector3<Scalar> stable_cluster_faces_barycenter = Eigen::Vector3<Scalar>::Zero(),
                                    cluster_barycenter = Eigen::Vector3<Scalar>::Zero();
             std::tie(cluster_barycenter, stable_cluster_faces_barycenter) = 
@@ -299,27 +287,16 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
         // total energy
         energy += pure_dice_energy + 
                   co_planar_reg * total_coplanar_energy + bary_reg * total_bary_energy + cluster_distance_reg * total_cluster_distance_energy;
-        if (verbose){
-            // for (auto cluster: clustered_probs){
-            //     std::vector<Face> cluster_faces = std::get<0>(cluster);
-            //     double cluster_prob = std::get<1>(cluster);
-            //     Vector3 assigned_normal = std::get<2>(cluster);
-            //     std::cout << "  - cluster prob: " << cluster_prob << std::endl;
-            //     std::cout << "    - assigned normal: " << assigned_normal << std::endl;
-            //     for (Face f: cluster_faces){
-            //         std::cout << "    - f" << f.getIndex() << "  ";
-            //     }
-            //     std::cout << " ** \n ** \n";
-            // }
-            std::cout << "  - barycenter dist energy : " << bary_reg << " * " <<  total_bary_energy << std::endl;
-            std::cout << "  - coplanar energy        : " << co_planar_reg << " * " << total_coplanar_energy << std::endl;
-            std::cout << "  - cluster distance energy: " << cluster_distance_reg << " * " << total_cluster_distance_energy << std::endl;
-            std::cout << "  - pure dice energy: " << pure_dice_energy << "\t Nz cluster count: " << non_zero_clusters << std::endl;
-            std::cout << "\t\t\t** total energy: " << energy << std::endl;
-        }
     }
     else {
         throw std::invalid_argument("policy not recognized");
+    }
+    if (verbose){
+        if (bary_reg > 0)             std::cout << "  - barycenter dist energy : " << bary_reg << " * " <<  total_bary_energy << std::endl;
+        if (co_planar_reg > 0)        std::cout << "  - coplanar energy        : " << co_planar_reg << " * " << total_coplanar_energy << std::endl;
+        if (cluster_distance_reg > 0) std::cout << "  - cluster distance energy: " << cluster_distance_reg << " * " << total_cluster_distance_energy << std::endl;
+        std::cout << "  - pure dice energy: " << pure_dice_energy << "\t Nz cluster count: " << non_zero_clusters << std::endl;
+        std::cout << "\t\t\t** total energy: " << energy << std::endl;
     }
     return energy;
 }
@@ -333,7 +310,7 @@ Eigen::Vector3<Scalar> BoundaryBuilder::point_to_segment_normal(Eigen::Vector3<S
 
 template <typename Scalar>
 Eigen::Vector3<Scalar> BoundaryBuilder::intersect_arcs(Eigen::Vector3<Scalar> v_normal, Eigen::Vector3<Scalar> R2, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B){
-    Eigen::Vector3<Scalar> p = (((v_normal.cross(R2)).cross(A.cross(B)))).normalized(); // var_G.transpose()
+    Eigen::Vector3<Scalar> p = (((v_normal.cross(R2)).cross(A.cross(B)))).normalized();
     if (p.cross(B).dot(A.cross(B)) >= 0. && p.cross(A).dot(B.cross(A)) >= 0.)
         return p;
     else if ((-p).cross(B).dot(A.cross(B)) >= 0. && (-p).cross(A).dot(B.cross(A)) >= 0.)
@@ -367,10 +344,11 @@ Scalar BoundaryBuilder::single_cluster_coplanar_e(std::vector<Face> faces,
             if (std::find(faces.begin(), faces.end(), ff1) != faces.end()){ // final face is in the same cluster
                 for (Face f2: faces){
                     Face ff2 = face_last_face[f2];
-                    if (ff2 == f2 && f1 != f2) // Could remove
+                    if (ff2 == f2 && f1 != f2){ // Could remove
                         if (std::find(faces.begin(), faces.end(), ff2) != faces.end()){ // final face is in the same cluster
                             local_energy += (face_normals[f1] - face_normals[f2]).squaredNorm();
                         }
+                    }
                 }
             }
         }
@@ -406,7 +384,6 @@ Scalar BoundaryBuilder::single_cluster_bary_e(std::vector<Face> faces, FaceData<
     region_and_stables_barycenters(faces, face_last_face, 
                                    hull_positions, G, 
                                    face_normals, face_region_boundary_vertices);
-
     Scalar stable_face_distances_to_barycenter = 0.;
     
     // -- Penalize very stable face distance to bary center; could de-motivate splitting; // sum (fi - bary)^2
@@ -450,4 +427,20 @@ BoundaryBuilder::region_and_stables_barycenters(std::vector<Face> faces, FaceDat
     }
 
     return {cluster_barycenter, stable_cluster_faces_barycenter};
+}
+
+
+// --- for Fair and Manual policies ---
+template <typename Scalar> 
+Scalar 
+BoundaryBuilder::single_DAG_cluster_bary_e(Face stable_face, Eigen::Vector3<Scalar> stable_face_normal,
+                        Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
+                        FaceData<std::set<Vertex>> face_region_boundary_vertices){
+    Eigen::Vector3<Scalar> barycenter = Eigen::Vector3<Scalar>::Zero();
+    for (Vertex v: face_region_boundary_vertices[stable_face]){
+        barycenter += (hull_positions.row(v.getIndex())- G.transpose()).normalized(); // vertex-G normals
+    }
+    barycenter /= face_region_boundary_vertices[stable_face].size();
+    barycenter = barycenter.normalized();
+    return (barycenter - stable_face_normal).squaredNorm(); // diff^2
 }

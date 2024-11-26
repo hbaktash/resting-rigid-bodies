@@ -71,15 +71,15 @@ BoundaryBuilder *boundary_builder;
 bool compute_global_G_effect = true;
 polyscope::PointCloud *test_pc;
 
-int fair_sides_count = 11, // for optimization
+int fair_sides_count = 6, // for optimization
     DE_step_count = 40;
 bool do_sobolev_dice_grads = true,
      use_autodiff_for_dice_grad = true,
      visualize_steps = true,
      adaptive_reg = false,
-     frozen_G = false;
+     frozen_G = true;
 float sobolev_lambda = 2.,
-      sobolev_lambda_decay = 0.95,
+      sobolev_lambda_decay = 0.8,
       dice_energy_step = 0.01,
       dice_search_decay = 0.98,
       bary_reg = 0.1,
@@ -409,6 +409,8 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg,
                                                    policy_general, normal_prob_pairs, fair_sides_count, 
                                                    init_LS_step, dice_search_decay, frozen_G, 1000, LS_step_tol);
+    init_LS_step = opt_step_size; // TODO : adaptive step size
+
     std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
     if (opt_step_size < LS_step_tol){
       if (!adaptive_reg){
@@ -417,16 +419,19 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
       }
       else{
         std::cout << ANSI_FG_RED << "  line search step size too small; modifying reg coeffs" << ANSI_RESET << "\n";
-        bary_reg /= dice_search_decay;
-        coplanar_reg /= dice_search_decay;
-        if (bary_reg < 1e-3 || coplanar_reg < 1e-3 || bary_reg > 1e2 || coplanar_reg > 1e2){
+        std::cout << ANSI_FG_RED << "  bary reg: " << bary_reg << " coplanar reg: " << coplanar_reg << " sobolev lambda: " << current_sobolev_lambda << ANSI_RESET << "\n";
+        init_LS_step = dice_energy_step; // reset if coeffs are changing
+        // bary_reg /= dice_search_decay;
+        // coplanar_reg /= dice_search_decay;
+
+        current_sobolev_lambda *= sobolev_lambda_decay;
+        if (bary_reg < 1e-3 || coplanar_reg < 1e-3 || bary_reg > 1e2 || coplanar_reg > 1e2 || current_sobolev_lambda < 0.1){
           std::cout << ANSI_FG_RED << "  regularizers too small/big; breaking" << ANSI_RESET << "\n";
           break;
         }
       }
     }
     hull_positions = hull_positions - opt_step_size * dfdV;
-    init_LS_step = opt_step_size;
 
     tmp_solver = Forward3DSolver(hull_positions, G_vec, false); // could have been convaved
     if (!frozen_G){
@@ -487,6 +492,8 @@ void myCallback() {
   ImGui::SliderFloat("cluster distance regularizer", &cluster_distance_reg, 0., 100.);
   ImGui::Checkbox("sobolev grads", &do_sobolev_dice_grads);
   ImGui::SliderFloat("sobolev lambda", &sobolev_lambda, 0., 50.);
+  ImGui::SliderFloat("decay sobolev lambda", &sobolev_lambda_decay, 0., 1.);
+  ImGui::Checkbox("frozen G", &frozen_G);
   ImGui::Checkbox("adaptive reg", &adaptive_reg);
   ImGui::Checkbox("visualize steps", &visualize_steps);
   if (ImGui::Button("dice energy opt")){

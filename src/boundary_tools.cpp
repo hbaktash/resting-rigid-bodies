@@ -623,7 +623,7 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   for (j = 0; j < max_iter; j++) {
     tmp_solver = Forward3DSolver(hull_positions - s * dfdv, G_vec, false); // not necessarily convex
     if (frozen_G && !G_is_inside(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, tmp_solver.get_G())){
-        printf("  - G outside! \n");
+        // printf("  - G outside! \n");
         s *= decay;
         continue;
     }

@@ -161,12 +161,14 @@ class BoundaryBuilder {
         template <typename Scalar>
         static Scalar triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B, Eigen::Vector3<Scalar> C);
 
-        // regularizers
+        // Regularizers
+        //  --- for ManualCluster policy --- 
         template <typename Scalar>
         static Scalar 
         single_cluster_coplanar_e(std::vector<Face> faces, 
                                     FaceData<Eigen::Vector3<Scalar>> face_normals,
                                     FaceData<Face> face_last_face, bool verbose);
+        
         template <typename Scalar>
         static Scalar 
         single_cluster_bary_e(std::vector<Face> faces, FaceData<Face> face_last_face,
@@ -179,6 +181,13 @@ class BoundaryBuilder {
                                        Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
                                        FaceData<Eigen::Vector3<Scalar>> face_normals,
                                        FaceData<std::set<Vertex>> face_region_boundary_vertices);
+
+        // --- for Fair and Manual policies ---
+        template <typename Scalar>
+        static Scalar 
+        single_DAG_cluster_bary_e(Face stable_face, Eigen::Vector3<Scalar> stable_face_normal,
+                                Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
+                                FaceData<std::set<Vertex>> face_region_boundary_vertices);
 };
 
 double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
