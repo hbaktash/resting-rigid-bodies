@@ -468,9 +468,8 @@ void VisualUtils::draw_guess_pc(Forward3DSolver* forwardSolver,
 
 
 // visualize center of mass
-void VisualUtils::draw_G(Forward3DSolver* forwardSolver) {
-  std::vector<Vector3> G_position = {forwardSolver->get_G()};
-  psG = polyscope::registerPointCloud("Center of Mass", G_position);
+void VisualUtils::draw_G(Vector3 G) {
+  psG = polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>{G});
   psG->setPointColor({0., 0., 0.});
   psG->setPointRadius(G_radi, false);
 }
@@ -616,7 +615,7 @@ void VisualUtils::update_visuals(Forward3DSolver *tmp_solver, BoundaryBuilder *b
   // VisualUtils vis_utils(tmp_solver);
   VisualUtils vis_utils;
   draw_gauss_map(tmp_solver, sphere_mesh, sphere_geometry);
-  draw_G(tmp_solver);
+  draw_G(tmp_solver->get_G());
   plot_height_function(tmp_solver, sphere_mesh, sphere_geometry, false);
   draw_stable_patches_on_gauss_map(false, bnd_builder, false);
 }

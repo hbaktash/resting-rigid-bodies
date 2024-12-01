@@ -33,7 +33,6 @@
 #include "mesh_factory.h"
 // #include "geometry_utils.h" //; in fwd solver 
 #include "visual_utils.h"
-#include "markov_model.h"
 #include "inv_design.h"
 // #include "igl/arap.h"
 #include "deformation.h"

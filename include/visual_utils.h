@@ -46,14 +46,12 @@ class VisualUtils{
               stablizable_edge_radi = 0.009,
               both_edge_radi = 0.013,
               gm_pt_radi = 0.01,
-              G_radi = 0.1;
+              G_radi = 0.05;
 
-        
         glm::vec3 stable_edge_color = glm::vec3({0.2, 0.3, 0.3}),
                   stabilizable_edge_color = glm::vec3({0.05, 0.05, 0.05}),
                   // stabilizable_edge_color({0.1, 0.4, 0.6}),
                   both_edge_color = glm::vec3({0.1, 0.1, 0.8});
-
 
         // Gauss map stuff
         double gm_distance = 2,
@@ -85,7 +83,7 @@ class VisualUtils{
         void draw_gauss_map(Forward3DSolver* forwardSolver, ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry);
         void draw_guess_pc(Forward3DSolver* forwardSolver, std::vector<std::pair<size_t, size_t>> edge_inds, std::vector<Vector3> boundary_normals);
         void show_edge_equilibria_on_gauss_map(Forward3DSolver* forwardSolver);
-        void draw_G(Forward3DSolver* forwardSolver);
+        void draw_G(Vector3 G);
 
         // polyhedra domain
         void visualize_stable_vertices(Forward3DSolver* forwardSolver);

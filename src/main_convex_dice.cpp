@@ -125,7 +125,7 @@ void init_visuals(){
   forwardSolver->hullGeometry->requireFaceNormals();
   psHullMesh->addFaceVectorQuantity("face normals", forwardSolver->hullGeometry->faceNormals);
   psHullMesh->setEnabled(true);
-  vis_utils.draw_G(forwardSolver);
+  vis_utils.draw_G(forwardSolver->get_G());
 }
 
 
@@ -224,7 +224,7 @@ void initialize_state(std::string input_name){
     visualize_gauss_map(forwardSolver);//
     boundary_builder->print_area_of_boundary_loops();
     vis_utils.update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
-    // TODO : temporary
+    // TODO : temporary; for indexing
     Forward3DSolver tmp_solver(vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions), 
                                vec32vec(forwardSolver->get_G()), true);
     tmp_solver.initialize_pre_computes();

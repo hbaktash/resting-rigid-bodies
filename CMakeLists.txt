@@ -34,8 +34,6 @@ set(SRC_FILES
     src/boundary_tools.cpp
     src/inv_design.cpp
     src/convex_hull.cpp
-    src/deformation.cpp
-    src/optimization.cpp
     src/remesh_tools.cpp
 )
 
@@ -75,6 +73,17 @@ add_library(rolling_dragons::rolling_dragons ALIAS rolling_dragons)
 # stan::stan
 # )
 # set_property(TARGET convexFill PROPERTY CXX_STANDARD 20)
+
+# Add executables
+
+add_executable(hullFill src/main_hull_fill.cpp src/deformation.cpp src/optimization.cpp)
+target_link_libraries(hullFill
+PRIVATE
+rolling_dragons::rolling_dragons
+taywee::args
+)
+set_property(TARGET hullFill PROPERTY CXX_STANDARD 20)
+
 
 # Add executables
 
