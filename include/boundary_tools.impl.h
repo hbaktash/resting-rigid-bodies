@@ -2,7 +2,7 @@
 
 template <typename Scalar>
 Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                    Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg, double cluster_distance_reg,
+                                    Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
                                     std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
                                     size_t side_count, bool verbose
                                     ){
@@ -263,7 +263,7 @@ Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eige
             pure_dice_energy += diff * diff;
 
             // Co-planar energy
-            total_coplanar_energy += single_cluster_coplanar_e<Scalar>(cluster_faces, face_normals, face_last_face, verbose);
+            total_coplanar_energy += single_cluster_coplanar_e<Scalar>(cluster_faces, face_normals, face_last_face, unstable_attaction_thresh, verbose);
             
             // Barycentric energy
             Eigen::Vector3<Scalar> stable_cluster_faces_barycenter = Eigen::Vector3<Scalar>::Zero(),
@@ -336,7 +336,8 @@ Scalar BoundaryBuilder::triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scal
 template <typename Scalar>
 Scalar BoundaryBuilder::single_cluster_coplanar_e(std::vector<Face> faces, 
                                         FaceData<Eigen::Vector3<Scalar>> face_normals,
-                                        FaceData<Face> face_last_face, bool verbose){
+                                        FaceData<Face> face_last_face, double unstable_attaction_thresh,
+                                        bool verbose){
     Scalar local_energy = 0.;
     for (Face f1: faces){
         Face ff1 = face_last_face[f1];
@@ -353,7 +354,7 @@ Scalar BoundaryBuilder::single_cluster_coplanar_e(std::vector<Face> faces,
             }
         }
         else {
-            if ((face_normals[f1] - face_normals[ff1]).norm() < 0.1){ // close enough unstab // 0.1 up to 6 prism
+            if ((face_normals[f1] - face_normals[ff1]).norm() < unstable_attaction_thresh){ // close enough unstab // 0.1 up to 6 prism
                 // if (verbose)
                 //     std::cout << "  - f" << f1.getIndex() << "(" << f1.halfedge().vertex().getIndex() << ", " << f1.halfedge().tipVertex().getIndex() << ", " << f1.halfedge().next().tipVertex().getIndex() << ")" 
                 //     << " is close to f" << ff1.getIndex()<< "("<< ff1.halfedge().vertex().getIndex() << ", " << ff1.halfedge().tipVertex().getIndex() << ", " << ff1.halfedge().next().tipVertex().getIndex() << ")"

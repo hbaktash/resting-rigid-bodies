@@ -198,6 +198,36 @@ normal_prob_assignment(std::string shape_name){
   // Vector3 nf42({0.803215, -0.26098, 0.535477});  // 9
 }
 
+
+// initializer for fair cluster assignment 
+std::vector<std::pair<Vector3, double>> 
+normal_prob_assignment_fair(Forward3DSolver *tmp_solver, size_t dice_side_count){
+  BoundaryBuilder tmp_bnd_builder(tmp_solver);
+  tmp_bnd_builder.build_boundary_normals();
+  // sort face region areas
+  std::vector<std::pair<Face, double>> face_areas;
+  for (Face f: tmp_solver->hullMesh->faces()){
+    if (tmp_bnd_builder.face_region_area[f] > 0){
+      face_areas.push_back({f, tmp_bnd_builder.face_region_area[f]});
+    }
+  }
+  std::sort(face_areas.begin(), face_areas.end(), [] (auto a, auto b) { return a.second > b.second; });
+
+  // assign
+  std::vector<std::pair<Vector3, double>> normal_prob_pairs;
+  double goal_prob = 1./(double)dice_side_count;
+  for (size_t i = 0; i < dice_side_count; i++){
+    if (i >= face_areas.size()){
+      break;
+    }
+    Face f = face_areas[i].first;
+    Vector3 normal = tmp_solver->hullGeometry->faceNormal(f);
+    normal_prob_pairs.push_back({normal, goal_prob});
+  }
+  return normal_prob_pairs;
+}
+
+
 FaceData<double> 
 manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<std::pair<Vector3, double>> normal_prob_pairs){
   FaceData<double> goal_probs(*tmp_solver->hullMesh, 0.);
@@ -598,7 +628,7 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
 // hull update stuff
 // frozen G so far
 double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
-                               double bary_reg, double coplanar_reg, double cluster_distance_reg,
+                               double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
                                std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
                                size_t dice_side_count, 
                                double step_size, double decay, bool frozen_G, size_t max_iter, double step_tol){
@@ -612,7 +642,7 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
   
   // std::cout << "getting fair dice energy for the initial hull\n";
   double min_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions, G_vec, 
-                                                                tmp_solver, bary_reg, coplanar_reg, cluster_distance_reg,
+                                                                tmp_solver, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attaction_thresh,
                                                                 policy_general, normal_prob_assignment, 
                                                                 dice_side_count, false);
   double s = step_size; //
@@ -641,7 +671,7 @@ double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_posi
       printf("   ---   LS step %d -----\n", j);
     }
     tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, G_vec,
-                                                           tmp_solver2, bary_reg, coplanar_reg, cluster_distance_reg,
+                                                           tmp_solver2, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attaction_thresh,
                                                            policy_general, normal_prob_assignment, 
                                                            dice_side_count, verbose);
 

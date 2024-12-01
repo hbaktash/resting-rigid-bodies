@@ -84,7 +84,8 @@ float sobolev_lambda = 2.,
       dice_search_decay = 0.98,
       bary_reg = 0.1,
       coplanar_reg = 0.0,
-      cluster_distance_reg = 0.0;
+      cluster_distance_reg = 0.0,
+      unstable_attraction_thresh = 0.1;
 int sobolev_p = 2;
 // optimization stuff
 
@@ -92,7 +93,7 @@ int sobolev_p = 2;
 
 // example choice
 std::vector<std::string> all_input_names = {std::string("6 prism"), std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
-std::string input_name = "7 prism";
+std::string input_name = "6 prism";
 std::string policy_general = "manualCluster"; // "fair", "manualCluster ", "manual"
 // std::string policy_shape = "dodecahedron binomial"; // "dodecahedron binomial", "octahedron binomial", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
 std::string policy;
@@ -151,10 +152,13 @@ void generate_polyhedron_example(std::string poly_str, bool triangulate = false)
 
 void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, 
                                        std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
+                                       Eigen::MatrixXd dfdV, Eigen::MatrixXd diffused_dfdV, 
                                        bool show, bool print_probs = false){
   polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>{tmp_solver.get_G()});
   auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
-  
+  curr_hull_psmesh->addVertexVectorQuantity("dfdV", dfdV)->setEnabled(false);
+  curr_hull_psmesh->addVertexVectorQuantity("diffused dfdV", diffused_dfdV)->setEnabled(false);
+
   curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
   if (policy_general == "manual"){ // first word
     FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver, normal_prob_assignment);
@@ -270,7 +274,7 @@ std::vector<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Eigen::Matri
 }
 
 
-void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, double bary_reg, double coplanar_reg, double cluster_distance_reg,
+void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attraction_thresh,
                            Eigen::MatrixX3d &df_dv, Eigen::Vector3d &df_dG, double &dice_energy,
                            bool use_autodiff, bool frozen_G, 
                            std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_pairs, 
@@ -321,7 +325,7 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
       size_t flat_n = hull_poses_G_append_vec.rows();
       Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
       return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, 
-                                                  bary_reg, coplanar_reg, cluster_distance_reg,
+                                                  bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
                                                   policy_general, normal_prob_pairs, fair_sides, true);
     };
     Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
@@ -366,47 +370,50 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   std::string policy_general = policy.substr(0, policy.find(" ")); // first word
   std::string policy_shape = policy.substr(policy.find(" ") + 1); // second word
   std::cout << ANSI_FG_YELLOW << "policy general: " << policy_general << " policy shape: " << policy_shape << ANSI_RESET << "\n";
-  std::vector<std::pair<Vector3, double>> normal_prob_pairs = normal_prob_assignment(policy_shape);
-  
+  // if (policy_shape == "circus" || policy_shape == "hendecahedron" || policy_shape == "cube"|| policy_shape == "dodecahedron"|| policy_shape == "octahedron"|| policy_shape.substr(policy_shape.find(" ") + 1) == "prism")
+  std::vector<std::pair<Vector3, double>> normal_prob_pairs;
+  normal_prob_pairs = normal_prob_assignment(policy_shape);
+  if (policy_general == "fairCluster"){
+    normal_prob_pairs = normal_prob_assignment_fair(&tmp_solver, fair_sides_count);
+    policy_general = "manualCluster"; // switch after initial assignment
+  }
   // BoundaryBuilder tmp_bnd_builder(&tmp_solver);
   
   double current_sobolev_lambda = sobolev_lambda;
   double init_LS_step = dice_energy_step;
   double LS_step_tol = 1e-8;
+  Eigen::MatrixX3d dfdV, diffused_dfdV;
   for (size_t iter = 0; iter < step_count; iter++){
     double dice_e;
     Eigen::Vector3d dfdG;
-    Eigen::MatrixX3d dfdV(hull_positions.rows(), 3);
-    
+    dfdV = Eigen::MatrixX3d::Zero(hull_positions.rows(), 3);
+
     printf("getting grads\n");
     FaceData<double> goal_probs;
-    get_dice_energy_grads(hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg,
+    get_dice_energy_grads(hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
                           dfdV, dfdG, dice_e, 
                           use_autodiff_for_dice_grad, frozen_G,
                           policy_general, normal_prob_pairs, fair_sides_count);
     // update_visuals_with_G(&tmp_solver, &tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << "i: "<< iter << "\tDE: " << dice_e << ANSI_RESET << "\n";
 
-    // DEBUG/visuals
-    visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, visualize_steps);
-    // show grads
-    polyscope::getSurfaceMesh("current hull")->addVertexVectorQuantity("ad total grads", -1.*dfdV)->setEnabled(true);
       
     // diffused grads
-    if (do_sobolev_dice_grads){    
-      // current_sobolev_lambda *= sobolev_lambda_decay;
-      Eigen::MatrixXd diffused_dfdV = sobolev_diffuse_gradients(dfdV, *tmp_solver.hullMesh, current_sobolev_lambda, sobolev_p);
+    if (do_sobolev_dice_grads){
+      current_sobolev_lambda *= sobolev_lambda_decay;
+      diffused_dfdV = sobolev_diffuse_gradients(dfdV, *tmp_solver.hullMesh, current_sobolev_lambda, sobolev_p);
       
       double raw_norm = tinyAD_flatten(dfdV).norm(); // use eigen flaten
       double diffused_norm = tinyAD_flatten(diffused_dfdV).norm();
       
-      // std::cout << "energies: " << energies[0][iter] << " " << energies[1][iter] << " " << energies[2][iter] << "\n";
-      polyscope::getSurfaceMesh("current hull")->addVertexVectorQuantity(" sobolev diffused grads", diffused_dfdV*(-1.))->setEnabled(true);
       dfdV = diffused_dfdV;
     }
+    // DEBUG/visuals
+    visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, 
+                                      dfdV, diffused_dfdV, visualize_steps);
 
     // printf("line search\n");
-    double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg,
+    double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
                                                    policy_general, normal_prob_pairs, fair_sides_count, 
                                                    init_LS_step, dice_search_decay, frozen_G, 1000, LS_step_tol);
     init_LS_step = opt_step_size; // TODO : adaptive step size
@@ -448,7 +455,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   }
 
   // DEBUG/visuals
-  visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, false, true);
+  visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, dfdV, diffused_dfdV, false, true);
 
   optimized_mesh = tmp_solver.hullMesh;
   optimized_geometry = tmp_solver.hullGeometry; 
@@ -483,13 +490,15 @@ void myCallback() {
       ImGui::EndCombo();
   }
   ImGui::SliderInt("ITERS",           &DE_step_count, 1, 200);
-  ImGui::SliderInt("fair sides",      &fair_sides_count, 4, 20);
+  ImGui::SliderInt("fair sides",      &fair_sides_count, 2, 20);
   ImGui::SliderFloat("DE step size",  &dice_energy_step, 0, 0.05);
   ImGui::SliderFloat("DE step decay", &dice_search_decay, 0.1, 1.);
 
   ImGui::SliderFloat("barycenter distance regularizer", &bary_reg, 0., 100.);
   ImGui::SliderFloat("coplanar regularizer", &coplanar_reg, 0., 100.);
   ImGui::SliderFloat("cluster distance regularizer", &cluster_distance_reg, 0., 100.);
+  ImGui::SliderFloat("cluster unstable-stable attraction threshold", &unstable_attraction_thresh, 0., 100.);
+
   ImGui::Checkbox("sobolev grads", &do_sobolev_dice_grads);
   ImGui::SliderFloat("sobolev lambda", &sobolev_lambda, 0., 50.);
   ImGui::SliderFloat("decay sobolev lambda", &sobolev_lambda_decay, 0., 1.);
@@ -514,7 +523,7 @@ int main(int argc, char **argv) {
   // args::Flag do_just_ours(parser, "do_just_ours", "do just ours", {"just_ours"});
   // args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {"samples"});
   args::ValueFlag<std::string> input_shape_arg(parser, "input_shape_str", "path to input shape", {'m', "mesh_dir"});
-  args::ValueFlag<std::string> policy_arg(parser, "policy_general", " general policy string: fair | manual | manualCluster ", {'p', "policy"}, "manualCluster");
+  args::ValueFlag<std::string> policy_arg(parser, "policy_general", " general policy string: fair | manual | manualCluster | fairCluster ", {'p', "policy"}, "manualCluster");
 
 
   try {
@@ -552,6 +561,8 @@ int main(int argc, char **argv) {
   polyscope::init();
 
   initialize_state(input_name);
+  input_name = input_name.substr(input_name.find_last_of("/") + 1);
+  input_name = input_name.substr(0, input_name.find_last_of("."));
   // Initialize polyscope
   // Set the callback function
   polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;

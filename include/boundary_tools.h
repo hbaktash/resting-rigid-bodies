@@ -43,6 +43,9 @@ using namespace geometrycentral::surface;
 std::vector<std::pair<Vector3, double>> 
 normal_prob_assignment(std::string shape_name);
 
+std::vector<std::pair<Vector3, double>> 
+normal_prob_assignment_fair(Forward3DSolver *tmp_solver, size_t dice_side_count);
+
 FaceData<double> 
 manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<std::pair<Vector3, double>> normal_prob_pairs);
 
@@ -151,7 +154,7 @@ class BoundaryBuilder {
         // TODO template
         template <typename Scalar>
         static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                  Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg, double cluster_distance_reg,
+                                  Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
                                   std::string policy, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
                                   size_t side_count, bool verbose);
         template <typename Scalar>
@@ -167,7 +170,8 @@ class BoundaryBuilder {
         static Scalar 
         single_cluster_coplanar_e(std::vector<Face> faces, 
                                     FaceData<Eigen::Vector3<Scalar>> face_normals,
-                                    FaceData<Face> face_last_face, bool verbose);
+                                    FaceData<Face> face_last_face, double unstable_attaction_thresh, 
+                                    bool verbose);
         
         template <typename Scalar>
         static Scalar 
@@ -191,7 +195,7 @@ class BoundaryBuilder {
 };
 
 double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
-                               double bary_reg, double coplanar_reg, double cluster_distance_reg, 
+                               double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
                                std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
                                size_t dice_side_count, double step_size, double decay, bool frozen_G, 
                                size_t max_iter, double step_tol);
