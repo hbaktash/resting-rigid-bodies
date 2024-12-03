@@ -52,11 +52,6 @@ VertexPositionGeometry *hull_geometry, *concave_geometry, *optimized_concave_geo
 Vector3 goal_G, // center of Mass of pre-deformed hull
         current_G;
 
-bool load_hull_from_file = true;
-
-Forward3DSolver* forwardSolver;
-  
-
 VisualUtils vis_utils;
 
 ManifoldSurfaceMesh* sphere_mesh;
@@ -65,31 +60,36 @@ VertexPositionGeometry* sphere_geometry;
 // raster image stuff
 FaceData<Vector3> face_colors;
 
-// boundary stuff
-BoundaryBuilder *boundary_builder;
 
-int fair_sides_count = 6, // for optimization
-    DE_step_count = 40;
-bool do_sobolev_dice_grads = true,
-     use_autodiff_for_dice_grad = true,
-     visualize_steps = true,
-     adaptive_reg = false,
-     frozen_G = true;
-float sobolev_lambda = 2.,
-      sobolev_lambda_decay = 0.8,
-      dice_energy_step = 0.01,
-      dice_search_decay = 0.98,
-      bary_reg = 0.1,
-      coplanar_reg = 0.0,
-      cluster_distance_reg = 0.0,
-      unstable_attraction_thresh = 0.1;
-int sobolev_p = 2;
-// optimization stuff
 
+// deformation stuff
+bool animate_deform = false,
+     animate_G_deform = false,
+     v2_dice_animate = false,
+     enforce_snapping = false,
+     use_reg = false,
+     use_QP_solver = true,
+     curvature_weighted_CP = false,
+     dynamic_remesh = true;
+
+float dice_search_decay = 0.95;
+
+float bending_lambda_exps[2] = {1., 1.},
+      membrane_lambda_exps[2] = {3., 3.},
+      CP_lambda_exps[2] = {1., 7.},
+      barrier_lambda_exps[2] = {-4., -8.},
+      G_lambda_exps[2] = {1,5},
+      reg_lambda_exp = -3.,
+      internal_p = 0.91,
+      refinement_CP_threshold = 0.001,
+      active_set_threshold = 0.08,
+      split_robustness_threshold = 0.2;
+int filling_max_iter = 10;
 
 
 // example choice
-std::string hull_input_name, concave_input_name;
+std::string hull_input_name, concave_input_name,
+            hull_shape_name, concave_shape_name;
     
 
 void visualize_gauss_map(Forward3DSolver* forwardSolver){
@@ -104,17 +104,21 @@ void visualize_gauss_map(Forward3DSolver* forwardSolver){
 }
 
 
-void update_solver(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, Vector3 G = Vector3({-1,-1,-1})){ // only doing this for convex input
-  forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
-  if (G == Vector3({-1,-1,-1})){ // not provided
-    forwardSolver->set_uniform_G();
-  }
-  forwardSolver->initialize_pre_computes();
-  boundary_builder = new BoundaryBuilder(forwardSolver);
-  boundary_builder->build_boundary_normals();
+void ideal_hull_G_stats(bool visualize = true){
+    // ideal G and hull probs
+    Forward3DSolver* ideal_solver = new Forward3DSolver(hull_mesh, hull_geometry, goal_G, false); //
+    ideal_solver->initialize_pre_computes();
+    BoundaryBuilder* ideal_bnd_builder = new BoundaryBuilder(ideal_solver);
+    ideal_bnd_builder->build_boundary_normals();
+    std::cout << "ideal G:" << goal_G << "\n";
+    std::cout << "ideal probabilities:\n";
+    ideal_bnd_builder->print_area_of_boundary_loops();
+    if (visualize){
+        visualize_gauss_map(ideal_solver);
+        vis_utils.update_visuals(ideal_solver, ideal_bnd_builder, sphere_mesh, sphere_geometry);
+        vis_utils.draw_stable_patches_on_gauss_map(false, ideal_bnd_builder, false);
+    }
 }
-
-
 
 
 void initialize_state(std::string hull_input_name, std::string concave_input_name){
@@ -136,13 +140,13 @@ void initialize_state(std::string hull_input_name, std::string concave_input_nam
     preprocess_mesh(concave_mesh, concave_geometry, triangulate, false, 1.);
 
     // no need for path anymore
-    hull_input_name = hull_input_name.substr(hull_input_name.find_last_of("/") + 1);
-    hull_input_name = hull_input_name.substr(0, hull_input_name.find_last_of("."));
-    concave_input_name = concave_input_name.substr(concave_input_name.find_last_of("/") + 1);
-    concave_input_name = concave_input_name.substr(0, concave_input_name.find_last_of("."));
+    hull_shape_name = hull_input_name.substr(hull_input_name.find_last_of("/") + 1);
+    hull_shape_name = hull_shape_name.substr(0, hull_shape_name.find_last_of("."));
+    concave_shape_name = concave_input_name.substr(concave_input_name.find_last_of("/") + 1);
+    concave_shape_name = concave_shape_name.substr(0, concave_shape_name.find_last_of("."));
 
-
-    update_solver(hull_mesh, hull_geometry, goal_G);
+    // ideal stats
+    ideal_hull_G_stats(false);
 
     // visuals
     polyscope::registerSurfaceMesh("hull input",
@@ -154,20 +158,76 @@ void initialize_state(std::string hull_input_name, std::string concave_input_nam
 }
 
 
+void initialize_deformation_params(DeformationSolver *deformation_solver){
+  deformation_solver->dynamic_remesh = dynamic_remesh;
+  deformation_solver->filling_max_iter = filling_max_iter;  
+  
+  deformation_solver->init_bending_lambda = pow(10, bending_lambda_exps[0]);
+  deformation_solver->final_bending_lambda = pow(10, bending_lambda_exps[1]);
+  deformation_solver->init_membrane_lambda = pow(10, membrane_lambda_exps[0]);
+  deformation_solver->final_membrane_lambda = pow(10, membrane_lambda_exps[1]);
+  deformation_solver->init_CP_lambda = pow(10, CP_lambda_exps[0]);
+  deformation_solver->final_CP_lambda = pow(10, CP_lambda_exps[1]);
+  if (!use_QP_solver){
+    deformation_solver->init_barrier_lambda = pow(10, barrier_lambda_exps[0]);
+    deformation_solver->final_barrier_lambda = pow(10, barrier_lambda_exps[1]);
+  }
+  else {
+    deformation_solver->init_barrier_lambda = 0.;
+    deformation_solver->final_barrier_lambda = 0.;
+  }
+  deformation_solver->internal_growth_p = internal_p;
+  if (use_reg)
+    deformation_solver->reg_lambda = pow(10, reg_lambda_exp);
+  else 
+    deformation_solver->reg_lambda = 0.;
+  deformation_solver->curvature_weighted_CP = curvature_weighted_CP;
+  deformation_solver->active_set_threshold = active_set_threshold;
+  deformation_solver->refinement_CP_threshold = refinement_CP_threshold;
+  deformation_solver->split_robustness_threshold = split_robustness_threshold;
+  deformation_solver->enforce_snapping = enforce_snapping;
+}
+
+
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
 // https://github.com/ocornut/imgui/blob/master/imgui.h
 void myCallback() {
-  ImGui::Checkbox("adaptive reg", &adaptive_reg);
-  ImGui::Checkbox("visualize steps", &visualize_steps);
-  if (ImGui::Button("save optimized shape & G")){
-    std::string output_name = "filled_in_" + concave_input_name;
-    writeSurfaceMesh(*optimized_concave_mesh, *optimized_concave_geometry, "../meshes/hulls/" + std::string(output_name) +".obj");
-    // save G using filesystem
-    std::ofstream out_file("../meshes/hulls/" + std::string(output_name) + "_finalG.txt");
-    out_file << goal_G.x << " " << goal_G.y << " " << goal_G.z << "\n";
-    out_file.close();
-  }
+
+    // deformation params
+    ImGui::Checkbox("do remeshing", &dynamic_remesh);
+    // ImGui::Checkbox("enforce snapping at threshold", &enforce_snapping);
+    // ImGui::Checkbox("curvature weighted", &curvature_weighted_CP);
+    ImGui::SliderInt("filling iters", &filling_max_iter, 1, 300);
+    ImGui::SliderFloat("growth p", &internal_p, 0., 1.);
+    ImGui::SliderFloat("refinement CP threshold ", &refinement_CP_threshold, 0., 1.);
+    ImGui::SliderFloat("split rubostness threshold ", &split_robustness_threshold, 0., 1.);
+    ImGui::InputFloat2("init/final bending log ", bending_lambda_exps);
+    ImGui::InputFloat2("init/final membrane log ", membrane_lambda_exps);
+    ImGui::InputFloat2("init/final CP log ", CP_lambda_exps);
+    ImGui::Checkbox("use QP solver ", &use_QP_solver);
+    if(!use_QP_solver) 
+        ImGui::InputFloat2("init/final barrier log ", barrier_lambda_exps);
+    else
+        ImGui::InputFloat("active set threshold ", &active_set_threshold);
+    ImGui::Checkbox("use reg ", &use_reg);
+    if(use_reg) 
+        ImGui::SliderFloat("reg lambda; log10", &reg_lambda_exp, -5., 5.);
+    
+
+    if (ImGui::Button("deform to hull")){
+        animate_deform = true;
+    }
+
+    if (ImGui::Button("refresh")){
+        polyscope::removeAllStructures();
+        initialize_state(hull_input_name, concave_input_name);
+    }
+
+    if (ImGui::Button("save optimized concave shape")){
+        std::string output_name = "hull_fill_output_" + concave_shape_name;
+        writeSurfaceMesh(*optimized_concave_mesh, *optimized_concave_geometry, "../meshes/hulls/" + std::string(output_name) +".obj");
+    }
 }
 
 
@@ -223,6 +283,39 @@ int main(int argc, char **argv) {
     // init_convex_shape_to_fill(all_polygons_current_item2);
     // deformationSolver = new DeformationSolver(mesh, geometry, convex_to_fill_mesh, convex_to_fill_geometry);
     polyscope::state::userCallback = myCallback;
+    while (true) {
+        if (animate_deform){
+            animate_deform = false;
+            DeformationSolver* deformationSolver = new DeformationSolver(concave_mesh, concave_geometry, hull_mesh, hull_geometry);   
+            initialize_deformation_params(deformationSolver);
+            size_t current_fill_iter = 0;
+            Eigen::MatrixXd new_points = deformationSolver->solve_for_bending(1, false, nullptr, nullptr);
+
+
+            // checking probabilities for the deformed shape
+            Forward3DSolver* final_solver = new Forward3DSolver(deformationSolver->mesh, deformationSolver->deformed_geometry, goal_G, true); // 
+            
+            polyscope::registerSurfaceMesh("v2pipeline final hull", final_solver->hullGeometry->inputVertexPositions, 
+                                           final_solver->hullMesh->getFaceVertexList())->setTransparency(0.4);
+
+            // get the probabilities of new deformed shape
+            final_solver->set_uniform_G();
+            final_solver->initialize_pre_computes();
+            BoundaryBuilder* tmp_bnd_builder = new BoundaryBuilder(final_solver);
+            tmp_bnd_builder->build_boundary_normals();
+
+            Vector3 post_deform_G = final_solver->get_G();
+            std::cout << "post-deform G:" << post_deform_G << "\n";
+            printf(" post deform probabilities:\n");
+            tmp_bnd_builder->print_area_of_boundary_loops();
+            // visuals for post deform
+            // None yet
+
+            // ideal stats
+            ideal_hull_G_stats(false);
+        }
+        polyscope::frameTick();
+    }
     polyscope::show();
 
     return EXIT_SUCCESS;

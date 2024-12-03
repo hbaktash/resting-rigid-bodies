@@ -175,6 +175,8 @@ class DeformationSolver{
 };
 
 
+void visualize_cv_cp_assignments();
+
 
 // ARAP
 // geometrycentral::DenseMatrix<double> get_ARAP_positions(DenseMatrix<double> old_pos_mat,

@@ -99,17 +99,13 @@ bool compute_global_G_effect = true,
      deform_after = true,
      frozen_G = true,
      structured_opt = true,
-     dynamic_remesh = true,
-     use_reg = false,
-     use_QP_solver = true,
      always_update_structure = true,
      with_hull_projection = false,
      first_time = false,
-     curvature_weighted_CP = false;
 bool do_remesh = false;
 float scale_for_remesh = 1.003;
 polyscope::PointCloud *test_pc;
-
+     
 int fair_sides_count = 6; // for optimization
 bool do_sobolev_dice_grads = true,
      use_autodiff_for_dice_grad = true;
@@ -129,7 +125,12 @@ DeformationSolver *deformationSolver;
 bool animate = false,
      animate_G_deform = false,
      v2_dice_animate = false,
-     enforce_snapping = false;
+     enforce_snapping = false,
+     use_reg = false,
+     use_QP_solver = true,
+     curvature_weighted_CP = false,
+     dynamic_remesh = true;
+
 float dice_search_decay = 0.95;
 
 float bending_lambda_exps[2] = {1., 1.},
@@ -143,6 +144,7 @@ float bending_lambda_exps[2] = {1., 1.},
       active_set_threshold = 0.08,
       split_robustness_threshold = 0.2;
 int filling_max_iter = 10;
+
 int hull_opt_steps = 50;
 
 static const int MAX_FILL_ITERS = 300,
@@ -244,22 +246,22 @@ void init_convex_shape_to_fill(std::string poly_str, bool triangulate = true){
 }
 
 void initialize_deformation_params(DeformationSolver *deformation_solver){
-  deformationSolver->dynamic_remesh = dynamic_remesh;
+  deformation_solver->dynamic_remesh = dynamic_remesh;
   deformation_solver->filling_max_iter = filling_max_iter;  
   
-  deformationSolver->init_bending_lambda = pow(10, bending_lambda_exps[0]);
-  deformationSolver->final_bending_lambda = pow(10, bending_lambda_exps[1]);
-  deformationSolver->init_membrane_lambda = pow(10, membrane_lambda_exps[0]);
-  deformationSolver->final_membrane_lambda = pow(10, membrane_lambda_exps[1]);
-  deformationSolver->init_CP_lambda = pow(10, CP_lambda_exps[0]);
-  deformationSolver->final_CP_lambda = pow(10, CP_lambda_exps[1]);
+  deformation_solver->init_bending_lambda = pow(10, bending_lambda_exps[0]);
+  deformation_solver->final_bending_lambda = pow(10, bending_lambda_exps[1]);
+  deformation_solver->init_membrane_lambda = pow(10, membrane_lambda_exps[0]);
+  deformation_solver->final_membrane_lambda = pow(10, membrane_lambda_exps[1]);
+  deformation_solver->init_CP_lambda = pow(10, CP_lambda_exps[0]);
+  deformation_solver->final_CP_lambda = pow(10, CP_lambda_exps[1]);
   if (!use_QP_solver){
-    deformationSolver->init_barrier_lambda = pow(10, barrier_lambda_exps[0]);
-    deformationSolver->final_barrier_lambda = pow(10, barrier_lambda_exps[1]);
+    deformation_solver->init_barrier_lambda = pow(10, barrier_lambda_exps[0]);
+    deformation_solver->final_barrier_lambda = pow(10, barrier_lambda_exps[1]);
   }
   else {
-    deformationSolver->init_barrier_lambda = 0.;
-    deformationSolver->final_barrier_lambda = 0.;
+    deformation_solver->init_barrier_lambda = 0.;
+    deformation_solver->final_barrier_lambda = 0.;
   }
   deformation_solver->internal_growth_p = internal_p;
   if (use_reg)
@@ -581,33 +583,7 @@ void myCallback() {
       polyscope::getCurveNetwork("stable regions on polyhedra")->setEnabled(false);
     }
   }
-
-  // Dice energy
-  ImGui::SliderFloat("starting step size", &step_size3, 0., 1.0);
-  ImGui::SliderInt("fair dice side count", &fair_sides_count, 1, 10);
-  ImGui::Checkbox("frozen G", &frozen_G);
-  ImGui::SliderFloat("DE line search decay", &dice_search_decay, 0., 1.);
-  ImGui::SliderInt("DE iterations", &hull_opt_steps, 1, 200);
-  ImGui::SliderFloat("stable normal update thresh", &stable_normal_update_thresh, 0., 4.0);
-  ImGui::Checkbox("Sobolev pre-condition", &do_sobolev_dice_grads);
-  if (do_sobolev_dice_grads){
-    ImGui::SliderFloat("Sobolev lambda", &sobolev_lambda, 0., 5.);
-    ImGui::SliderFloat("Sobolev lambda decay", &sobolev_lambda_decay, 0., 1);
-    ImGui::SliderInt("Sobolev power", &sobolev_p, 1, 5);
-  }
-  ImGui::Checkbox("autodiff DE grads", &use_autodiff_for_dice_grad);
-  if (ImGui::Button("optimize hull DE")) {
-    v2_dice_animate = true;
-    if (polyscope::hasSurfaceMesh("v2pipeline final mesh")) polyscope::removeSurfaceMesh("v2pipeline final mesh");
-    if (polyscope::hasSurfaceMesh("v2pipeline final hull")) polyscope::removeSurfaceMesh("v2pipeline final hull");
-  }
-  if (ImGui::Button("Save hull and G to file")){
-    writeSurfaceMesh(*convex_to_fill_mesh, *convex_to_fill_geometry, "../meshes/hulls/hull_" + all_polygons_current_item + "_fs" + std::to_string(fair_sides_count), "obj");
-    std::string filename = "../meshes/hulls/G_" + all_polygons_current_item + "_fs" + std::to_string(fair_sides_count) + ".txt";
-    std::ofstream file(filename);
-    file << G.x << " " << G.y << " " << G.z << "\n";
-    file.close();
-  }
+  // removed Dice energy from here
 }
 
 

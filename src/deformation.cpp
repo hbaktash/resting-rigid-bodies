@@ -528,6 +528,7 @@ SurfacePoint DeformationSolver::get_robust_barycentric_point(SurfacePoint p, dou
     }
 }
 
+
 bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry *new_geometry){  
     // assign CP should be called already; containers initialized
     size_t mutli_edge_hits = 0, multi_face_hits = 0, multi_vertex_hits = 0;
@@ -601,6 +602,7 @@ bool DeformationSolver::split_barycentric_closest_points(VertexPositionGeometry 
     return split_occured;
 }
 
+
 Vector<double> DeformationSolver::get_CP_barrier_multiplier_vetor(double CP_involed_constant){
     Vector<double> barrier_multipliers = Vector<double>::Ones(mesh->nVertices());
     for (Vertex v: mesh->vertices()){
@@ -610,6 +612,7 @@ Vector<double> DeformationSolver::get_CP_barrier_multiplier_vetor(double CP_invo
     }
     return barrier_multipliers;
 }
+
 
 void DeformationSolver::build_constraint_matrix_and_rhs(){
     size_t nf = convex_mesh->nFaces();
@@ -622,6 +625,7 @@ void DeformationSolver::build_constraint_matrix_and_rhs(){
         constraint_rhs(f.getIndex()) = dot(face_normal, point_on_face_normal);
     }
 }
+
 
 std::tuple<double, DenseMatrix<double>, std::vector<DenseMatrix<double>>> 
 DeformationSolver::get_log_barrier_stuff(DenseMatrix<double> new_pos_mat, Vector<double> weights){
@@ -674,6 +678,7 @@ double DeformationSolver::get_log_barrier_energy(DenseMatrix<double> new_pos_mat
     return -energy_ij.sum();
 }
 
+
 bool DeformationSolver::check_feasibility(DenseMatrix<double> new_pos_mat){
     size_t n = new_pos_mat.rows();
     DenseMatrix<double> NP = constraint_matrix * new_pos_mat.transpose(); // nf by n; col j is N*P_j
@@ -682,6 +687,7 @@ bool DeformationSolver::check_feasibility(DenseMatrix<double> new_pos_mat){
     DenseMatrix<double> diff_ij = repeated_rhs - NP; // col j is N*P_j - rhs; i.e. -f_i(P_j) which should be positive
     return (diff_ij.array() > DenseMatrix<double>::Zero(diff_ij.rows(), diff_ij.cols()).array()).all();
 }
+
 
 DenseMatrix<bool> DeformationSolver::get_active_set_matrix(DenseMatrix<double> new_pos_mat, double active_threshold){
     size_t n = new_pos_mat.rows();
@@ -692,6 +698,7 @@ DenseMatrix<bool> DeformationSolver::get_active_set_matrix(DenseMatrix<double> n
     DenseMatrix<bool> active_constraints = diff_ij.array() < DenseMatrix<double>::Constant(constraint_matrix.rows(), n, active_threshold).array();
     return active_constraints;
 }
+
 
 double DeformationSolver::get_point_distance_to_convex_hull(Eigen::VectorXd p, bool from_faces){
     double distance = 0.;
@@ -713,6 +720,7 @@ double DeformationSolver::get_point_distance_to_convex_hull(Eigen::VectorXd p, b
     return distance;
 }
 
+
 void DeformationSolver::update_bending_rest_constants(){
     // rest dihedrals
     old_geometry->requireEdgeDihedralAngles();
@@ -731,7 +739,7 @@ void DeformationSolver::update_bending_rest_constants(){
                area2 = old_geometry->faceArea(e.halfedge().twin().face());
         rest_bending_constant[e] = e_len_sqrd/(area1+area2);
         if (rest_bending_constant[e] >= 1e9){ // DEBUG
-            printf(" edge is dead %d\n", e.isDead());
+            printf(" edge Death: %d\n", e.isDead());
             printf("rest constant: %d: %d, %d  = %f\n", e.getIndex(), e.firstVertex().getIndex(), e.secondVertex().getIndex(), rest_bending_constant[e]);
             printf(" -- areas: %f, %f\n", area1, area2);
             printf(" -- length sqrd: %f\n", e_len_sqrd);
@@ -814,6 +822,7 @@ auto DeformationSolver::get_tinyAD_bending_function(){
 
     return bendingEnergy_func;
 }
+
 
 auto DeformationSolver::get_tinyAD_membrane_function(){
     double membrane_mu = 0.2, membrane_lambda = 0.1;
@@ -932,7 +941,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
     VertexPositionGeometry *tmp_geometry = new VertexPositionGeometry(*mesh, unflat_tinyAD(x));
     
     // some parameters
-    double convergence_eps = 1e-7;
     double barrier_lambda = init_barrier_lambda,
            bending_lambda = init_bending_lambda,
            membrane_lambda = init_membrane_lambda,
@@ -942,7 +950,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
     vertex_only_assignment = VertexData<bool>(*convex_mesh, false);
     frozen_assignment = VertexData<Vertex>(*convex_mesh, Vertex());
     for (int i = 0; i < filling_max_iter; ++i) {
-        
         // assign closest points
         std::vector<Vector3> post_frozen_points, pre_frozen_points;
         assign_closest_points_barycentric(tmp_geometry);
@@ -953,26 +960,17 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
                 post_frozen_points.push_back(convex_geometry->inputVertexPositions[cv]);
             }
         }
+        if (enforce_snapping){
+            polyscope::registerPointCloud("pre freeze points", pre_frozen_points)->setPointColor({1.,0.,0.})->setEnabled(true);
+            polyscope::registerPointCloud("post freeze points", post_frozen_points)->setPointColor({0.,0.,1.})->setEnabled(true);
+        }
+        
         x = bendingEnergy_func.x_from_data([&] (Vertex v) {return to_eigen(tmp_geometry->inputVertexPositions[v.getIndex()]);});
-        polyscope::registerPointCloud("pre freeze points", pre_frozen_points)->setPointColor({1.,0.,0.})->setEnabled(true);
-        polyscope::registerPointCloud("post freeze points", post_frozen_points)->setPointColor({0.,0.,1.})->setEnabled(true);
         // polyscope::show();
         
-        //DEBUG
-        polyscope::registerPointCloud("CVs", convex_geometry->inputVertexPositions)->setPointColor({1.,0.,0.})->setEnabled(false);
-        polyscope::registerPointCloud("CPs", unflat_tinyAD(closest_point_flat_operator * x))->setPointColor({0.,1.,0.})->setEnabled(false);
-        std::vector<std::array<size_t, 2>> edge_inds;
-        std::vector<Vector3> edge_points;
-        std::vector<double> edge_lens;
-        for (Vertex v: convex_mesh->vertices()){
-            edge_inds.push_back({2*v.getIndex(),2*v.getIndex() + 1});
-            edge_points.push_back(convex_geometry->inputVertexPositions[v]);
-            edge_points.push_back(closest_point_assignment[v].interpolate(tmp_geometry->inputVertexPositions));
-            edge_lens.push_back((edge_points.back() - edge_points[edge_points.size()-2]).norm());
-        }
-        polyscope::registerCurveNetwork("CV-CP", edge_points, edge_inds)->setColor({0.,0.,1.})->setRadius(0.0003)->addEdgeScalarQuantity("edge len", edge_lens);
-        // polyscope::show();
-        // visuals
+        // DEBUG & visuals
+        visualize_cv_cp_assignments(mesh, old_geometry, tmp_geometry, convex_mesh, convex_geometry, closest_point_assignment, closest_point_flat_operator, x);
+        
         if (visual_per_step != 0){
             if (i % visual_per_step == 0){
                 printf(" visualizing step %d, mesh size: %d\n", i, mesh->nVertices());
@@ -984,7 +982,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
                 tmp_PSmesh->setEdgeWidth(1.);
                 tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
                 tmp_PSmesh->setEnabled(true);
-                polyscope::screenshot();
+                // polyscope::screenshot();
                 polyscope::frameTick();
             }
         }
@@ -1019,7 +1017,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
             // re-assign CP since connectivity has changed
             assign_closest_points_barycentric(tmp_geometry);
             // assign_closest_vertices(tmp_geometry, true);
-            
         }
 
         // CP stuff; splits shouldnt affect energy
@@ -1133,7 +1130,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
     tmp_PSmesh->setEdgeWidth(1.);
     tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
     tmp_PSmesh->setEnabled(true);
-    polyscope::screenshot();
+    // polyscope::screenshot();
     polyscope::frameTick();
 
     DenseMatrix<double> new_points_mat = unflat_tinyAD(x); 
@@ -1250,7 +1247,7 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
                 tmp_PSmesh->setTransparency(0.7);
                 tmp_PSmesh->setBackFacePolicy(polyscope::BackFacePolicy::Custom);
                 tmp_PSmesh->setEnabled(true);
-                polyscope::screenshot();
+                // polyscope::screenshot();
                 polyscope::frameTick();
             }
         }
@@ -1347,4 +1344,32 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
     }
     DenseMatrix<double> new_points_mat = unflat_tinyAD(x); 
     return new_points_mat;
+}
+
+
+
+
+/// Visuals
+
+
+void visualize_cv_cp_assignments(ManifoldSurfaceMesh *mesh, 
+                                 VertexPositionGeometry *old_geometry, VertexPositionGeometry *tmp_geometry, 
+                                 ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry, 
+                                 VertexData<SurfacePoint> closest_point_assignment, 
+                                 Eigen::SparseMatrix<double> closest_point_flat_operator, Eigen::VectorXd x){
+    
+    polyscope::registerPointCloud("CVs", convex_geometry->inputVertexPositions)->setPointColor({1.,0.,0.})->setEnabled(false);
+    polyscope::registerPointCloud("CPs", unflat_tinyAD(closest_point_flat_operator * x))->setPointColor({0.,1.,0.})->setEnabled(false);
+    
+    std::vector<std::array<size_t, 2>> edge_inds;
+    std::vector<Vector3> edge_points;
+    std::vector<double> edge_lens;
+    for (Vertex v: convex_mesh->vertices()){
+        edge_inds.push_back({2*v.getIndex(),2*v.getIndex() + 1});
+        edge_points.push_back(convex_geometry->inputVertexPositions[v]);
+        edge_points.push_back(closest_point_assignment[v].interpolate(tmp_geometry->inputVertexPositions));
+        edge_lens.push_back((edge_points.back() - edge_points[edge_points.size()-2]).norm());
+    }
+    polyscope::registerCurveNetwork("CV-CP", edge_points, edge_inds)->setColor({0.,0.,1.})->setRadius(0.0003)->addEdgeScalarQuantity("edge len", edge_lens);
+    polyscope::show();
 }
