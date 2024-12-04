@@ -26,6 +26,34 @@
 
 #include "geometrycentral/numerical/linear_solvers.h"
 
+
+
+/// Visuals
+
+
+void visualize_cv_cp_assignments(ManifoldSurfaceMesh *mesh, 
+                                 VertexPositionGeometry *old_geometry, VertexPositionGeometry *tmp_geometry, 
+                                 ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry, 
+                                 VertexData<SurfacePoint> closest_point_assignment, 
+                                 Eigen::SparseMatrix<double> closest_point_flat_operator, Eigen::VectorXd x){
+    
+    polyscope::registerPointCloud("CVs", convex_geometry->inputVertexPositions)->setPointColor({1.,0.,0.})->setEnabled(false);
+    polyscope::registerPointCloud("CPs", unflat_tinyAD(closest_point_flat_operator * x))->setPointColor({0.,1.,0.})->setEnabled(false);
+    
+    std::vector<std::array<size_t, 2>> edge_inds;
+    std::vector<Vector3> edge_points;
+    std::vector<double> edge_lens;
+    for (Vertex v: convex_mesh->vertices()){
+        edge_inds.push_back({2*v.getIndex(),2*v.getIndex() + 1});
+        edge_points.push_back(convex_geometry->inputVertexPositions[v]);
+        edge_points.push_back(closest_point_assignment[v].interpolate(tmp_geometry->inputVertexPositions));
+        edge_lens.push_back((edge_points.back() - edge_points[edge_points.size()-2]).norm());
+    }
+    polyscope::registerCurveNetwork("CV-CP", edge_points, edge_inds)->setColor({0.,0.,1.})->setRadius(0.0003)->addEdgeScalarQuantity("edge len", edge_lens);
+    // polyscope::show();
+}
+
+
 // point p with respect to triangle ABC
 Vector3 barycentric(Vector3 p, Vector3 A, Vector3 B, Vector3 C) {
     Vector3 v0 = B - A, v1 = C - A, v2 = p - A;
@@ -463,7 +491,7 @@ void DeformationSolver::assign_closest_points_barycentric(VertexPositionGeometry
 
 
 Eigen::VectorX<bool> DeformationSolver::get_frozen_flags() {
-    Eigen::VectorX<bool> frozen_flags(mesh->nVertices());
+    Eigen::VectorX<bool> frozen_flags(3*mesh->nVertices());
     frozen_flags.setConstant(false);
     for (Vertex v: convex_mesh->vertices()){
         if (frozen_assignment[v].getIndex() != INVALID_IND){
@@ -984,6 +1012,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
                 tmp_PSmesh->setEnabled(true);
                 // polyscope::screenshot();
                 polyscope::frameTick();
+                // polyscope::show();
             }
         }
 
@@ -1079,13 +1108,13 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
         Eigen::VectorXd old_x = x;
         Eigen::VectorXd d;
         if (barrier_lambda == 0){ // use QP
-            // Eigen::VectorXd new_x = update_QP_objective_and_solve(QPmodel, total_H/2., total_g - total_H * old_x, old_x);
             Eigen::MatrixX<bool> active_set = get_active_set_matrix(unflat_tinyAD(x), active_set_threshold);
-            // std::cout << ANSI_FG_GREEN << "total active consts: " << active_set.cast<int>().sum() << "/" << n*constraint_matrix.rows() << ANSI_RESET << std::endl; 
-            Eigen::VectorXd new_x = solve_QP_with_ineq_GRB(total_H/2., total_g - total_H * x, old_x, //
+            std::cout << ANSI_FG_YELLOW << " solving QP... " << ANSI_RESET << std::endl;
+            Eigen::VectorXd new_x = solve_QP_with_ineq_OSQP(total_H/2., total_g - total_H * x, old_x, //
                                                        constraint_matrix, constraint_rhs, 
                                                        get_frozen_flags(), get_frozen_x(),
                                                        active_set);
+            std::cout << ANSI_FG_GREEN << "  ... done solving QP" << ANSI_RESET << std::endl;
             d = new_x - old_x;
         }
         else { // my own barrier
@@ -1108,21 +1137,30 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bo
                         1., 0.9, 200, 0.);
                     // smax, decay, max_iter, armijo constant
         // update tmp geometry
+        VertexData<Vector3> old_positions = tmp_geometry->inputVertexPositions;
         bendingEnergy_func.x_to_data(x, [&] (Vertex v, const Eigen::Vector3d& p) {
             tmp_geometry->inputVertexPositions[v] = to_geometrycentral(p);
         });
 
+        double smallest_dist = 1e9, largest_dist = 0.;
+        for (Vertex v: tmp_geometry->mesh.vertices()){
+            double dist = (tmp_geometry->inputVertexPositions[v] - old_positions[v]).norm();
+        }
         double step_norm = (x - old_x).norm();
-        // printf(" step norm is %9f\n", step_norm);
-        internal_pt *= internal_growth_p;
-        bending_lambda = get_scheduled_weight(init_bending_lambda, final_bending_lambda);
-        membrane_lambda = get_scheduled_weight(init_membrane_lambda, final_membrane_lambda);
-        CP_lambda = get_scheduled_weight(init_CP_lambda, final_CP_lambda);
-        barrier_lambda = get_scheduled_weight(init_barrier_lambda, final_barrier_lambda);
+        std::cout << ANSI_FG_YELLOW << "step norm: " << step_norm << ANSI_RESET << std::endl;
+        // internal_pt *= internal_growth_p;
+
+        if (step_norm < 0.05){
+            CP_lambda /= internal_growth_p;
+            std::cout << " step norm is small, increasing CP lambda to " << CP_lambda << std::endl;
+        }
+        // bending_lambda = get_scheduled_weight(init_bending_lambda, final_bending_lambda);
+        // membrane_lambda = get_scheduled_weight(init_membrane_lambda, final_membrane_lambda);
+        // barrier_lambda = get_scheduled_weight(init_barrier_lambda, final_barrier_lambda);
         // if (step_norm < convergence_eps)
         //     break;
-        if (step_norm == 0 && bending_lambda == final_bending_lambda && membrane_lambda == final_membrane_lambda && CP_lambda == final_CP_lambda && barrier_lambda == final_barrier_lambda)
-            break;
+        // if (step_norm == 0 && bending_lambda == final_bending_lambda && membrane_lambda == final_membrane_lambda && CP_lambda == final_CP_lambda && barrier_lambda == final_barrier_lambda)
+        //     break;
     }
     // last tick
     auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
@@ -1348,28 +1386,3 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
 
 
 
-
-/// Visuals
-
-
-void visualize_cv_cp_assignments(ManifoldSurfaceMesh *mesh, 
-                                 VertexPositionGeometry *old_geometry, VertexPositionGeometry *tmp_geometry, 
-                                 ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry, 
-                                 VertexData<SurfacePoint> closest_point_assignment, 
-                                 Eigen::SparseMatrix<double> closest_point_flat_operator, Eigen::VectorXd x){
-    
-    polyscope::registerPointCloud("CVs", convex_geometry->inputVertexPositions)->setPointColor({1.,0.,0.})->setEnabled(false);
-    polyscope::registerPointCloud("CPs", unflat_tinyAD(closest_point_flat_operator * x))->setPointColor({0.,1.,0.})->setEnabled(false);
-    
-    std::vector<std::array<size_t, 2>> edge_inds;
-    std::vector<Vector3> edge_points;
-    std::vector<double> edge_lens;
-    for (Vertex v: convex_mesh->vertices()){
-        edge_inds.push_back({2*v.getIndex(),2*v.getIndex() + 1});
-        edge_points.push_back(convex_geometry->inputVertexPositions[v]);
-        edge_points.push_back(closest_point_assignment[v].interpolate(tmp_geometry->inputVertexPositions));
-        edge_lens.push_back((edge_points.back() - edge_points[edge_points.size()-2]).norm());
-    }
-    polyscope::registerCurveNetwork("CV-CP", edge_points, edge_inds)->setColor({0.,0.,1.})->setRadius(0.0003)->addEdgeScalarQuantity("edge len", edge_lens);
-    polyscope::show();
-}

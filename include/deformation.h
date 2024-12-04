@@ -45,6 +45,9 @@ using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 
+// debug/visuals
+void visualize_cv_cp_assignments();
+
 
 // convertion stuff; Moved to utils
 
@@ -175,7 +178,6 @@ class DeformationSolver{
 };
 
 
-void visualize_cv_cp_assignments();
 
 
 // ARAP

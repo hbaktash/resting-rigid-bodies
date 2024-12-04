@@ -61,35 +61,99 @@ Eigen::VectorXd solve_QP_with_ineq_GRB(Eigen::SparseMatrix<double> Q, Eigen::Vec
     return x_0;
 }
 
+std::tuple<Eigen::SparseMatrix<double>, Eigen::VectorXd, Eigen::VectorXd> 
+inequality_constraints_to_matrix(Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, 
+                                Eigen::VectorX<bool> frozen_flags, Eigen::VectorXd frozen_x,
+                                Eigen::MatrixX<bool> active_set){
+    const double kInfinity = std::numeric_limits<double>::infinity();
+    
+    // build matrix
+    size_t n_vars = frozen_x.size(),
+           n_fc = cons_b.size();
+    size_t n_verts = n_vars/3;
+    // add linear inequalities
+    std::vector<double> lb_list, ub_list;
+    std::vector<Eigen::Triplet<double>> tripletList;
+
+    size_t const_counter = 0;
+    for (size_t j = 0; j < n_fc; j++) {
+        Eigen::VectorXd rowj = cons_A.row(j);
+        double rhsj = cons_b[j];
+        for (size_t i = 0; i < n_verts; i++){
+            if (frozen_flags[i]) // skip frozen vertices
+                continue; // add equality consts later
+            // GRBLinExpr face_dist = ;
+            if (active_set.size() > 1) // not default argument
+                if (!active_set(j, i)) // skip inactive constraints
+                    continue;
+            tripletList.push_back(Eigen::Triplet<double>(const_counter, 3*i + 0, rowj[0]));
+            tripletList.push_back(Eigen::Triplet<double>(const_counter, 3*i + 1, rowj[1]));
+            tripletList.push_back(Eigen::Triplet<double>(const_counter, 3*i + 2, rowj[2]));
+            lb_list.push_back(-kInfinity);
+            ub_list.push_back(rhsj);
+            const_counter++;
+            // model.addConstr(rowj[0] * vars[3*i + 0] + 
+            //                 rowj[1] * vars[3*i + 1] + 
+            //                 rowj[2] * vars[3*i + 2] <= rhsj);
+        }
+    }
+    // add frozen inequalities
+    for (size_t i = 0; i < n_vars; i++){
+        if (frozen_flags[i]){
+            tripletList.push_back(Eigen::Triplet<double>(const_counter, i, 1.)); //tODO
+            lb_list.push_back(frozen_x[i]);
+            ub_list.push_back(frozen_x[i]);
+            const_counter++;
+            // model.addConstr(vars[i] == frozen_x[i]);
+        }
+    }
+    Eigen::SparseMatrix<double> constraint_matrix(const_counter, n_vars);
+    constraint_matrix.setFromTriplets(tripletList.begin(), tripletList.end());
+    Eigen::VectorXd lower_bounds = Eigen::Map<Eigen::VectorXd>(lb_list.data(), lb_list.size());
+    Eigen::VectorXd upper_bounds = Eigen::Map<Eigen::VectorXd>(ub_list.data(), ub_list.size());
+    return std::make_tuple(constraint_matrix, lower_bounds, upper_bounds);
+}
 
 Eigen::VectorXd solve_QP_with_ineq_OSQP(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
                                         Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, 
-                                        Eigen::VectorX<bool> frozen_indices, Eigen::VectorXd frozen_x,
+                                        Eigen::VectorX<bool> frozen_flags, Eigen::VectorXd frozen_x,
                                         Eigen::MatrixX<bool> active_set){
-    return x_0;
-    // Eigen::SparseMatrix<double> objective_matrix(N, N);
-    // Eigen::VectorXd objective_vector(N);
-    // SparseMatrix<double> constraint_matrix(N + 2 * s2_mesh.nEdges(), N);
+    // generic LP solve
+    // Eigen::VectorXd build_and_solve_LP(Eigen::SparseMatrix<double> objective_matrix, Eigen::VectorXd 
+    //                                 objective_vector, Eigen::SparseMatrix<double> constraint_matrix, 
+    //                                 Eigen::VectorXd lower_bounds, Eigen::VectorXd upper_bounds,
+    //                                 int max_iter, double err_tol){
+        // build OSQP model
+    assert(lower_bounds.size() == constraint_matrix.rows());
+    assert(upper_bounds.size() == constraint_matrix.rows());
 
-    // osqp::OsqpInstance instance;
-    // instance.objective_matrix = objective_matrix;
-    // instance.objective_vector.resize(2);
-    // instance.objective_vector << 1.0, 0.0;
-    // instance.constraint_matrix = constraint_matrix;
-    // instance.lower_bounds.resize(1);
-    // instance.lower_bounds << 1.0;
-    // instance.upper_bounds.resize(1);
-    // instance.upper_bounds << kInfinity;
+    osqp::OsqpInstance instance;
+    instance.objective_matrix = Q;
+    instance.objective_vector = g;
 
-    // osqp::OsqpSolver solver;
-    // osqp::OsqpSettings settings;
-    // // Edit settings if appropriate.
-    // auto status = solver.Init(instance, settings);
-    // // Assuming status.ok().
-    // osqp::OsqpExitCode exit_code = solver.Solve();
-    // // Assuming exit_code == OsqpExitCode::kOptimal.
-    // double optimal_objective = solver.objective_value();
-    // Eigen::VectorXd optimal_solution = solver.primal_solution();
+    Eigen::SparseMatrix<double> constraint_matrix;
+    Eigen::VectorXd lower_bounds, upper_bounds;
+    std::tie(constraint_matrix, lower_bounds, upper_bounds) = inequality_constraints_to_matrix(cons_A, cons_b, frozen_flags, frozen_x, active_set);
+    instance.constraint_matrix = constraint_matrix;
+    instance.lower_bounds = lower_bounds;
+    instance.upper_bounds = upper_bounds;
+    
+    osqp::OsqpSolver osqp_solver;
+    osqp::OsqpSettings osqp_settings; 
+    osqp_settings.verbose = false;
+    
+
+    // Edit settings
+    osqp_settings.max_iter = 5e4;
+    auto status = osqp_solver.Init(instance, osqp_settings);
+    // Assuming status.ok().
+    osqp::OsqpExitCode exit_code = osqp_solver.Solve();
+    // Assuming exit_code == OsqpExitCode::kOptimal.
+    std::cout << ANSI_FG_MAGENTA << " \t QP solve done,  Exit code: " << ToString(exit_code) << 
+                                    " \n\t total steps: " << osqp_solver.iterations() << ANSI_RESET << std::endl;
+    double optimal_objective = osqp_solver.objective_value();
+    Eigen::VectorXd optimal_solution = osqp_solver.primal_solution();
+    return optimal_solution;
 }
 
 
@@ -155,7 +219,7 @@ Eigen::VectorXd solve_QP_with_ineq_OSQP(Eigen::SparseMatrix<double> Q, Eigen::Ve
 //         }
 //     }
 //     // add frozen inequalities
-//     for (size_t i = 0; i < n_verts; i++){
+//     for (size_t i = 0; i < n_vars; i++){
 //         if (frozen_flags[i])
 //             model.addConstr(vars[i] == frozen_x[i]);
 //     }

@@ -603,10 +603,12 @@ double BoundaryBuilder::get_fair_dice_energy(size_t side_count){
 void BoundaryBuilder::print_area_of_boundary_loops(){
     printf(" Face probs:\n");
     std::vector<std::pair<Face, double>> probs;
+    double sum = 0.;
     for (Face f: forward_solver->hullMesh->faces()){
         if (face_region_area[f] != 0){
             // face_region_area[f] /= (4.*PI);
             probs.push_back({f, face_region_area[f]/(4.*PI)});
+            sum += face_region_area[f]/(4.*PI);
         }
     }
     std::sort(probs.begin(), probs.end(), [] (auto a, auto b) { return a.second > b.second; });
@@ -617,6 +619,7 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
                                            pair.first.halfedge().tipVertex().getIndex(),
                                            pair.first.halfedge().next().tipVertex().getIndex(),
                                            pair.second);
+    printf("sum: %f\n", sum);
 }
 
 

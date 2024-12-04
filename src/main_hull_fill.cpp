@@ -47,8 +47,8 @@ using namespace geometrycentral::surface;
 
 
 // == Geometry-central data
-ManifoldSurfaceMesh *hull_mesh, *concave_mesh, *optimized_concave_mesh;
-VertexPositionGeometry *hull_geometry, *concave_geometry, *optimized_concave_geometry;
+ManifoldSurfaceMesh *hull_mesh, *concave_mesh, *optimized_concave_mesh, *ref_remeshed_concave_mesh;
+VertexPositionGeometry *hull_geometry, *concave_geometry, *optimized_concave_geometry, *ref_remeshed_concave_geometry;
 Vector3 goal_G, // center of Mass of pre-deformed hull
         current_G;
 
@@ -82,9 +82,12 @@ float bending_lambda_exps[2] = {1., 1.},
       reg_lambda_exp = -3.,
       internal_p = 0.91,
       refinement_CP_threshold = 0.001,
-      active_set_threshold = 0.08,
+      active_set_threshold = 0.01,
       split_robustness_threshold = 0.2;
 int filling_max_iter = 10;
+
+// deformed shape per step
+std::vector<std::pair<ManifoldSurfaceMesh*, VertexPositionGeometry*>> deformed_shapes;
 
 
 // example choice
@@ -137,7 +140,7 @@ void initialize_state(std::string hull_input_name, std::string concave_input_nam
 
     bool triangulate = true;
     // preprocess_mesh(hull_mesh, hull_geometry, triangulate, false, 1.);
-    preprocess_mesh(concave_mesh, concave_geometry, triangulate, false, 1.);
+    // preprocess_mesh(concave_mesh, concave_geometry, triangulate, false, 1.);
 
     // no need for path anymore
     hull_shape_name = hull_input_name.substr(hull_input_name.find_last_of("/") + 1);
@@ -196,7 +199,7 @@ void myCallback() {
 
     // deformation params
     ImGui::Checkbox("do remeshing", &dynamic_remesh);
-    // ImGui::Checkbox("enforce snapping at threshold", &enforce_snapping);
+    ImGui::Checkbox("enforce snapping at threshold", &enforce_snapping);
     // ImGui::Checkbox("curvature weighted", &curvature_weighted_CP);
     ImGui::SliderInt("filling iters", &filling_max_iter, 1, 300);
     ImGui::SliderFloat("growth p", &internal_p, 0., 1.);
@@ -227,6 +230,8 @@ void myCallback() {
     if (ImGui::Button("save optimized concave shape")){
         std::string output_name = "hull_fill_output_" + concave_shape_name;
         writeSurfaceMesh(*optimized_concave_mesh, *optimized_concave_geometry, "../meshes/hulls/" + std::string(output_name) +".obj");
+        std::string ref_output_name = "hull_fill_remeshed_ref_" + concave_shape_name;
+        writeSurfaceMesh(*ref_remeshed_concave_mesh, *ref_remeshed_concave_geometry, "../meshes/hulls/" + std::string(ref_output_name) +".obj");
     }
 }
 
@@ -291,13 +296,19 @@ int main(int argc, char **argv) {
             size_t current_fill_iter = 0;
             Eigen::MatrixXd new_points = deformationSolver->solve_for_bending(1, false, nullptr, nullptr);
 
+            optimized_concave_mesh = deformationSolver->mesh;
+            optimized_concave_geometry = deformationSolver->deformed_geometry;
+            ref_remeshed_concave_mesh = deformationSolver->mesh;
+            ref_remeshed_concave_geometry = deformationSolver->old_geometry;
 
             // checking probabilities for the deformed shape
             Forward3DSolver* final_solver = new Forward3DSolver(deformationSolver->mesh, deformationSolver->deformed_geometry, goal_G, true); // 
             
-            polyscope::registerSurfaceMesh("v2pipeline final hull", final_solver->hullGeometry->inputVertexPositions, 
+            polyscope::registerSurfaceMesh("deformed final hull", final_solver->hullGeometry->inputVertexPositions, 
                                            final_solver->hullMesh->getFaceVertexList())->setTransparency(0.4);
 
+            
+            // post process
             // get the probabilities of new deformed shape
             final_solver->set_uniform_G();
             final_solver->initialize_pre_computes();
