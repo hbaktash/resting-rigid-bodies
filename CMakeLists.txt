@@ -98,19 +98,19 @@ set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
 
 # Add executables
 
-# include(json)
-# # include(rigid-ipc)
-# include(bullet3)
-# add_executable(scriptIPC src/main_IPC_script.cpp src/bullet_sim.cpp)
-# target_link_libraries(scriptIPC
-# PRIVATE
-# rolling_dragons::rolling_dragons
-# taywee::args
-# nlohmann::json
-# bullet3::bullet3
-# # ipc::toolkit
-# )
-# set_property(TARGET scriptIPC PROPERTY CXX_STANDARD 20)
+include(json)
+# include(rigid-ipc)
+include(bullet3)
+add_executable(scriptIPC src/main_IPC_script.cpp src/bullet_sim.cpp)
+target_link_libraries(scriptIPC
+PRIVATE
+rolling_dragons::rolling_dragons
+taywee::args
+nlohmann::json
+bullet3::bullet3
+# ipc::toolkit
+)
+set_property(TARGET scriptIPC PROPERTY CXX_STANDARD 20)
 
 # Add executables
 

@@ -97,6 +97,9 @@ Vector3 ground_box_shape({10,1,10});
 // Vector3 default_face_color({0.99,0.99,0.99});
 Vector3 default_face_color({240./256.,178/256.,44./256.});
 
+//
+float scale_for_save = 10.;
+
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("tet0"),std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("worst_case"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("baby_car"), std::string("rubberDuckie")};
 std::string all_polygons_current_item = "bunny";
@@ -251,7 +254,7 @@ void init_visuals(){
   psHullMesh->setEnabled(true);
   psHullMesh->setTransparency(0.95);
   // visualize_colored_polyhedra();
-  vis_utils.draw_G(forwardSolver);
+  vis_utils.draw_G(forwardSolver->get_G());
   visualize_gauss_map(forwardSolver);//
 
 
@@ -1084,6 +1087,15 @@ void myCallback() {
       // else
       //   run_IPC_samples_MCMC("example.json", ICOS_samples, max_steps_IPC);
     }
+    ImGui::SliderFloat("scale for stl save", &scale_for_save, 0.1, 10.);
+    if (ImGui::Button("save scaled")){
+      std::string single_mesh_name = SINGLE_MESH_PATH.substr(SINGLE_MESH_PATH.find_last_of("/")+1);
+      single_mesh_name = single_mesh_name.substr(0, single_mesh_name.find_last_of("."));
+
+      std::string save_path = "../meshes/hulls/" + single_mesh_name + "_" +  + "scaled_for3DP.obj";
+      geometry->inputVertexPositions = geometry->inputVertexPositions * scale_for_save;
+      writeSurfaceMesh(*mesh, *geometry, save_path);
+    }
 }
 
 
@@ -1210,7 +1222,21 @@ int main(int argc, char* argv[])
     polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("single face probabilities", boundary_builder->face_region_area/(4.*PI), polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(false);
     polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("accum probabilities", accum_probs, polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(true);
 
-    
+    // print min and max edge length
+    double min_edge = 1e9, max_edge = 0.; 
+    for (Edge e: forwardSolver->hullMesh->edges()){
+      double edge_len = forwardSolver->hullGeometry->edgeLength(e);
+      if (edge_len < min_edge)
+        min_edge = edge_len;
+      if (edge_len > max_edge)
+        max_edge = edge_len;
+    }
+    std::cout << "min edge: " << min_edge << " max edge: " << max_edge << "\n";
+
+    // print volume of the shape
+    double volume = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).second;
+    std::cout << "volume: " << volume << "\n";
+
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
     polyscope::state::userCallback = myCallback;
     // polyscope::view::lookAt(glm::vec3{4., 4., 0.}, glm::vec3{0., 0., 0.});
