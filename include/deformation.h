@@ -109,6 +109,10 @@ class DeformationSolver{
        // constructors
        DeformationSolver(ManifoldSurfaceMesh *old_mesh, VertexPositionGeometry *old_geometry,
                      ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry);
+       // with intermediate step
+       // DeformationSolver(ManifoldSurfaceMesh *old_mesh, VertexPositionGeometry *old_geometry,
+       //               ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry);
+
 
        // bending energy
        double bending_energy(VertexPositionGeometry *new_geometry);

@@ -40,9 +40,9 @@
 #define ANSI_RESET "\x1b[0m"
 
 
-Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Eigen::VectorXd g, 
+double line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Eigen::VectorXd g, 
                             std::function<double(Eigen::VectorXd)> eval, double s_max = 1.0, 
-                            double shrink = 0.8, int max_iters = 64, double armijo_const = 0.);
+                            double shrink = 0.8, int max_iters = 64);
 
 Eigen::VectorXd solve_QP_with_ineq_GRB(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
                                        Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, 

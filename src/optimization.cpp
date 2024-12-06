@@ -21,20 +21,20 @@
 
 
 
-Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Eigen::VectorXd g, 
+double line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Eigen::VectorXd g, 
                             std::function<double(Eigen::VectorXd)> eval, double s_max, 
-                            double shrink, int max_iters, double armijo_const){
+                            double shrink, int max_iters){
     // Check input
     assert(x0.size() == g.size());
-    if (s_max <= 0.0)
+    if (s_max < 0.0)
         throw std::runtime_error("Max step size not positive.");
     int i = 0;
     for (i = 0; i < max_iters; i++) {
         Eigen::VectorXd x_new = x0 + s_max * d;
         double f_new = eval(x_new);
-        if (f_new <= f0 + armijo_const * s_max * d.dot(g)){
-            std::cout << ANSI_FG_GREEN << " line search ended at iter " << i << "/" << max_iters << ANSI_RESET << std::endl;
-            return x_new;
+        if (f_new <= f0){
+            std::cout << ANSI_FG_GREEN << " line search ended at iter " << i << "/" << max_iters << " with s = " << s_max << ANSI_RESET << std::endl;
+            return s_max;
         }
         if (s_max > 1.0 && s_max * shrink < 1.0)
             s_max = 1.0;
@@ -42,7 +42,7 @@ Eigen::VectorXd line_search(Eigen::VectorXd x0, Eigen::VectorXd d, double f0, Ei
             s_max *= shrink;
     }
     std::cout << ANSI_FG_YELLOW << "Line search couldn't find improvement. Gradient max norm is" << g.cwiseAbs().maxCoeff() << ANSI_RESET << std::endl;
-    return x0;
+    return 0.;
 }
 
 

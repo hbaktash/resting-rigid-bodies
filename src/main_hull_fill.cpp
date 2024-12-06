@@ -72,19 +72,18 @@ bool animate_deform = false,
      curvature_weighted_CP = false,
      dynamic_remesh = true;
 
-float dice_search_decay = 0.95;
 
-float bending_lambda_exps[2] = {1., 1.},
-      membrane_lambda_exps[2] = {3., 3.},
-      CP_lambda_exps[2] = {1., 7.},
+float bending_lambda_exps[2] = {0., 0.},
+      membrane_lambda_exps[2] = {0.5, 0.5},
+      CP_lambda_exps[2] = {2., 7.},
       barrier_lambda_exps[2] = {-4., -8.},
       G_lambda_exps[2] = {1,5},
       reg_lambda_exp = -3.,
-      internal_p = 0.91,
+      internal_p = 0.2,
       refinement_CP_threshold = 0.001,
       active_set_threshold = 0.01,
       split_robustness_threshold = 0.2;
-int filling_max_iter = 10;
+int filling_max_iter = 100;
 
 // deformed shape per step
 std::vector<std::pair<ManifoldSurfaceMesh*, VertexPositionGeometry*>> deformed_shapes;
@@ -120,6 +119,16 @@ void ideal_hull_G_stats(bool visualize = true){
         visualize_gauss_map(ideal_solver);
         vis_utils.update_visuals(ideal_solver, ideal_bnd_builder, sphere_mesh, sphere_geometry);
         vis_utils.draw_stable_patches_on_gauss_map(false, ideal_bnd_builder, false);
+        
+        Vector3 offset({2., 0., 0});
+        auto ps_shifted_hull = polyscope::registerSurfaceMesh("offset hull", ideal_solver->hullGeometry->inputVertexPositions + offset, ideal_solver->hullMesh->getFaceVertexList());
+        
+        FaceData<double> probs = ideal_bnd_builder->face_region_area/(4.*PI);
+        ps_shifted_hull->addFaceScalarQuantity("raw probs ", probs)->setColorMap("reds")->setEnabled(true);
+        for (Face f: hull_mesh->faces()){
+            probs[f] = probs[ideal_solver->face_last_face[f]];
+        }
+        ps_shifted_hull->addFaceScalarQuantity("probs accum", probs)->setColorMap("reds")->setEnabled(true);
     }
 }
 
@@ -148,8 +157,6 @@ void initialize_state(std::string hull_input_name, std::string concave_input_nam
     concave_shape_name = concave_input_name.substr(concave_input_name.find_last_of("/") + 1);
     concave_shape_name = concave_shape_name.substr(0, concave_shape_name.find_last_of("."));
 
-    // ideal stats
-    ideal_hull_G_stats(false);
 
     // visuals
     polyscope::registerSurfaceMesh("hull input",
@@ -158,6 +165,9 @@ void initialize_state(std::string hull_input_name, std::string concave_input_nam
                                 concave_geometry->inputVertexPositions, concave_mesh->getFaceVertexList())->setTransparency(0.7); 
     polyscope::registerPointCloud("goal G", std::vector<Vector3>{goal_G})->setPointColor({0,0,0})->setPointRadius(vis_utils.G_radi);
     polyscope::registerPointCloud("current G", std::vector<Vector3>{current_G})->setPointColor({1,0,0})->setPointRadius(vis_utils.G_radi);
+    
+    // ideal stats
+    ideal_hull_G_stats(false);
 }
 
 
@@ -191,6 +201,23 @@ void initialize_deformation_params(DeformationSolver *deformation_solver){
   deformation_solver->enforce_snapping = enforce_snapping;
 }
 
+void save_params_to_file(std::string file_path){
+    std::ofstream out_file(file_path);
+    out_file << "filling_max_iter " << filling_max_iter << "\n";
+    out_file << "dynamic_remesh " << dynamic_remesh << "\n";
+    out_file << "bending_lambda_exps " << bending_lambda_exps[0] << " " << bending_lambda_exps[1] << "\n";
+    out_file << "membrane_lambda_exps " << membrane_lambda_exps[0] << " " << membrane_lambda_exps[1] << "\n";
+    out_file << "CP_lambda_exps " << CP_lambda_exps[0] << " " << CP_lambda_exps[1] << "\n";
+    out_file << "barrier_lambda_exps " << barrier_lambda_exps[0] << " " << barrier_lambda_exps[1] << "\n";
+    out_file << "internal_p " << internal_p << "\n";
+    out_file << "refinement_CP_threshold " << refinement_CP_threshold << "\n";
+    out_file << "split_robustness_threshold " << split_robustness_threshold << "\n";
+    out_file << "active_set_threshold " << active_set_threshold << "\n";
+    out_file << "use_QP_solver " << use_QP_solver << "\n";
+    out_file << "use_reg " << use_reg << "\n";
+    out_file << "reg_lambda_exp " << reg_lambda_exp << "\n";
+    out_file.close();
+}
 
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
@@ -229,9 +256,14 @@ void myCallback() {
 
     if (ImGui::Button("save optimized concave shape")){
         std::string output_name = "hull_fill_output_" + concave_shape_name;
-        writeSurfaceMesh(*optimized_concave_mesh, *optimized_concave_geometry, "../meshes/hulls/" + std::string(output_name) +".obj");
+        writeSurfaceMesh(*optimized_concave_mesh, *optimized_concave_geometry, "../meshes/hulls/nonconvex_deformation/deformation_saves/" 
+                                                                            + std::string(output_name) +".obj");
         std::string ref_output_name = "hull_fill_remeshed_ref_" + concave_shape_name;
-        writeSurfaceMesh(*ref_remeshed_concave_mesh, *ref_remeshed_concave_geometry, "../meshes/hulls/" + std::string(ref_output_name) +".obj");
+        writeSurfaceMesh(*ref_remeshed_concave_mesh, *ref_remeshed_concave_geometry, "../meshes/hulls/nonconvex_deformation/deformation_saves/" 
+                                                                            + std::string(ref_output_name) +".obj");
+        // save parameters in a text file
+        std::string output_params_path = "../meshes/hulls/nonconvex_deformation/deformation_saves/params_" + std::string(output_name) + ".txt";
+        save_params_to_file(output_params_path);
     }
 }
 

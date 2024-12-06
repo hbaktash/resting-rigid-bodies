@@ -98,11 +98,12 @@ bool split_only_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_ge
   }
 
   // actually splitting
+  size_t split_count = 0;
   while (!toSplit.empty()) {
     Edge e = toSplit.back();
     toSplit.pop_back();
     double length_e = deformed_geometry->edgeLength(e);
-    double threshold = 2. * target_edge_len;
+    double threshold = 4. * target_edge_len; // this constant matters
     if (length_e > threshold) {
       Vector3 def_newPos = 0.5 * (deformed_geometry->inputVertexPositions[e.firstVertex()] + deformed_geometry->inputVertexPositions[e.secondVertex()]),
               ref_newPos = 0.5 * (ref_geometry->inputVertexPositions[e.firstVertex()] + ref_geometry->inputVertexPositions[e.secondVertex()]);
@@ -110,6 +111,7 @@ bool split_only_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_ge
       change_flag = true;
       deformed_geometry->inputVertexPositions[he.vertex()] = def_newPos;
       ref_geometry->inputVertexPositions[he.vertex()] = ref_newPos;
+      split_count++;
     }
   }
   mesh->compress();
@@ -119,5 +121,6 @@ bool split_only_remesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry *ref_ge
   old_geo_psmesh->setSurfaceColor({0.2,0.2,0.7});
   old_geo_psmesh->setEdgeWidth(1.);
   // new_geo_psmesh->setS
+  std::cout << " \t\t\t -/-/- split count: " << split_count << "  -/-/- " << std::endl;
   return change_flag;
 }
