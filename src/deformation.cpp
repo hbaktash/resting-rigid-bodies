@@ -1085,7 +1085,7 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
         polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("total g un-wieghted", -1*unflat_tinyAD(total_g))->setEnabled(false);
         
         // sobolev diffuse grads
-        Eigen::VectorXd diffused_total_g = tinyAD_flatten(sobolev_diffuse_gradients(unflat_tinyAD(total_g), *mesh, 5, 2));
+        Eigen::VectorXd diffused_total_g = tinyAD_flatten(sobolev_diffuse_gradients(unflat_tinyAD(total_g), *mesh, G_deform_sobolev_lambda, sobolev_p));
         polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("total g diffused", -1*unflat_tinyAD(diffused_total_g))->setEnabled(false);
         
         total_g = diffused_total_g.cwiseProduct(flat_dist_mult.cwiseAbs2());

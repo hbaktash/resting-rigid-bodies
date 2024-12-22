@@ -54,7 +54,6 @@ VertexPositionGeometry *geometry, *optimized_geometry;
 bool load_hull_from_file = true;
 Vector3 G; // center of Mass
 
-Forward3DSolver* forwardSolver;
   
 
 VisualUtils vis_utils;
@@ -64,12 +63,6 @@ VertexPositionGeometry* sphere_geometry;
 
 // raster image stuff
 FaceData<Vector3> face_colors;
-
-// boundary stuff
-BoundaryBuilder *boundary_builder;
-
-bool compute_global_G_effect = true;
-polyscope::PointCloud *test_pc;
 
 int fair_sides_count = 6, // for optimization
     DE_step_count = 40;
@@ -111,7 +104,7 @@ void visualize_gauss_map(Forward3DSolver* forwardSolver){
 }
 
 
-void init_visuals(){
+void init_visuals(Forward3DSolver* forwardSolver){
   // Register the mesh with polyscope
   // psInputMesh = polyscope::registerSurfaceMesh(
   //   "init input mesh",
@@ -129,24 +122,12 @@ void init_visuals(){
 }
 
 
-void update_solver(){ // only doing this for convex input
-  forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
-  forwardSolver->set_uniform_G();
-  // TODO: doing this for hull dice search only?
-  G = forwardSolver->get_G();
-  forwardSolver->initialize_pre_computes();
-  boundary_builder = new BoundaryBuilder(forwardSolver);
-  boundary_builder->build_boundary_normals();
-}
-
-
-void generate_polyhedron_example(std::string poly_str, bool triangulate = false){
+void generate_polyhedron_example(std::string poly_str){
   // readManifoldSurfaceMesh()
   // std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
   std::tie(mesh_ptr, geometry_ptr) = generate_11_sided_polyhedron(poly_str);
   mesh = mesh_ptr.release();
   geometry = geometry_ptr.release();
-  preprocess_mesh(mesh, geometry, triangulate, false, 1.);
 }
 
 
@@ -219,12 +200,22 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
 
 void initialize_state(std::string input_name){
     generate_polyhedron_example(input_name);
-    update_solver();
-    init_visuals();
+    bool triangulate = false;
+    preprocess_mesh(mesh, geometry, triangulate, false, 1.);
+    // set global G to uniform here
+    Forward3DSolver* forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
+    forwardSolver->set_uniform_G();
+    G = forwardSolver->get_G();
+    forwardSolver->initialize_pre_computes();
+    BoundaryBuilder *boundary_builder = new BoundaryBuilder(forwardSolver);
+    boundary_builder->build_boundary_normals();
+
+    // visuals
+    init_visuals(forwardSolver);
     visualize_gauss_map(forwardSolver);//
     boundary_builder->print_area_of_boundary_loops();
     vis_utils.update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
-    // TODO : temporary; for indexing
+    // TODO : temporary; reinitialize solver for indexing
     Forward3DSolver tmp_solver(vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions), 
                                vec32vec(forwardSolver->get_G()), true);
     tmp_solver.initialize_pre_computes();

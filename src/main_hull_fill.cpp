@@ -81,8 +81,9 @@ float bending_lambda_exps[2]  = {0. , 0.},
       membrane_lambda_exps[2] = {0.5, 0.5},
       CP_lambda_exps[2]       = {2. , 7.},
       barrier_lambda_exps[2]  = {-4., -8.},
-      G_lambda_exps[2]        = {1  , 7},
+      G_lambda_exps[2]        = {2  , 7},
       reg_lambda_exp          = 1.,
+      G_deform_sobolev_lambda = 10.,
       internal_p              = 0.2,
       refinement_CP_threshold = 0.00,
       active_set_threshold    = 0.03,
@@ -205,6 +206,7 @@ void initialize_deformation_params(DeformationSolver *deformation_solver){
     deformation_solver->refinement_CP_threshold = refinement_CP_threshold;
     deformation_solver->split_robustness_threshold = split_robustness_threshold;
     deformation_solver->enforce_snapping = enforce_snapping;
+    deformation_solver->G_deform_sobolev_lambda = G_deform_sobolev_lambda;
 }
 
 void save_params_to_file(std::string file_path){
@@ -215,6 +217,7 @@ void save_params_to_file(std::string file_path){
     out_file << "membrane_lambda_exps " << membrane_lambda_exps[0] << " " << membrane_lambda_exps[1] << "\n";
     out_file << "CP_lambda_exps " << CP_lambda_exps[0] << " " << CP_lambda_exps[1] << "\n";
     out_file << "G_lambda_exps " << G_lambda_exps[0] << " " << G_lambda_exps[1] << "\n";
+    out_file << "G_deform_sobolev_lambda " << G_deform_sobolev_lambda << "\n";
     out_file << "barrier_lambda_exps " << barrier_lambda_exps[0] << " " << barrier_lambda_exps[1] << "\n";
     out_file << "internal_p " << internal_p << "\n";
     out_file << "refinement_CP_threshold " << refinement_CP_threshold << "\n";
@@ -242,7 +245,8 @@ void myCallback() {
     ImGui::InputFloat2("init/final bending log ", bending_lambda_exps);
     ImGui::InputFloat2("init/final membrane log ", membrane_lambda_exps);
     ImGui::InputFloat2("init/final CP log ", CP_lambda_exps);
-    ImGui::InputFloat2("init/final COM log ", G_lambda_exps);
+    ImGui::InputFloat2("init/final G log ", G_lambda_exps);
+    ImGui::InputFloat("G defrom sobolev lambda ", &G_deform_sobolev_lambda);
     ImGui::Checkbox("use QP solver ", &use_QP_solver);
     if(!use_QP_solver) 
         ImGui::InputFloat2("init/final barrier log ", barrier_lambda_exps);
@@ -273,6 +277,14 @@ void myCallback() {
         std::string ref_output_name = "hull_fill_remeshed_ref_" + concave_shape_name;
         writeSurfaceMesh(*ref_remeshed_concave_mesh, *ref_remeshed_concave_geometry, "../meshes/hulls/nonconvex_deformation/deformation_saves/" 
                                                                             + std::string(ref_output_name) +".obj");
+        // save parameters in a text file
+        std::string output_params_path = "../meshes/hulls/nonconvex_deformation/deformation_saves/params_" + std::string(output_name) + ".txt";
+        save_params_to_file(output_params_path);
+    }
+    if (ImGui::Button("save optimized G-deform shape")){
+        std::string output_name = "G_deform_output_" + concave_shape_name;
+        writeSurfaceMesh(*optimized_concave_mesh, *optimized_concave_geometry, "../meshes/hulls/nonconvex_deformation/deformation_saves/" 
+                                                                            + std::string(output_name) +".obj");
         // save parameters in a text file
         std::string output_params_path = "../meshes/hulls/nonconvex_deformation/deformation_saves/params_" + std::string(output_name) + ".txt";
         save_params_to_file(output_params_path);

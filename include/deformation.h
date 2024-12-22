@@ -104,8 +104,7 @@ class DeformationSolver{
               final_membrane_lambda = 1e0,
               init_CP_lambda = 1e1,
               final_CP_lambda = 1e9,
-              reg_lambda = 0.,
-              goal_G_lambda = 1.;
+              reg_lambda = 0.;
        double final_barrier_lambda = 0.,
               init_barrier_lambda = 0.;
        // TODO: should this be different for every energy? 
@@ -173,7 +172,9 @@ class DeformationSolver{
        Eigen::VectorXd flat_distance_multiplier(VertexPositionGeometry *tmp_geometry, bool from_faces);
        Eigen::MatrixXd per_vertex_G_derivative(VertexPositionGeometry *tmp_geometry);
        double init_G_lambda = 1e1,
-              final_G_lambda = 1e3;
+              final_G_lambda = 1e3,
+              G_deform_sobolev_lambda = 2.;
+       size_t sobolev_p = 2;
        DenseMatrix<double> solve_for_G(int visual_per_step = 0, 
                                        bool energy_plot = false, int* current_iter = nullptr, float** ys = nullptr);
 
