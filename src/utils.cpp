@@ -127,3 +127,4 @@ double binomial_dist(int n, int k) {
     result *= std::ldexp(1.0, -(n - k));
     return result;
 }
+

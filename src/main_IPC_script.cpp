@@ -89,7 +89,7 @@ int arcs_seg_count = 13;
 Vector3 shift = {0., gm_distance , 0.},
         colored_shift = {gm_distance, gm_distance , 0.};
 float arc_curve_radi = 0.01;
-
+double friction_coeff = 0.1;
 
 double ground_box_y = -2.1;
 Vector3 ground_box_shape({10,1,10});
@@ -407,7 +407,8 @@ Eigen::AngleAxisd run_sim_fetch_rot(Vector3 init_ori, nlohmann::json jf,
   
   Eigen::AngleAxisd Rinput_aa = aa_from_init_ori(init_ori);
   Eigen::EulerAnglesZYXd temp_R_euler(Rinput_aa.toRotationMatrix());
-  jf["max_iterations"] = max_iters;
+  jf["max_iterations"] = max_iters;//
+  jf["rigid_body_problem"]["coefficient_friction"] = friction_coeff;
   jf["rigid_body_problem"]["rigid_bodies"][0]["mesh"] = mesh_dir + "/" + mesh_name + "_normalized.obj";
   jf["rigid_body_problem"]["rigid_bodies"][0]["rotation"] = {temp_R_euler.angles()[2] * 180. / M_PI, 
                                                              temp_R_euler.angles()[1] * 180. / M_PI, 
@@ -1117,6 +1118,9 @@ int main(int argc, char* argv[])
   args::ValueFlag<std::string> IPC_repo_dir(parser, "absolute_IPC_repo_dir", "abs path to IPC repo (built and ready to run)", {"ipc_dir"}, IPC_REPO_DIR);
   args::ValueFlag<std::string> BB_base_dir(parser, "absolute_BB_path", "abs path to BB meshes folder", {"bb_dir"}, BB_BASE_DIR);
   args::ValueFlag<std::string> single_mesh_path(parser, "absolute_single_mesh_path", "abs path to single_mesh", {'m', "mesh_dir"}, SINGLE_MESH_PATH);
+  // optional: take center of mass as input
+  args::ValueFlag<double> friction_arg(parser, "IPC_friction", "IPC friction", {"friction"});
+  args::ValueFlag<std::string> center_of_mass_path(parser, "center_of_mass", "center of mass of the shape", {"com"});
 
   try {
     parser.ParseCLI(argc, argv);
@@ -1164,6 +1168,10 @@ int main(int argc, char* argv[])
       just_ours = true;
       std::cout << "   ----  Just Ours    ---- \n";
     }
+    if (friction_arg){
+      friction_coeff = args::get(friction_arg);
+      std::cout << "friction coeff: " << friction_coeff << "\n";
+    }
 
     if (BB_base_dir){
       std::cout << "running on BB dataset at: "<< BB_BASE_DIR << "\n";
@@ -1200,10 +1208,15 @@ int main(int argc, char* argv[])
     polyscope::init();
     vis_utils = VisualUtils();
     // generate_polyhedron_example("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m2_p1.obj");
-    generate_polyhedron_example(SINGLE_MESH_PATH);
-    // re-write for IPC use
-    // writeSurfaceMesh(*mesh, *geometry, "/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m0_p0_normalized.obj");
-    update_solver();
+    generate_polyhedron_example(SINGLE_MESH_PATH);// G is set by default here
+    // set G from file path provided
+    if (center_of_mass_path){
+      std::string com_path = args::get(center_of_mass_path);
+      std::ifstream in_file(com_path);
+      in_file >> G.x >> G.y >> G.z;
+      in_file.close();
+    }
+    update_solver(); 
     init_visuals();
     
     FaceData<double> accum_probs(*forwardSolver->hullMesh);

@@ -39,6 +39,7 @@
 #include "utils.h"
 #include "geometry_utils.h"
 
+#include "CP_tools.h"
 #include "optimization.h"
 
 using namespace geometrycentral;
@@ -53,9 +54,6 @@ void visualize_cv_cp_assignments();
 
 // tiny gradient stuff; Moved to utils
 
-
-Vector3 barycentric(Vector3 p, Vector3 A, Vector3 B, Vector3 C);
-
 class DeformationSolver{
     public:
        ManifoldSurfaceMesh *mesh;
@@ -63,6 +61,19 @@ class DeformationSolver{
        
        ManifoldSurfaceMesh *convex_mesh;
        VertexPositionGeometry *convex_geometry;
+       
+       Vector3 current_G, goal_G;
+       double current_volume;
+
+       // constructors
+       DeformationSolver(ManifoldSurfaceMesh *old_mesh, VertexPositionGeometry *old_geometry,
+                     ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry,
+                     Vector3 goal_G);
+       // with intermediate deformed geometry step
+       DeformationSolver(ManifoldSurfaceMesh *old_mesh, 
+                         VertexPositionGeometry *old_geometry, VertexPositionGeometry *deformed_geometry,
+                         ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry,
+                         Vector3 goal_G);
 
        // CP energy stuff
        size_t threshold_exceeded = 0;
@@ -93,26 +104,21 @@ class DeformationSolver{
               final_membrane_lambda = 1e0,
               init_CP_lambda = 1e1,
               final_CP_lambda = 1e9,
-              reg_lambda = 0.;
+              reg_lambda = 0.,
+              goal_G_lambda = 1.;
        double final_barrier_lambda = 0.,
               init_barrier_lambda = 0.;
        // TODO: should this be different for every energy? 
        double internal_growth_p = 0.9, // p; for b-(a-b)p^{t}
               internal_pt = 1.;
-       double get_scheduled_weight(double init_w, double final_w);
+       // double get_scheduled_weight(double init_w, double final_w);
 
        int filling_max_iter = 50;
        // linear constraints
        DenseMatrix<double> constraint_matrix;
        Vector<double> constraint_rhs;
 
-       // constructors
-       DeformationSolver(ManifoldSurfaceMesh *old_mesh, VertexPositionGeometry *old_geometry,
-                     ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry);
-       // with intermediate step
-       // DeformationSolver(ManifoldSurfaceMesh *old_mesh, VertexPositionGeometry *old_geometry,
-       //               ManifoldSurfaceMesh *convex_mesh, VertexPositionGeometry *convex_geometry);
-
+       
 
        // bending energy
        double bending_energy(VertexPositionGeometry *new_geometry);
@@ -126,12 +132,9 @@ class DeformationSolver{
        void assign_closest_vertices(VertexPositionGeometry *new_geometry, bool allow_multi_assignment = true);
        void assign_closest_points_barycentric(VertexPositionGeometry *new_geometry);
        // edge/face splits
-       SurfacePoint get_robust_barycentric_point(SurfacePoint p, double threshold);
        bool split_barycentric_closest_points(VertexPositionGeometry *new_geometry);
        double closest_point_energy(VertexPositionGeometry *new_geometry);
        double closest_point_energy(Vector<double> flat_new_pos_mat);
-       // gradient of CP energy
-       DenseMatrix<double> closest_point_energy_gradient(VertexPositionGeometry *new_geometry);
        
 
        // barrier and CP computes
@@ -160,17 +163,12 @@ class DeformationSolver{
        EdgeData<double> bending_per_edge;
        FaceData<double> membrane_per_vertex;
        // solver
-       DenseMatrix<double> solve_for_bending(int visual_per_step = 0, 
-                                             bool energy_plot = false, int* current_iter = nullptr, float** ys = nullptr);
+       DenseMatrix<double> solve_for_bending(int visual_per_step = 0);
        // void solve_qp(std::vector<Energy*> energies, std::vector<Constraint*> constraints);
        void print_energies_after_transform(Eigen::Matrix3d A);
        void test_my_barrier_vs_tinyAD();
 
-       DenseMatrix<double> solve_for_center_of_mass(int visual_per_step = 0, 
-                                                    bool energy_plot = false, int* current_iter = nullptr, float** ys = nullptr);
-       Vector3 current_G, goal_G;
-       double current_volume;
-
+       // deforming for G
        VertexData<DenseMatrix<double>> per_vertex_G_jacobian(VertexPositionGeometry *tmp_geometry);
        Eigen::VectorXd flat_distance_multiplier(VertexPositionGeometry *tmp_geometry, bool from_faces);
        Eigen::MatrixXd per_vertex_G_derivative(VertexPositionGeometry *tmp_geometry);

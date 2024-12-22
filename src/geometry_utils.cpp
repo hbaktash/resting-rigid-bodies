@@ -24,6 +24,59 @@
 
 
 
+// point p with respect to triangle ABC
+Vector3 barycentric(Vector3 p, Vector3 A, Vector3 B, Vector3 C) {
+    Vector3 v0 = B - A, v1 = C - A, v2 = p - A;
+    double d00 = dot(v0, v0),
+           d01 = dot(v0, v1),
+           d11 = dot(v1, v1),
+           d20 = dot(v2, v0),
+           d21 = dot(v2, v1);
+    double denom = d00 * d11 - d01 * d01;
+    Vector3 ans = Vector3::zero();
+    ans.y = (d11 * d20 - d01 * d21) / denom;
+    ans.z = (d00 * d21 - d01 * d20) / denom;
+    ans.x = 1.0f - ans.y - ans.z;
+    return ans;
+}
+
+
+// robust barycentric point
+SurfacePoint get_robust_barycentric_point(SurfacePoint p, double threshold){
+    if (p.type == SurfacePointType::Face){
+        Vector3 bary_coords = p.faceCoords;
+        bool remove_x = bary_coords.x < threshold,
+             remove_y = bary_coords.y < threshold,
+             remove_z = bary_coords.z < threshold;
+        if      (remove_x && !remove_y && !remove_z)
+            return SurfacePoint(p.face.halfedge().next(), 1. - bary_coords.y); 
+        else if (!remove_x && remove_y && !remove_z)
+            return SurfacePoint(p.face.halfedge().next().next(), 1. - bary_coords.z);
+        else if (!remove_x && !remove_y && remove_z)
+            return SurfacePoint(p.face.halfedge(), 1. - bary_coords.x);
+        else if (remove_x && remove_y && !remove_z)
+            return SurfacePoint(p.face.halfedge().next().tipVertex()); // vertex 2
+        else if (!remove_x && remove_y && remove_z)
+            return SurfacePoint(p.face.halfedge().vertex()); // vertex 0
+        else if (remove_x && !remove_y && remove_z)
+            return SurfacePoint(p.face.halfedge().next().tailVertex()); // vertex 1
+        else if (!remove_x && !remove_y && !remove_z) // all-remove not possible
+            return p; 
+        else throw std::logic_error(" barycenteric weights should sum to one!");
+    }
+    else if (p.type == SurfacePointType::Edge){
+        if (p.tEdge < threshold)
+            return SurfacePoint(p.edge.firstVertex());
+        else if (1. - p.tEdge < threshold)
+            return SurfacePoint(p.edge.secondVertex());
+        else 
+            return p;
+    }
+    else {
+        return p;
+    }
+}
+
 
 
 // tmp tools ; should be in utils

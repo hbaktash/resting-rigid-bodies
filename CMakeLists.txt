@@ -75,28 +75,37 @@ add_library(rolling_dragons::rolling_dragons ALIAS rolling_dragons)
 # set_property(TARGET convexFill PROPERTY CXX_STANDARD 20)
 
 # Add executables
+find_package(GUROBI)
+if (GUROBI_FOUND)
+  message(STATUS "Gurobi found at ${GUROBI_INCLUDE_DIRS}")
+else ()
+  message(STATUS "Gurobi not found!")
+endif ()
 
-add_executable(hullFill src/main_hull_fill.cpp src/deformation.cpp src/optimization.cpp)
+add_executable(hullFill src/main_hull_fill.cpp src/deformation.cpp src/optimization.cpp src/CP_tools.cpp)
+target_include_directories(hullFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
 target_link_libraries(hullFill
 PRIVATE
 rolling_dragons::rolling_dragons
 taywee::args
+${GUROBI_LIBRARY}
+${GUROBI_CXX_LIBRARY}
 )
 set_property(TARGET hullFill PROPERTY CXX_STANDARD 20)
 
 
-# Add executables
+# # Add executables
 
-add_executable(convexDice src/main_convex_dice.cpp)
-target_link_libraries(convexDice
-PRIVATE
-rolling_dragons::rolling_dragons
-taywee::args
-)
-set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
+# add_executable(convexDice src/main_convex_dice.cpp)
+# target_link_libraries(convexDice
+# PRIVATE
+# rolling_dragons::rolling_dragons
+# taywee::args
+# )
+# set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
 
 
-# Add executables
+# # Add executables
 
 include(json)
 # include(rigid-ipc)

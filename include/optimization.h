@@ -19,11 +19,11 @@
 
 #pragma once
 
-// #include "monty.h"
-// #include "fusion.h"
+
 #include "geometrycentral/numerical/linear_solvers.h"
 #include <Eigen/Core>
-// #include "gurobi_c++.h"
+#include <utils.h>
+#include "gurobi_c++.h"
 #include <osqp++.h>
 // #include "monty.h"
 // #include "fusion.h"
@@ -60,15 +60,34 @@ inequality_constraints_to_matrix(Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b,
                                 Eigen::VectorX<bool> frozen_flags, Eigen::VectorXd frozen_x,
                                 Eigen::MatrixX<bool> active_set = Eigen::MatrixX<bool>::Zero(0,0));
 
-// void build_QP_model_with_constraints(GRBModel &model, 
-//                                      Eigen::VectorXd x_0, 
-//                                      Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, 
-//                                      Eigen::VectorX<bool> frozen_flags, Eigen::VectorXd frozen_x,
-//                                      Eigen::MatrixX<bool> active_set = Eigen::MatrixX<bool>::Zero(0,0));
 
-// Eigen::VectorXd update_QP_objective_and_solve(GRBModel &model, 
-//                                               Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0);
+
+void build_GRB_QP_model_with_constraints(GRBModel &model, 
+                                     Eigen::VectorXd x_0, 
+                                     Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, 
+                                     Eigen::VectorX<bool> frozen_flags, Eigen::VectorXd frozen_x,
+                                     Eigen::MatrixX<bool> active_set = Eigen::MatrixX<bool>::Zero(0,0));
+
+Eigen::VectorXd update_GRB_QP_objective_and_solve(GRBModel &model, 
+                                              Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0);
 
 
 // Eigen::VectorXd solve_QP_with_ineq_MOSEK(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
 //                                          Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b);
+
+
+
+
+//// trust region
+
+// Eigen::VectorXd 
+// solve_with_trust_region_Newton(Eigen::SparseMatrix<double> Q, Eigen::VectorXd g, Eigen::VectorXd x_0, 
+//                                Eigen::MatrixXd cons_A, Eigen::VectorXd cons_b, 
+//                                std::vector<int> &mask,
+//                                double initRadius,
+//                                double maxRadius,
+//                                double stopEpsilon = 1e-8,
+//                                const int maxIterations = 100,
+//                                const int cgIterations = 100,
+//                                double eta = 0.25,
+//                                bool quiet = false );

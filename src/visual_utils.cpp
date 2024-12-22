@@ -292,18 +292,28 @@ void VisualUtils::draw_stable_vertices_on_gauss_map(Forward3DSolver* forwardSolv
 
 
 void VisualUtils::draw_stable_face_normals_on_gauss_map(Forward3DSolver* forwardSolver){
+
+  // get probabilities
+  forwardSolver->initialize_pre_computes();
+  BoundaryBuilder *bnd_builder = new BoundaryBuilder(forwardSolver);
+  bnd_builder->build_boundary_normals();
+
   std::vector<Vector3> stable_face_normals, face_normal_points;
+  std::vector<double> stable_face_probs;
   for (Face f: forwardSolver->hullMesh->faces()){
     Vector3 normal_pos_on_gm = forwardSolver->hullGeometry->faceNormal(f) + center;
     face_normal_points.push_back(normal_pos_on_gm);
     if (forwardSolver->face_is_stable(f)){
       stable_face_normals.push_back(normal_pos_on_gm);
+      stable_face_probs.push_back(bnd_builder->face_region_area[f]/(4.*PI));
     }
   }
   polyscope::PointCloud* stable_face_normals_pc = polyscope::registerPointCloud("stable Face Normals", stable_face_normals);
+  stable_face_normals_pc->addScalarQuantity("stable face probs", stable_face_probs);
   stable_face_normals_pc->setPointRadius(gm_pt_radi*1.1, false);
   stable_face_normals_pc->setPointColor({0.9,0.1,0.1});
   stable_face_normals_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere); 
+
 
   polyscope::PointCloud* face_normals_pc = polyscope::registerPointCloud("Face Normals", face_normal_points);
   face_normals_pc->setPointRadius(gm_pt_radi, false);

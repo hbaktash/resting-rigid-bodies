@@ -22,13 +22,14 @@
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
 #include "geometrycentral/numerical/linear_solvers.h"
+#include "geometrycentral/surface/surface_point.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 
-
-
+Vector3 barycentric(Vector3 p, Vector3 A, Vector3 B, Vector3 C);
+SurfacePoint get_robust_barycentric_point(SurfacePoint p, double threshold);
 
 // tmp tools
 Vector3 vec2vec3(Vector<double> v);
