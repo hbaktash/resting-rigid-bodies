@@ -79,6 +79,7 @@ double bullet_step_size = 0.01; // 0.016;
 
 int step_count = 1;
 Vector3 G;
+Vector3 pre_shift_G;
 Vector3 refresh_orientation({0,-1,0});
 
 // stuff for Gauss map
@@ -155,7 +156,7 @@ void initialize_vis(bool with_plane = true){
 }
 
 
-void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = true){
+void generate_polyhedron_example(std::string mesh_full_path, bool preprocess = true){
   
   std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
   std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
@@ -172,11 +173,15 @@ void generate_polyhedron_example(std::string mesh_full_path, bool triangulate = 
   }
 
   // preproccess and shift for external use
-  preprocess_mesh(mesh, geometry, true);
-  G = find_center_of_mass(*mesh, *geometry).first;
-  // std::cout << "center of mass before shift: " << G << "\n";
-  for (Vertex v: mesh->vertices()){
-    geometry->inputVertexPositions[v] -= G;
+  if (preprocess){
+    preprocess_mesh(mesh, geometry, true, false);
+    G = find_center_of_mass(*mesh, *geometry).first;
+    pre_shift_G = G;
+    // std::cout << "center of mass before shift: " << G << "\n";
+    for (Vertex v: mesh->vertices()){
+      geometry->inputVertexPositions[v] -= G;
+    }
+    G = find_center_of_mass(*mesh, *geometry).first;
   }
   G = find_center_of_mass(*mesh, *geometry).first;
   // std::cout << "center of mass after shift: " << G << "\n";
@@ -1208,7 +1213,10 @@ int main(int argc, char* argv[])
     polyscope::init();
     vis_utils = VisualUtils();
     // generate_polyhedron_example("/Users/hbakt/Desktop/code/rolling-dragons/meshes/BB_selection/44234_sf/m2_p1.obj");
-    generate_polyhedron_example(SINGLE_MESH_PATH);// G is set by default here
+    bool preprocess = true;
+    if (center_of_mass_path) // scaling and shifting will ruin the center of mass relative to shape input
+      preprocess = false;
+    generate_polyhedron_example(SINGLE_MESH_PATH, preprocess);// G is set by default here
     // set G from file path provided
     if (center_of_mass_path){
       std::string com_path = args::get(center_of_mass_path);
