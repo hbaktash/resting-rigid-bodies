@@ -1031,6 +1031,12 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
     bending_lambda = 0.;
     membrane_lambda = 0.;
 
+    // 
+    Eigen::VectorXd flat_dist_mult = flat_distance_multiplier(tmp_geometry, true);
+    flat_dist_mult /= flat_dist_mult.maxCoeff();
+    for(int i = 0; i < flat_dist_mult.size(); ++i)
+        flat_dist_mult[i] = sqrt(flat_dist_mult[i]);
+
     for (int i = 0; i < filling_max_iter; ++i) {    
         // update G
         auto GV_pair = find_center_of_mass(*mesh, *tmp_geometry);
@@ -1040,8 +1046,8 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
         if (visual_per_step != 0){
             if ((i+1) % visual_per_step == 0){
                 printf(" visualizing step %d\n", i);
-                polyscope::registerPointCloud("G", std::vector<Vector3>({current_G}))->setPointColor({1.,0.,0.})->setPointRadius(0.01)->setEnabled(true);
-                polyscope::registerPointCloud("goal G", std::vector<Vector3>({goal_G}))->setPointColor({0.,0.,1.})->setPointRadius(0.01)->setEnabled(true);
+                polyscope::registerPointCloud("G current iter", std::vector<Vector3>({current_G}))->setPointColor({1.,0.,0.})->setPointRadius(0.01)->setEnabled(true);
+                polyscope::registerPointCloud("G goal", std::vector<Vector3>({goal_G}))->setPointColor({0.,0.,1.})->setPointRadius(0.01)->setEnabled(true);
                 
                 auto tmp_PSmesh = polyscope::registerSurfaceMesh("temp sol", tmp_geometry->inputVertexPositions, mesh->getFaceVertexList());
                 tmp_PSmesh->setSurfaceColor({136./255., 229./255., 107./255.});
@@ -1072,34 +1078,34 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
         double total_energy = G_lambda * Gdiff_f + reg_lambda * reg_f; // + bending_lambda * bending_f + membrane_lambda * membrane_f; // reg e is zero at x0 // barrier_lambda * barrier_f;
 
 
-        Eigen::VectorXd flat_dist_mult = flat_distance_multiplier(tmp_geometry, true);
+        if (!use_static_dists){
+            flat_dist_mult = flat_distance_multiplier(tmp_geometry, true);
+            flat_dist_mult /= flat_dist_mult.maxCoeff();
+            for(int i = 0; i < flat_dist_mult.size(); ++i)
+                flat_dist_mult[i] = sqrt(flat_dist_mult[i]);
+        }
         
-        flat_dist_mult /= flat_dist_mult.maxCoeff();
-        for(int i = 0; i < flat_dist_mult.size(); ++i)
-            flat_dist_mult[i] = sqrt(flat_dist_mult[i]);
-        
-        assert(flat_dist_mult.size() == x.size());
         // DEBUG
         // printf("temp sol size %d\n other shit size", polyscope::getSurfaceMesh("temp sol")->vertexDataSize, unflat_tinyAD(flat_dist_mult).col(0).size());
-        polyscope::getSurfaceMesh("temp sol")->addVertexScalarQuantity("normalized distance to CV", unflat_tinyAD(flat_dist_mult).col(0))->setEnabled(false);
-        polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("total g un-wieghted", -1*unflat_tinyAD(total_g))->setEnabled(false);
+        // polyscope::getSurfaceMesh("temp sol")->addVertexScalarQuantity("normalized distance to CV", unflat_tinyAD(flat_dist_mult).col(0))->setEnabled(false);
+        // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("total g un-wieghted", -1*unflat_tinyAD(total_g))->setEnabled(false);
         
-        // sobolev diffuse grads
+        // // sobolev diffuse grads
         Eigen::VectorXd diffused_total_g = tinyAD_flatten(sobolev_diffuse_gradients(unflat_tinyAD(total_g), *mesh, G_deform_sobolev_lambda, sobolev_p));
-        polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("total g diffused", -1*unflat_tinyAD(diffused_total_g))->setEnabled(false);
         
         total_g = diffused_total_g.cwiseProduct(flat_dist_mult.cwiseAbs2());
         // total_g = total_g.cwiseProduct(flat_dist_mult.cwiseAbs2());
 
         // std::cout << "temp sol size:" << mesh->nVertices() << " gghat size: " << G_Ghat_g.size() << "unflat gghat size" << unflat_tinyAD(G_Ghat_g).rows() << std::endl;
+        // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("total g diffused", -1*unflat_tinyAD(diffused_total_g))->setEnabled(false);
         // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("bending g", -1*unflat_tinyAD(bending_g))->setEnabled(false);
         // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("membrane g", -1*unflat_tinyAD(membrane_g))->setEnabled(false);        
         // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("reg g unW", -1*unflat_tinyAD(reg_g))->setEnabled(false);
         // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("Gdiff unW", -1*unflat_tinyAD(Gdiff_g))->setEnabled(false);
         // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("reg g W", -1*unflat_tinyAD(reg_g.cwiseProduct(flat_dist_mult.cwiseAbs2())))->setEnabled(true);
         // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("Gdiff w", -1*unflat_tinyAD(Gdiff_g.cwiseProduct(flat_dist_mult.cwiseAbs2())))->setEnabled(true);
-        
-        polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("total g wieghted", -1*unflat_tinyAD(total_g))->setEnabled(true);
+        // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("total g wieghted", -1*unflat_tinyAD(total_g))->setEnabled(true);
+
         // if (i % 100 == 1){
         //     polyscope::show();
         // }
@@ -1115,6 +1121,23 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
         
         Eigen::VectorXd old_x = x;
         Eigen::VectorXd d = -total_g;
+        if (use_QP_solver){
+            Eigen::MatrixX<bool> active_set = get_active_set_matrix(unflat_tinyAD(x), active_set_threshold);
+            Eigen::VectorX<bool> frozen_flags(x.size());
+            frozen_flags.fill(false);
+
+            Eigen::SparseMatrix<double> Q = identityMatrix<double>(num_var);
+            Eigen::VectorXd c = -2. * (x + 1. * d); // -2x_0
+
+            std::cout << ANSI_FG_YELLOW << " solving QP... " << ANSI_RESET << std::endl;
+            Eigen::VectorXd new_x = solve_QP_with_ineq_GRB(Q, c, old_x, //
+                                                        constraint_matrix, constraint_rhs, 
+                                                        frozen_flags, old_x,
+                                                        active_set);
+            std::cout << ANSI_FG_GREEN << "  ... done solving QP" << ANSI_RESET << std::endl;
+            d = new_x - old_x;
+            x = new_x;
+        }
         double initial_LS_step_size = 1;
         double opt_step = line_search(old_x, d, total_energy, total_g,
                         [&] (const Eigen::VectorXd curr_x, bool print = false) {
@@ -1145,6 +1168,9 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
             if (G_lambda > final_G_lambda)
                 G_lambda = final_G_lambda;
             std::cout << ANSI_FG_RED << " step norm is small, increasing G lambda to " << G_lambda << ANSI_RESET << std::endl;
+        }
+        if (Gdiff_f < 1e-6){ // converged
+            break;
         }
         // internal_pt *= internal_growth_p;
         // G_lambda = get_scheduled_weight(init_G_lambda, final_G_lambda);

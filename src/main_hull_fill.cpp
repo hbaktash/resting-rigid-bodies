@@ -74,7 +74,8 @@ bool animate_deform = false,
      use_reg = true,
      use_QP_solver = true,
      curvature_weighted_CP = false,
-     dynamic_remesh = true;
+     dynamic_remesh = true,
+     use_static_dists = true;
 
 
 float bending_lambda_exps[2]  = {0. , 0.},
@@ -207,6 +208,8 @@ void initialize_deformation_params(DeformationSolver *deformation_solver){
     deformation_solver->split_robustness_threshold = split_robustness_threshold;
     deformation_solver->enforce_snapping = enforce_snapping;
     deformation_solver->G_deform_sobolev_lambda = G_deform_sobolev_lambda;
+    deformation_solver->use_static_dists = use_static_dists;
+    deformation_solver->use_QP_solver = use_QP_solver;
 }
 
 void save_params_to_file(std::string file_path){
@@ -226,6 +229,7 @@ void save_params_to_file(std::string file_path){
     out_file << "use_QP_solver " << use_QP_solver << "\n";
     out_file << "use_reg " << use_reg << "\n";
     out_file << "reg_lambda_exp " << reg_lambda_exp << "\n";
+    out_file << "use_static_dists " << use_static_dists << "\n";
     out_file.close();
 }
 
@@ -261,6 +265,7 @@ void myCallback() {
         animate_deform = true;
     }
 
+    ImGui::Checkbox("use static dists for G-deform ", &use_static_dists);
     if (ImGui::Button("do the G-deform")){
         animate_G_deform = true;
     }
@@ -419,6 +424,8 @@ int main(int argc, char **argv) {
             ideal_hull_G_stats(true);
         }
         else if (animate_G_deform){
+            polyscope::getPointCloud("goal G")->setEnabled(false);
+            polyscope::getPointCloud("current G")->setEnabled(false);
             animate_G_deform = false;
             DeformationSolver* deformationSolver = 
                         new DeformationSolver(concave_mesh, concave_geometry, deformed_geometry, hull_mesh, hull_geometry, goal_G);   
@@ -436,15 +443,24 @@ int main(int argc, char **argv) {
 
             
             // post process
-            // get the probabilities of new deformed shape
-            final_solver->set_uniform_G();
+            // ideal G probs
+            final_solver->set_G(goal_G);
             final_solver->initialize_pre_computes();
             BoundaryBuilder* tmp_bnd_builder = new BoundaryBuilder(final_solver);
             tmp_bnd_builder->build_boundary_normals();
+            std::cout << "  **  assuming perfect G probs:\n";
+            tmp_bnd_builder->print_area_of_boundary_loops(); 
 
+            // probs of new deformed shape
+            final_solver->set_uniform_G();
             Vector3 post_deform_G = final_solver->get_G();
             std::cout << "goal G was   : " << goal_G << "\n";
             std::cout << "post-deform G: " << post_deform_G << "\n";
+            
+            final_solver->initialize_pre_computes();
+            tmp_bnd_builder = new BoundaryBuilder(final_solver);
+            tmp_bnd_builder->build_boundary_normals();
+
             
             printf(" post deform probabilities:\n");
             tmp_bnd_builder->print_area_of_boundary_loops();
@@ -453,16 +469,6 @@ int main(int argc, char **argv) {
             visualize_gauss_map(final_solver);
             vis_utils.update_visuals(final_solver, tmp_bnd_builder, sphere_mesh, sphere_geometry);
             vis_utils.draw_stable_patches_on_gauss_map(false, tmp_bnd_builder, false);
-
-
-            final_solver->set_G(goal_G);
-            final_solver->initialize_pre_computes();
-            tmp_bnd_builder = new BoundaryBuilder(final_solver);
-            tmp_bnd_builder->build_boundary_normals();
-            std::cout << "  **  assuming perfect G probs:\n";
-            tmp_bnd_builder->print_area_of_boundary_loops(); 
-        
-            polyscope::show();
         }
         polyscope::frameTick();
     }

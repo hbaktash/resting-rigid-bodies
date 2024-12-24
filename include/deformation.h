@@ -175,6 +175,9 @@ class DeformationSolver{
               final_G_lambda = 1e3,
               G_deform_sobolev_lambda = 2.;
        size_t sobolev_p = 2;
+
+       bool use_static_dists = true,
+            use_QP_solver = true;
        DenseMatrix<double> solve_for_G(int visual_per_step = 0, 
                                        bool energy_plot = false, int* current_iter = nullptr, float** ys = nullptr);
 

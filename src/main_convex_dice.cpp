@@ -201,7 +201,7 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
 void initialize_state(std::string input_name){
     generate_polyhedron_example(input_name);
     bool triangulate = false;
-    preprocess_mesh(mesh, geometry, triangulate, false, 1.);
+    preprocess_mesh(mesh, geometry, triangulate, false);
     // set global G to uniform here
     Forward3DSolver* forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
     forwardSolver->set_uniform_G();
@@ -222,6 +222,7 @@ void initialize_state(std::string input_name){
     for (Face f: tmp_solver.hullMesh->faces()){
       std::cout << "face " << f.getIndex() << " N:" << tmp_solver.hullGeometry->faceNormal(f) << std::endl;
     }
+    std::cout << ANSI_FG_GREEN << "G is set to uniform:" << G << ANSI_RESET << std::endl;
 }
 
 
@@ -350,6 +351,11 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
 
   Forward3DSolver tmp_solver(mesh, geometry, G, true);
   tmp_solver.set_uniform_G();
+
+  std::cout << ANSI_FG_YELLOW << "initializing for optimization" << ANSI_RESET<< "\n";
+  std::cout << " G was: "<< G << "\n";
+  std::cout << " G is: "<< tmp_solver.get_G() << "\n";
+  polyscope::show();
   tmp_solver.initialize_pre_computes();
   
   G = tmp_solver.get_G();
