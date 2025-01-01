@@ -71,12 +71,13 @@ bool animate_deform = false,
      animate_G_deform = false,
      v2_dice_animate = false,
      enforce_snapping = false,
-     use_reg = true,
+     use_reg = false,
      use_QP_solver = true,
      curvature_weighted_CP = false,
-     dynamic_remesh = true,
+     dynamic_remesh = false,
      use_static_dists = true;
 
+double concave_input_remesh_scale = 1.;
 
 float bending_lambda_exps[2]  = {0. , 0.},
       membrane_lambda_exps[2] = {0.5, 0.5},
@@ -87,7 +88,7 @@ float bending_lambda_exps[2]  = {0. , 0.},
       G_deform_sobolev_lambda = 10.,
       internal_p              = 0.2,
       refinement_CP_threshold = 0.00,
-      active_set_threshold    = 0.03,
+      active_set_threshold    = 0.01,
       split_robustness_threshold = 0.0;
 int filling_max_iter = 100;
 
@@ -139,7 +140,7 @@ void ideal_hull_G_stats(bool visualize = true){
 }
 
 
-void initialize_state(std::string hull_input_name, std::string concave_input_name){
+void initialize_state(std::string hull_input_name, std::string concave_input_name, bool normalize_concave_input = false){
     std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
     std::unique_ptr<VertexPositionGeometry> geometry_ptr;
     
@@ -150,12 +151,15 @@ void initialize_state(std::string hull_input_name, std::string concave_input_nam
     std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(concave_input_name);
     concave_mesh = mesh_ptr.release();
     concave_geometry = geometry_ptr.release();
+    bool triangulate = true;
+    // preprocess_mesh(hull_mesh, hull_geometry, triangulate, false, 1.);
+    if (normalize_concave_input){
+        preprocess_mesh(concave_mesh, concave_geometry, triangulate, concave_input_remesh_scale != 1. ? true : false, concave_input_remesh_scale);
+    }
+
     auto currentGVpair = find_center_of_mass(*concave_mesh, *concave_geometry);
     current_G = currentGVpair.first;
 
-    bool triangulate = true;
-    // preprocess_mesh(hull_mesh, hull_geometry, triangulate, false, 1.);
-    // preprocess_mesh(concave_mesh, concave_geometry, triangulate, false, 1.);
 
     // no need for path anymore
     hull_shape_name = hull_input_name.substr(hull_input_name.find_last_of("/") + 1);
@@ -214,22 +218,23 @@ void initialize_deformation_params(DeformationSolver *deformation_solver){
 
 void save_params_to_file(std::string file_path){
     std::ofstream out_file(file_path);
+    out_file << "dynamic_remesh: " << dynamic_remesh << std::endl;
     out_file << "filling_max_iter " << filling_max_iter << "\n";
-    out_file << "dynamic_remesh " << dynamic_remesh << "\n";
-    out_file << "bending_lambda_exps " << bending_lambda_exps[0] << " " << bending_lambda_exps[1] << "\n";
-    out_file << "membrane_lambda_exps " << membrane_lambda_exps[0] << " " << membrane_lambda_exps[1] << "\n";
-    out_file << "CP_lambda_exps " << CP_lambda_exps[0] << " " << CP_lambda_exps[1] << "\n";
-    out_file << "G_lambda_exps " << G_lambda_exps[0] << " " << G_lambda_exps[1] << "\n";
-    out_file << "G_deform_sobolev_lambda " << G_deform_sobolev_lambda << "\n";
-    out_file << "barrier_lambda_exps " << barrier_lambda_exps[0] << " " << barrier_lambda_exps[1] << "\n";
-    out_file << "internal_p " << internal_p << "\n";
-    out_file << "refinement_CP_threshold " << refinement_CP_threshold << "\n";
-    out_file << "split_robustness_threshold " << split_robustness_threshold << "\n";
-    out_file << "active_set_threshold " << active_set_threshold << "\n";
-    out_file << "use_QP_solver " << use_QP_solver << "\n";
-    out_file << "use_reg " << use_reg << "\n";
-    out_file << "reg_lambda_exp " << reg_lambda_exp << "\n";
-    out_file << "use_static_dists " << use_static_dists << "\n";
+    out_file << "enforce_snapping: " << enforce_snapping << std::endl;
+    out_file << "curvature_weighted_CP: " << curvature_weighted_CP << std::endl;
+    out_file << "filling_max_iter: " << filling_max_iter << std::endl;
+    out_file << "internal_p: " << internal_p << std::endl;
+    out_file << "refinement_CP_threshold: " << refinement_CP_threshold << std::endl;
+    out_file << "split_robustness_threshold: " << split_robustness_threshold << std::endl;
+    out_file << "bending_lambda_exps: " << bending_lambda_exps[0] << " " << bending_lambda_exps[1] << std::endl;
+    out_file << "membrane_lambda_exps: " << membrane_lambda_exps[0] << " " << membrane_lambda_exps[1] << std::endl;
+    out_file << "CP_lambda_exps: " << CP_lambda_exps[0] << " " << CP_lambda_exps[1] << std::endl;
+    out_file << "G_lambda_exps: " << G_lambda_exps[0] << " " << G_lambda_exps[1] << std::endl;
+    out_file << "use_QP_solver: " << use_QP_solver << std::endl;
+    out_file << "active_set_threshold: " << active_set_threshold << std::endl;
+    out_file << "use_reg: " << use_reg << std::endl;
+    out_file << "reg_lambda_exp: " << reg_lambda_exp << std::endl;
+    out_file << "use_static_dists for G-def" << use_static_dists << "\n";
     out_file.close();
 }
 
@@ -239,7 +244,7 @@ void save_params_to_file(std::string file_path){
 void myCallback() {
 
     // deformation params
-    ImGui::Checkbox("do remeshing", &dynamic_remesh);
+    ImGui::Checkbox("dynamic remeshing", &dynamic_remesh);
     ImGui::Checkbox("enforce snapping at threshold", &enforce_snapping);
     // ImGui::Checkbox("curvature weighted", &curvature_weighted_CP);
     ImGui::SliderInt("filling iters", &filling_max_iter, 1, 300);
@@ -249,8 +254,6 @@ void myCallback() {
     ImGui::InputFloat2("init/final bending log ", bending_lambda_exps);
     ImGui::InputFloat2("init/final membrane log ", membrane_lambda_exps);
     ImGui::InputFloat2("init/final CP log ", CP_lambda_exps);
-    ImGui::InputFloat2("init/final G log ", G_lambda_exps);
-    ImGui::InputFloat("G defrom sobolev lambda ", &G_deform_sobolev_lambda);
     ImGui::Checkbox("use QP solver ", &use_QP_solver);
     if(!use_QP_solver) 
         ImGui::InputFloat2("init/final barrier log ", barrier_lambda_exps);
@@ -265,6 +268,8 @@ void myCallback() {
         animate_deform = true;
     }
 
+    ImGui::InputFloat2("init/final G log ", G_lambda_exps);
+    ImGui::InputFloat("G defrom sobolev lambda ", &G_deform_sobolev_lambda);
     ImGui::Checkbox("use static dists for G-deform ", &use_static_dists);
     if (ImGui::Button("do the G-deform")){
         animate_G_deform = true;
@@ -306,6 +311,7 @@ int main(int argc, char **argv) {
     // args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {"samples"});
     args::ValueFlag<std::string> convex_input_arg(  parser, "convex_input_str", "path to input convex shape to be filled", {'c', "convex_dir"});
     args::ValueFlag<std::string> concave_input_arg( parser, "concave_input_arg", "path to concave shape to fill with", {'m', "concave_dir"});
+    args::ValueFlag<std::string> remesh_scale_arg( parser, "remesh_scale_arg", "Remesh scale arg", {"remesh"});
     args::ValueFlag<std::string> deformed_input_arg(parser, "deformed_input_arg", "path to deformed shape that fills hull", {"deformed_dir"});
     args::ValueFlag<std::string> goal_G_text_arg(   parser, "goal_G_text_arg", "path to text containing G", {'g', "com"});
 
@@ -334,6 +340,10 @@ int main(int argc, char **argv) {
     in_file >> goal_G.x >> goal_G.y >> goal_G.z;
     in_file.close();
 
+    if (remesh_scale_arg){
+        concave_input_remesh_scale = std::stod(args::get(remesh_scale_arg));
+    }
+
     std::cout << ANSI_FG_YELLOW << "input convex shape: " << hull_input_name << ANSI_RESET << "\n";
     std::cout << ANSI_FG_YELLOW << "input concave shape: " << concave_input_name << ANSI_RESET << "\n";
     std::cout << ANSI_FG_YELLOW << "goal G: " << goal_G << ANSI_RESET << "\n";
@@ -341,10 +351,11 @@ int main(int argc, char **argv) {
     // build mesh
     vis_utils = VisualUtils();
     polyscope::init();
-
-    initialize_state(hull_input_name, concave_input_name);
-    
-    if (deformed_input_arg){
+    if (!deformed_input_arg){
+        initialize_state(hull_input_name, concave_input_name, true);
+    }
+    else{
+        initialize_state(hull_input_name, concave_input_name, false);
         // polyscope::show();
         std::string deformed_input_path = args::get(deformed_input_arg);
         std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
@@ -361,7 +372,6 @@ int main(int argc, char **argv) {
         // visuals
         polyscope::registerSurfaceMesh("deformed input",
                                     deformed_geometry->inputVertexPositions, deformed_mesh->getFaceVertexList())->setTransparency(0.7);
-        
         // check probabilities for the deformed shape
         Forward3DSolver* deformed_solver = new Forward3DSolver(deformed_mesh, deformed_geometry, goal_G, true); //
         deformed_solver->set_uniform_G();
@@ -377,6 +387,7 @@ int main(int argc, char **argv) {
         // vis_utils.draw_stable_patches_on_gauss_map(false, deformed_bnd_builder, false);
         // polyscope::show();
     }
+
     // Initialize polyscope
     // Set the callback function
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
@@ -417,11 +428,20 @@ int main(int argc, char **argv) {
             std::cout << "post-deform G:" << post_deform_G << "\n";
             printf(" post deform probabilities:\n");
             tmp_bnd_builder->print_area_of_boundary_loops();
-            // visuals for post deform
             // None yet
 
             // ideal stats
-            ideal_hull_G_stats(true);
+            final_solver->set_G(goal_G);
+            final_solver->initialize_pre_computes();
+            BoundaryBuilder* ideal_bnd_builder = new BoundaryBuilder(final_solver);
+            ideal_bnd_builder->build_boundary_normals();
+            std::cout << "post-deform with ideal G probabilities:\n";
+            ideal_bnd_builder->print_area_of_boundary_loops();
+            // visuals for post deform
+            // visuals
+            visualize_gauss_map(final_solver);
+            vis_utils.update_visuals(final_solver, ideal_bnd_builder, sphere_mesh, sphere_geometry);
+            vis_utils.draw_stable_patches_on_gauss_map(false, ideal_bnd_builder, false);
         }
         else if (animate_G_deform){
             polyscope::getPointCloud("goal G")->setEnabled(false);

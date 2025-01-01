@@ -182,14 +182,3 @@ class DeformationSolver{
                                        bool energy_plot = false, int* current_iter = nullptr, float** ys = nullptr);
 
 };
-
-
-
-
-// ARAP
-// geometrycentral::DenseMatrix<double> get_ARAP_positions(DenseMatrix<double> old_pos_mat,
-//                                        DenseMatrix<double> new_pos_mat,
-//                                        DenseMatrix<double> init_sol,
-//                                        ManifoldSurfaceMesh &inner_mesh,
-//                                        Vector<int> hull_indices);
-

@@ -164,6 +164,24 @@ void generate_polyhedron_example(std::string mesh_full_path, bool preprocess = t
   SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
   VertexPositionGeometry *nm_geometry = nm_geometry_ptr.release();
   nm_mesh->greedilyOrientFaces();
+  for (Vertex v: nm_mesh->vertices()){
+    if (!v.isManifold()){
+      std::cout << "non-manifold vertex "<< v.getIndex() << "\n";
+    }
+  }
+  for (Edge e: nm_mesh->edges()){
+    if (!e.isManifold()){
+      std::cout << "non-manifold edge "<< e.getIndex()<< ": " << e.firstVertex().getIndex() << " " << e.secondVertex().getIndex() << "\n";
+      std::cout << "sibling: " << e.halfedge().sibling().getIndex() << ": "
+                << e.halfedge().sibling().tailVertex().getIndex() << " " 
+                << e.halfedge().sibling().tipVertex().getIndex() << "\n";
+      std::cout << "sibling.sibling: " << e.halfedge().sibling().sibling().getIndex() << ": "
+                << e.halfedge().sibling().sibling().tailVertex().getIndex() << " " 
+                << e.halfedge().sibling().sibling().tipVertex().getIndex() << "\n";
+    }
+  }
+  nm_mesh->compress();
+
   mesh_ptr = nm_mesh->toManifoldMesh();
   mesh = mesh_ptr.release();
   geometry = new VertexPositionGeometry(*mesh);

@@ -337,8 +337,23 @@ generate_polyhedra(std::string poly_str){
     }
     else { // read from file
       try {
-        std::string filename = poly_str;
-        std::tie(mesh, geometry) = readManifoldSurfaceMesh(filename);
+        std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
+        std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
+        std::tie(nm_mesh_ptr, nm_geometry_ptr) = readSurfaceMesh(poly_str);
+        SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
+        VertexPositionGeometry *nm_geometry = nm_geometry_ptr.release();
+        nm_mesh->greedilyOrientFaces();
+        std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
+        mesh_ptr = nm_mesh->toManifoldMesh();
+        
+        ManifoldSurfaceMesh* mf_mesh = mesh_ptr.release();
+        VertexPositionGeometry* mf_geometry = new VertexPositionGeometry(*mf_mesh);
+        // transfer from nm geometry
+        for (Vertex v : mf_mesh->vertices()) {
+          mf_geometry->inputVertexPositions[v.getIndex()] = nm_geometry->inputVertexPositions[v.getIndex()];
+        }
+        mesh.reset(mf_mesh);
+        geometry.reset(mf_geometry);
       }
       catch(const std::exception& e) {
         try {

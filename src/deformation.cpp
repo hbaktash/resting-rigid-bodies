@@ -610,12 +610,16 @@ auto DeformationSolver::get_tinyAD_bending_function(){
         Eigen::Vector3<T> N2 = (p1 - p2).cross(p4 - p2);
         Eigen::Vector3<T> edgeDir = (p2 - p1).normalized();
         T dihedral_angle = atan2(edgeDir.dot(N1.cross(N2)), N1.dot(N2));
-        // if (dihedral_angle > rest_dihedral_angles[e]) // was trying smth funny here
-        //     return (dihedral_angle - rest_dihedral_angles[e]) * sqrt(rest_bending_constant[e]);
-        // else 
-        //     return (rest_dihedral_angles[e] - dihedral_angle) * sqrt(rest_bending_constant[e]);
-        // T current_edge_len = (p2 - p1).norm();
-        return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_bending_constant[e];
+
+        // trying deformed constant rather than rest constant
+        T current_edge_len_sqrd = (p2 - p1).squaredNorm();
+        T current_area_sum = 0.5 * (N1.norm() + N2.norm());
+        T current_bending_constant = current_edge_len_sqrd / current_area_sum;
+        
+        // rest area measure
+        // return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * rest_bending_constant[e];
+        // deformed area measure
+        return (dihedral_angle - rest_dihedral_angles[e]) * (dihedral_angle - rest_dihedral_angles[e]) * current_bending_constant;
     });
 
     return bendingEnergy_func;
@@ -719,7 +723,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
             
     while (!check_feasibility(unflat_tinyAD(x))){ // assuming centered; which is
         printf("  -- scaling for feasibility -- \n");
-        x *= 0.95;
+        x *= 0.99;
     }
 
     VertexPositionGeometry *tmp_geometry = new VertexPositionGeometry(*mesh, unflat_tinyAD(x));
@@ -729,7 +733,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
            bending_lambda = init_bending_lambda,
            membrane_lambda = init_membrane_lambda,
            CP_lambda = init_CP_lambda,
-           G_lambda = init_G_lambda;
+           G_lambda = 0;
     internal_pt = 1.;
 
     vertex_only_assignment = VertexData<bool>(*convex_mesh, false);
@@ -824,9 +828,9 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         
 
         // get G diff energy and derivative
-        double Gdiff_f = (current_G - goal_G).norm2();
-        Eigen::VectorXd Gdiff_g = tinyAD_flatten(per_vertex_G_derivative(tmp_geometry));
-        Eigen::SparseMatrix<double> Gdiff_H = identityMatrix<double>(x.size());
+        // double Gdiff_f = (current_G - goal_G).norm2();
+        // Eigen::VectorXd Gdiff_g = tinyAD_flatten(per_vertex_G_derivative(tmp_geometry));
+        // Eigen::SparseMatrix<double> Gdiff_H = identityMatrix<double>(x.size());
 
         // x - x_0 regularizer
         // Eigen::VectorXd reg_g = Eigen::VectorXd::Zero(x.size());
@@ -836,14 +840,14 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x); //
         auto [membrane_f, membrane_g, membrane_H_proj] = membraneEnergy_func.eval_with_hessian_proj(x); //
           
-        Eigen::SparseMatrix<double> total_H = bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + CP_lambda * CP_H + reg_lambda * reg_H + G_lambda * Gdiff_H; // + barrier_lambda * barrier_H;
-        Eigen::VectorXd total_g = bending_lambda * bending_g + membrane_lambda * membrane_g + CP_lambda * CP_g + G_lambda * Gdiff_g; // reg g is zero at x0 // + barrier_lambda * barrier_g;
-        double total_energy = bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy + G_lambda * Gdiff_f; // reg e is zero at x0 // barrier_lambda * barrier_f;
+        Eigen::SparseMatrix<double> total_H = bending_lambda * bending_H_proj + membrane_lambda * membrane_H_proj + CP_lambda * CP_H;// + reg_lambda * reg_H + G_lambda * Gdiff_H; // + barrier_lambda * barrier_H;
+        Eigen::VectorXd total_g = bending_lambda * bending_g + membrane_lambda * membrane_g + CP_lambda * CP_g ; // + G_lambda * Gdiff_g; // reg g is zero at x0 // + barrier_lambda * barrier_g;
+        double total_energy = bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy; // + G_lambda * Gdiff_f; // reg e is zero at x0 // barrier_lambda * barrier_f;
         
 
         std::cout << ANSI_FG_MAGENTA << "\t- Energy in iter " << i << ": bending= " << bending_lambda << "*" << bending_f << 
                          "\n\t\t\t\t membrane  = " << membrane_lambda << " * " << membrane_f <<
-                         "\n\t\t\t\t G-diff    = " << G_lambda << " * " << Gdiff_f <<
+                        //  "\n\t\t\t\t G-diff    = " << G_lambda << " * " << Gdiff_f <<
                          "\n\t\t\t\t CP        = " << CP_lambda << " * "<< CP_energy << ANSI_RESET << std::endl << 
                          "\n\t\t\t\t\t total: " << bending_lambda * bending_f + membrane_lambda * membrane_f + CP_lambda * CP_energy << ANSI_RESET << std::endl;
         
@@ -886,7 +890,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
                         initial_LS_step_size, 0.9, 200);
                     // smax, decay, max_iter
         x += opt_step * d;
-        initial_LS_step_size = opt_step != 0 ? 10. * opt_step : 0.1; // add 22 steps to the current step size
+        initial_LS_step_size = opt_step != 0 ? 10. * opt_step : 1.; // adds 22 steps to the current step size
         std::cout << ANSI_FG_YELLOW << "step size: " << opt_step << " next init LS step " << initial_LS_step_size << ANSI_RESET << std::endl;
         // update tmp geometry
         VertexData<Vector3> old_positions = tmp_geometry->inputVertexPositions;
@@ -903,12 +907,15 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         // internal_pt *= internal_growth_p;
 
         if (step_norm < 0.06){
-            if (CP_lambda == final_CP_lambda && G_lambda == final_G_lambda){
+            if (CP_lambda == final_CP_lambda){ // && G_lambda == final_G_lambda
+                break;
+            }
+            if (get_raw_CP_energy(*mesh, x, *convex_mesh, *convex_geometry) < 1e-4){
                 break;
             }
             CP_lambda = CP_lambda > final_CP_lambda ? final_CP_lambda : CP_lambda/internal_growth_p;
-            G_lambda = G_lambda > final_G_lambda ? final_G_lambda : G_lambda/internal_growth_p;
-
+            bending_lambda = bending_lambda > final_bending_lambda ? final_bending_lambda : bending_lambda/(2. * internal_growth_p);
+            // G_lambda = G_lambda > final_G_lambda ? final_G_lambda : G_lambda/internal_growth_p;
             std::cout << ANSI_FG_RED << " step norm is small, increasing CP lambda to " << CP_lambda << ANSI_RESET << std::endl;
         }
         // bending_lambda = get_scheduled_weight(init_bending_lambda, final_bending_lambda);
@@ -1070,12 +1077,12 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
         reg_lambda = 0.;
         // Eigen::SparseMatrix<double> reg_H = 2.* identityMatrix<double>(x.size());
         
-        // elastic stuff
-        // auto [bending_f, bending_g] = bendingEnergy_func.eval_with_gradient(x); //
-        // auto [membrane_f, membrane_g] = membraneEnergy_func.eval_with_gradient(x); //
+        // elastic stuff; comment out for peformance when their lambda is 0
+        auto [bending_f, bending_g] = bendingEnergy_func.eval_with_gradient(x); //
+        auto [membrane_f, membrane_g] = membraneEnergy_func.eval_with_gradient(x); //
 
-        Eigen::VectorXd total_g = G_lambda * Gdiff_g + reg_lambda * reg_g; // + bending_lambda * bending_g + membrane_lambda * membrane_g; // reg g is zero at x0 // + barrier_lambda * barrier_g;
-        double total_energy = G_lambda * Gdiff_f + reg_lambda * reg_f; // + bending_lambda * bending_f + membrane_lambda * membrane_f; // reg e is zero at x0 // barrier_lambda * barrier_f;
+        Eigen::VectorXd total_g = G_lambda * Gdiff_g + reg_lambda * reg_g + bending_lambda * bending_g + membrane_lambda * membrane_g; // reg g is zero at x0 // + barrier_lambda * barrier_g;
+        double total_energy = G_lambda * Gdiff_f + reg_lambda * reg_f + bending_lambda * bending_f + membrane_lambda * membrane_f; // reg e is zero at x0 // barrier_lambda * barrier_f;
 
 
         if (!use_static_dists){
@@ -1112,12 +1119,12 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
 
         std::cout << ANSI_FG_MAGENTA << 
                          "\t- Energy in iter " << i << 
-                        //  ": bending= " << bending_lambda << "*" << bending_f << 
-                        //  "\n\t\t\t\t membrane  = " << membrane_lambda << " * " << membrane_f <<
+                         "\n\t\t\t\t bending= " << bending_lambda << "*" << bending_f << 
+                         "\n\t\t\t\t membrane  = " << membrane_lambda << " * " << membrane_f <<
                          "\n\t\t\t\t G-diff    = " << G_lambda  << " * " << Gdiff_f <<
                          "\n\t\t\t\t reg       = " << reg_lambda << " * " << reg_f << ANSI_RESET << std::endl <<
-                         //bending_lambda * bending_f + membrane_lambda * membrane_f + 
-                         "\n\t\t\t\t\t total: " << G_lambda * Gdiff_f + reg_lambda * reg_f << ANSI_RESET << std::endl;
+                         "\n\t\t\t\t\t total:  " << bending_lambda * bending_f + membrane_lambda * membrane_f + 
+                                                   G_lambda * Gdiff_f + reg_lambda * reg_f << ANSI_RESET << std::endl;
         
         Eigen::VectorXd old_x = x;
         Eigen::VectorXd d = -total_g;

@@ -202,6 +202,7 @@ void initialize_state(std::string input_name){
     generate_polyhedron_example(input_name);
     bool triangulate = false;
     preprocess_mesh(mesh, geometry, triangulate, false);
+    center_and_normalize(mesh, geometry);
     // set global G to uniform here
     Forward3DSolver* forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
     forwardSolver->set_uniform_G();
@@ -508,6 +509,27 @@ void myCallback() {
   if (ImGui::Button("save optimized hull")){
     std::string output_name = input_name + "_optimized_dice";
     writeSurfaceMesh(*optimized_mesh, *optimized_geometry, "../meshes/hulls/" + std::string(output_name) +".obj");
+    // save parameters
+    std::ofstream param_file;
+    param_file.open("../meshes/hulls/params_" + std::string(output_name) + ".txt");
+    param_file << "bary reg: " << bary_reg << "\n";
+    param_file << "coplanar reg: " << coplanar_reg << "\n";
+    param_file << "cluster distance reg: " << cluster_distance_reg << "\n";
+    param_file << "unstable attraction thresh: " << unstable_attraction_thresh << "\n";
+    param_file << "fair sides count: " << fair_sides_count << "\n";
+    param_file << "dice energy step: " << dice_energy_step << "\n";
+    param_file << "dice search decay: " << dice_search_decay << "\n";
+    param_file << "sobolev lambda: " << sobolev_lambda << "\n";
+    param_file << "sobolev lambda decay: " << sobolev_lambda_decay << "\n";
+    param_file << "do sobolev grads: " << do_sobolev_dice_grads << "\n";
+    param_file << "adaptive reg: " << adaptive_reg << "\n";
+    param_file << "frozen G: " << frozen_G << "\n";
+    param_file.close();
+    // save G
+    std::ofstream G_file;
+    G_file.open("../meshes/hulls/G_" + std::string(output_name) + ".txt");
+    G_file << G.x << " " << G.y << " " << G.z << "\n";
+    G_file.close();
   }
 }
 
