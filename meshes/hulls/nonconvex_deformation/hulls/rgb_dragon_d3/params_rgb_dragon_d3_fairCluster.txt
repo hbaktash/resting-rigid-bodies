@@ -1,0 +1,12 @@
+bary reg: 0.01
+coplanar reg: 0.01
+cluster distance reg: 0
+unstable attraction thresh: 0
+fair sides count: 3
+dice energy step: 0.01
+dice search decay: 0.98
+sobolev lambda: 2
+sobolev lambda decay: 0.8
+do sobolev grads: 1
+adaptive reg: 0
+frozen G: 1
