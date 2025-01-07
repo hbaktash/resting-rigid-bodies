@@ -37,7 +37,7 @@ std::tuple<std::unique_ptr<ManifoldSurfaceMesh>, std::unique_ptr<VertexPositionG
 generate_11_sided_polyhedron(std::string type);
 
 void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
-                     bool triangulate = false, bool do_remesh = false, double remesh_edge_scale = 3.);
+                     bool triangulate = false, bool do_remesh = false, double remesh_edge_scale = 3., bool normalize = true);
 
 // sphere tesselation generation
 std::vector<Vector3> generate_normals_icosahedral(int resolution);

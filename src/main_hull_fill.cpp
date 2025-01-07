@@ -152,10 +152,13 @@ void initialize_state(std::string hull_input_name, std::string concave_input_nam
     concave_mesh = mesh_ptr.release();
     concave_geometry = geometry_ptr.release();
     bool triangulate = true;
-    // preprocess_mesh(hull_mesh, hull_geometry, triangulate, false, 1.);
+    preprocess_mesh(hull_mesh, hull_geometry, triangulate, false, 1., false);
+    preprocess_mesh(concave_mesh, concave_geometry, triangulate, false, 1., false);
     if (normalize_concave_input){
-        preprocess_mesh(concave_mesh, concave_geometry, triangulate, concave_input_remesh_scale != 1. ? true : false, concave_input_remesh_scale);
+        preprocess_mesh(concave_mesh, concave_geometry, triangulate, concave_input_remesh_scale != 1. ? true : false, concave_input_remesh_scale, true);
     }
+    std::cout << "connected components: " << concave_mesh->nConnectedComponents() << std::endl;
+    std::cout << "boundary loops count: " << concave_mesh->nBoundaryLoops() << std::endl;
 
     auto currentGVpair = find_center_of_mass(*concave_mesh, *concave_geometry);
     current_G = currentGVpair.first;
@@ -400,11 +403,11 @@ int main(int argc, char **argv) {
         if (animate_deform){
             animate_deform = false;
             DeformationSolver* deformationSolver = 
-                        new DeformationSolver(concave_mesh, concave_geometry, hull_mesh, hull_geometry, goal_G);   
+                        new DeformationSolver(concave_mesh, concave_geometry, hull_mesh, hull_geometry, goal_G);  
             initialize_deformation_params(deformationSolver);
             size_t current_fill_iter = 0;
             Eigen::MatrixXd new_points = deformationSolver->solve_for_bending(1);
-
+            
             optimized_concave_mesh = deformationSolver->mesh;
             optimized_concave_geometry = deformationSolver->deformed_geometry;
             ref_remeshed_concave_mesh = deformationSolver->mesh;

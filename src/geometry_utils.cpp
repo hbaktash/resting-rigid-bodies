@@ -242,6 +242,25 @@ void center_and_normalize(SurfaceMesh* mesh, VertexPositionGeometry* geometry){
     }
 }
 
+Vector3 bounding_box_size(VertexData<Vector3> positions){
+    double minX=1e9, maxX = -1e9,
+           minY=1e9, maxY = -1e9,
+           minZ=1e9, maxZ = -1e9;
+    for (Vertex v: positions.getMesh()->vertices()){
+        Vector3 p = positions[v];
+        minX = std::min({minX, p.x});
+        maxX = std::max({maxX, p.x});
+
+        minY = std::min({minY, p.y});
+        maxY = std::max({maxY, p.y});
+
+        minZ = std::min({minZ, p.z});
+        maxZ = std::max({maxZ, p.z});
+    }
+    return Vector3({maxX - minX, maxY - minY, maxZ - minZ});
+}
+
+
 bool check_hollow_tet_vertex(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, Vertex v){
     printf("      at v %d deg: %d\n", v.getIndex(), v.degree());
     if (v.degree() > 3) return false;

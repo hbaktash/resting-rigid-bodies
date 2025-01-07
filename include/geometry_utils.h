@@ -65,6 +65,8 @@ bool G_is_inside(ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry, Ve
 std::pair<Vector3, double> find_center_of_mass(ManifoldSurfaceMesh &input_mesh, VertexPositionGeometry &input_geometry);
 
 void center_and_normalize(SurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);
+Vector3 bounding_box_size(VertexData<Vector3> positions);
+
 
 bool check_hollow_tet_vertex(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, Vertex v);
 bool check_convexity_and_repair(ManifoldSurfaceMesh* input_mesh, VertexPositionGeometry* input_geometry);
@@ -77,3 +79,4 @@ VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, Manifol
                                               double sobolev_lambda, size_t sobolev_p = 2);
 Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurfaceMesh &hull_mesh,
                                               double sobolev_lambda, size_t sobolev_p = 2);
+

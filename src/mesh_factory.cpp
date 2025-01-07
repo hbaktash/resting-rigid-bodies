@@ -381,9 +381,11 @@ generate_polyhedra(std::string poly_str){
 
 
 // generate simple examples
-void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, bool triangulate, bool do_remesh, double remesh_edge_scale){
+void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry, bool triangulate, bool do_remesh, double remesh_edge_scale, bool normalize){
   // readManifoldSurfaceMesh()
-  center_and_normalize(mesh, geometry);
+  if (normalize){
+    center_and_normalize(mesh, geometry);
+  }
   if (triangulate) {
     for (Face f: mesh->faces())
       mesh->triangulate(f);

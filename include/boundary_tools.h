@@ -54,7 +54,8 @@ manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<s
 
 std::vector<std::pair<Vector3, double>> 
 update_normal_prob_assignment(Forward3DSolver *tmp_solver,
-                              std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals);
+                              std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals,
+                              bool take_max_prob_face);
 
 // boundary of regions leading to different faces
 class BoundaryNormal {

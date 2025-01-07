@@ -99,7 +99,7 @@ Vector3 ground_box_shape({10,1,10});
 Vector3 default_face_color({240./256.,178/256.,44./256.});
 
 //
-float scale_for_save = 10.;
+float scale_for_save = 1.;
 
 // example choice
 std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("tet0"),std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("worst_case"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("baby_car"), std::string("rubberDuckie")};
@@ -266,8 +266,7 @@ void visualize_gauss_map(Forward3DSolver* forwardSolver){
 void init_visuals(){
   auto psInputMesh = polyscope::registerSurfaceMesh(
     "init input mesh",
-    geometry->inputVertexPositions, mesh->getFaceVertexList(),
-    polyscopePermutations(*mesh));
+    geometry->inputVertexPositions, mesh->getFaceVertexList());
   psInputMesh->setTransparency(0.75);
   psInputMesh->setEnabled(true);
   auto psHullMesh = polyscope::registerSurfaceMesh(
@@ -1112,13 +1111,32 @@ void myCallback() {
       //   run_IPC_samples_MCMC("example.json", ICOS_samples, max_steps_IPC);
     }
     ImGui::SliderFloat("scale for stl save", &scale_for_save, 0.1, 10.);
+    if (ImGui::Button("get BB values")){
+      VertexPositionGeometry scaled_geo(*mesh);
+      scaled_geo.inputVertexPositions = geometry->inputVertexPositions * scale_for_save;
+      Vector3 bound_box = bounding_box_size(scaled_geo.inputVertexPositions);
+      std::cout << "scale: " << scale_for_save << "\n";
+      std::cout << "bounding box size: " << bound_box << "\n";
+    }
     if (ImGui::Button("save scaled")){
       std::string single_mesh_name = SINGLE_MESH_PATH.substr(SINGLE_MESH_PATH.find_last_of("/")+1);
       single_mesh_name = single_mesh_name.substr(0, single_mesh_name.find_last_of("."));
 
-      std::string save_path = "../meshes/hulls/" + single_mesh_name + "_" +  + "scaled_for3DP.obj";
-      geometry->inputVertexPositions = geometry->inputVertexPositions * scale_for_save;
-      writeSurfaceMesh(*mesh, *geometry, save_path);
+      std::string save_path = "../meshes/hulls/3D_print/" + single_mesh_name + "_scaled_for3DPrint.obj";
+      VertexPositionGeometry scaled_geo(*mesh);
+      scaled_geo.inputVertexPositions = geometry->inputVertexPositions * scale_for_save;
+      // geometry->inputVertexPositions = geometry->inputVertexPositions * scale_for_save;
+      writeSurfaceMesh(*mesh, scaled_geo, save_path);
+      // save the convex hull
+      VertexPositionGeometry scaled_hull_geo(*forwardSolver->hullMesh);
+      scaled_hull_geo.inputVertexPositions = forwardSolver->hullGeometry->inputVertexPositions * scale_for_save;
+      std::string hull_save_path = "../meshes/hulls/3D_print/hull_" + single_mesh_name + "_scaled_for3DPrint.obj";
+      // writeSurfaceMesh(*forwardSolver->hullMesh, scaled_hull_geo, hull_save_path);
+      FaceData<double> face_probs(*forwardSolver->hullMesh, 0.);
+      for (Face f: forwardSolver->hullMesh->faces()){
+          face_probs[f] = boundary_builder->face_region_area[f]/(4.*PI);
+      }
+      write_mesh_obj_with_stability_material(*forwardSolver->hullMesh, face_probs, scaled_hull_geo, hull_save_path);
     }
 }
 
@@ -1131,11 +1149,11 @@ int main(int argc, char* argv[])
     printf("Single precision\n");
   #endif
 
-  args::ArgumentParser parser(   "This is a test program.", "This goes after the options.");
-  args::HelpFlag help(parser,    "help", "Display this help menu", {'h', "help"});
-  args::Flag verbose_arg(parser, "verbose", "print stuff per sample or not", {'v', "verbose"});
-  args::Flag do_bullet(parser,   "do_bullet_sim", "do bullet sim", {"bullet"});
-  args::Flag do_IPC(parser,      "do_IPC_sim", "do IPC sim", {"ipc"});
+  args::ArgumentParser parser(    "This is a test program.", "This goes after the options.");
+  args::HelpFlag help(parser,     "help", "Display this help menu", {'h', "help"});
+  args::Flag verbose_arg(parser,  "verbose", "print stuff per sample or not", {'v', "verbose"});
+  args::Flag do_bullet(parser,    "do_bullet_sim", "do bullet sim", {"bullet"});
+  args::Flag do_IPC(parser,       "do_IPC_sim", "do IPC sim", {"ipc"});
   args::Flag do_just_ours(parser, "do_just_ours", "do just ours", {"just_ours"});
   args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {"samples"});
   args::ValueFlag<std::string> IPC_repo_dir(parser, "absolute_IPC_repo_dir", "abs path to IPC repo (built and ready to run)", {"ipc_dir"}, IPC_REPO_DIR);

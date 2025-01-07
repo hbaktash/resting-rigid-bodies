@@ -79,15 +79,27 @@ normal_prob_assignment(std::string shape_name){
   }
   else if (shape_name == "hendecahedron"){
     normal_to_prob_pairs = {
+      // {Vector3({0, 0, -1})                    , 6./36.}, // top unique quad
+      // {Vector3({0, -0.707107, 0.707107})      , 5./36.}, // bottom 4 faces
+      // {Vector3({0, 0.707107, 0.707107})       , 5./36.}, 
+      // {Vector3({-0.57735, -0.57735, -0.57735}), 4./36.}, // top, right quads
+      // {Vector3({0.57735, -0.57735, -0.57735}) , 4./36.}, 
+      // {Vector3({-0.57735, 0.57735, -0.57735}) , 3./36.}, // top, left quads
+      // {Vector3({0.57735, 0.57735, -0.57735})  , 3./36.}, 
+      // {Vector3({-0.894427, 0, -0.447214})     , 2./36.}, // top ring; 6 faces
+      // {Vector3({0.894427, 0, -0.447214})      , 2./36.}, // triangle   
+      // {Vector3({0.447214, 0, 0.894427})       , 1./36.}, // triangle
+      // {Vector3({-0.447214, 0, 0.894427})      , 1./36.}  // triangle
+      // 0.16: 6/36, 0.13: 5/36, 0.11: 4/36, 0.08: 3/36, 0.05: 2/36, 0.03: 1/36
       {Vector3({0, 0, -1})                    , 6./36.}, // top unique quad
-      {Vector3({0, -0.707107, 0.707107})      , 5./36.}, // bottom 4 faces
-      {Vector3({0, 0.707107, 0.707107})       , 5./36.}, 
       {Vector3({-0.57735, -0.57735, -0.57735}), 4./36.}, // top, right quads
       {Vector3({0.57735, -0.57735, -0.57735}) , 4./36.}, 
-      {Vector3({-0.57735, 0.57735, -0.57735}) , 3./36.}, // top, left quads
-      {Vector3({0.57735, 0.57735, -0.57735})  , 3./36.}, 
-      {Vector3({-0.894427, 0, -0.447214})     , 2./36.}, // top ring; 6 faces
-      {Vector3({0.894427, 0, -0.447214})      , 2./36.}, // triangle   
+      {Vector3({-0.57735, 0.57735, -0.57735}) , 5./36.}, // top, left quads
+      {Vector3({0.57735, 0.57735, -0.57735})  , 5./36.}, 
+      {Vector3({-0.894427, 0, -0.447214})     , 3./36.}, // top ring; 6 faces
+      {Vector3({0.894427, 0, -0.447214})      , 3./36.}, // triangle   
+      {Vector3({0, -0.707107, 0.707107})      , 2./36.}, // bottom 4 faces
+      {Vector3({0, 0.707107, 0.707107})       , 2./36.}, 
       {Vector3({0.447214, 0, 0.894427})       , 1./36.}, // triangle
       {Vector3({-0.447214, 0, 0.894427})      , 1./36.}  // triangle
     };
@@ -290,20 +302,44 @@ manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<s
 
 std::vector<std::pair<Vector3, double>> 
 update_normal_prob_assignment(Forward3DSolver *tmp_solver,
-                              std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals){
+                              std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals,
+                              bool take_max_prob_face){
   std::vector<std::pair<Vector3, double>> updated_assignment;
   for (auto cluster: clustered_face_normals){
     std::vector<Face> faces = std::get<0>(cluster);
     double cluster_goal_prob = std::get<1>(cluster);
     Vector3 normal = std::get<2>(cluster);
-    Vector3 cluster_stables_avg{0., 0., 0.};
-    for (Face f: faces){
-      if (tmp_solver->face_last_face[f] == f){
-        cluster_stables_avg += tmp_solver->hullGeometry->faceNormal(f);
+    
+    BoundaryBuilder tmp_bnd_builder(tmp_solver);
+    tmp_bnd_builder.build_boundary_normals();
+    // // Two choices
+    if (!take_max_prob_face){
+      Vector3 cluster_stables_avg{0., 0., 0.};
+      double prob_sum = 0.;
+      // average the faces
+      for (Face f: faces){
+        if (tmp_solver->face_last_face[f] == f){
+          cluster_stables_avg += tmp_solver->hullGeometry->faceNormal(f) * tmp_bnd_builder.face_region_area[f];
+          prob_sum += tmp_bnd_builder.face_region_area[f];
+        }
       }
+      cluster_stables_avg /= prob_sum;
+      cluster_stables_avg = cluster_stables_avg.normalize();
+      updated_assignment.push_back({cluster_stables_avg, cluster_goal_prob});
     }
-    cluster_stables_avg = cluster_stables_avg.normalize();
-    updated_assignment.push_back({cluster_stables_avg, cluster_goal_prob});
+    else{
+      // take max prob face
+      Face max_prob_face;
+      double max_prob = 0.;
+      for (Face f: faces){
+        if (tmp_bnd_builder.face_region_area[f] > max_prob){
+          max_prob_face = f;
+          max_prob = tmp_bnd_builder.face_region_area[f];
+        }
+      }
+      updated_assignment.push_back({tmp_solver->hullGeometry->faceNormal(max_prob_face), cluster_goal_prob});
+    }
+
   }
   return updated_assignment;
 }

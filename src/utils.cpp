@@ -128,3 +128,50 @@ double binomial_dist(int n, int k) {
     return result;
 }
 
+
+
+// write to file with material stuff
+
+void write_mesh_obj_with_stability_material(geometrycentral::surface::SurfaceMesh& mesh, geometrycentral::surface::FaceData<double> prob,
+                                            geometrycentral::surface::VertexPositionGeometry& geometry, std::string filename) {
+    // Make sure we write out at full precision
+    std::ofstream out(filename);
+    if (!out) throw std::runtime_error("couldn't open output file " + filename);
+    out << std::setprecision(std::numeric_limits<double>::max_digits10);
+
+    // Write header
+    out << "# Mesh exported from geometry-central" << std::endl;
+    out << "#  vertices: " << mesh.nVertices() << std::endl;
+    out << "#     faces: " << mesh.nFaces() << std::endl;
+    out << std::endl;
+
+    // Write vertices
+    for (geometrycentral::surface::Vertex v : mesh.vertices()) {
+        geometrycentral::Vector3 p = geometry.vertexPositions[v];
+        out << "v " << p.x << " " << p.y << " " << p.z << std::endl;
+    }
+
+    // Write faces
+    size_t iC = 0;
+    bool prev_stable = false;
+    for (geometrycentral::surface::Face f : mesh.faces()) {
+        if (prob[f] > 0. && !prev_stable) {
+            out << "usemtl stable" << prob[f] << std::endl;
+            prev_stable = true;
+        }
+        else if (prob[f] == 0. && prev_stable) {
+            out << "usemtl unstable" << std::endl;
+            prev_stable = false;
+        }
+        else if (iC == 0) {
+            out << "usemtl unstable" << std::endl;
+            prev_stable = false;
+        }
+        out << "f";
+        for (geometrycentral::surface::Vertex v : f.adjacentVertices()) {
+            out << " " << (v.getIndex() + 1);
+        }
+        out << std::endl;
+        iC++;
+    }
+}

@@ -42,6 +42,10 @@ geometrycentral::DenseMatrix<double> face_data_to_matrix(geometrycentral::surfac
 double binomial_dist(int n, int k);
 
 
+// IO file
+void write_mesh_obj_with_stability_material(geometrycentral::surface::SurfaceMesh& mesh, geometrycentral::surface::FaceData<double> prob,
+                                            geometrycentral::surface::VertexPositionGeometry& geometry, std::string filename);
+
 
 
 

@@ -81,7 +81,7 @@ float sobolev_lambda = 2.,
       unstable_attraction_thresh = 0.1;
 int sobolev_p = 2;
 // optimization stuff
-
+bool update_with_max_prob_face = true;
 
 
 // example choice
@@ -106,12 +106,9 @@ void visualize_gauss_map(Forward3DSolver* forwardSolver){
 
 void init_visuals(Forward3DSolver* forwardSolver){
   // Register the mesh with polyscope
-  // psInputMesh = polyscope::registerSurfaceMesh(
-  //   "init input mesh",
-  //   geometry->inputVertexPositions, mesh->getFaceVertexList(),
-  //   polyscopePermutations(*mesh));
-  // psInputMesh->setTransparency(0.75);
-  // psInputMesh->setEnabled(true);
+  polyscope::registerSurfaceMesh(
+    "input concave mesh",
+    geometry->inputVertexPositions, mesh->getFaceVertexList());
   polyscope::SurfaceMesh *psHullMesh = polyscope::registerSurfaceMesh(
     "hull mesh",
     forwardSolver->hullGeometry->inputVertexPositions, forwardSolver->hullMesh->getFaceVertexList());
@@ -137,8 +134,9 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
                                        bool show, bool print_probs = false){
   polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>{tmp_solver.get_G()});
   auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
-  curr_hull_psmesh->addVertexVectorQuantity("dfdV", dfdV)->setEnabled(false);
-  curr_hull_psmesh->addVertexVectorQuantity("diffused dfdV", diffused_dfdV)->setEnabled(false);
+  // curr_hull_psmesh->addVertexVectorQuantity("dfdV", dfdV)->setEnabled(false);
+  // if (diffused_dfdV.size() > 0)
+  //   curr_hull_psmesh->addVertexVectorQuantity("diffused dfdV", diffused_dfdV)->setEnabled(false);
 
   curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
   if (policy_general == "manual"){ // first word
@@ -171,7 +169,7 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
     }
     curr_hull_psmesh->addFaceScalarQuantity("Goal cluster probs", goal_cluster_probs)->setColorMap("reds")->setEnabled(false);    
     curr_hull_psmesh->addFaceScalarQuantity("current cluster accum probs", current_cluster_probs)->setColorMap("reds")->setEnabled(true); 
-    polyscope::registerPointCloud("Cluster assignees", assignees);
+    polyscope::registerPointCloud("Cluster assignees", assignees)->setPointColor({0.5,0.80,0.8});
   }
 
   BoundaryBuilder tmp_bnd_builder(&tmp_solver);
@@ -354,9 +352,9 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   tmp_solver.set_uniform_G();
 
   std::cout << ANSI_FG_YELLOW << "initializing for optimization" << ANSI_RESET<< "\n";
-  std::cout << " G was: "<< G << "\n";
-  std::cout << " G is: "<< tmp_solver.get_G() << "\n";
-  polyscope::show();
+  // std::cout << " G was: "<< G << "\n";
+  // std::cout << " G is: "<< tmp_solver.get_G() << "\n";
+  // polyscope::show();
   tmp_solver.initialize_pre_computes();
   
   G = tmp_solver.get_G();
@@ -379,7 +377,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   
   double current_sobolev_lambda = sobolev_lambda;
   double init_LS_step = dice_energy_step;
-  double LS_step_tol = 1e-8;
+  double LS_step_tol = 1e-9;
   Eigen::MatrixX3d dfdV, diffused_dfdV;
   for (size_t iter = 0; iter < step_count; iter++){
     double dice_e;
@@ -395,28 +393,26 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     // update_visuals_with_G(&tmp_solver, &tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << "i: "<< iter << "\tDE: " << dice_e << ANSI_RESET << "\n";
 
-      
     // diffused grads
     if (do_sobolev_dice_grads){
       current_sobolev_lambda *= sobolev_lambda_decay;
-      diffused_dfdV = sobolev_diffuse_gradients(dfdV, *tmp_solver.hullMesh, current_sobolev_lambda, sobolev_p);
-      
-      double raw_norm = tinyAD_flatten(dfdV).norm(); // use eigen flaten
-      double diffused_norm = tinyAD_flatten(diffused_dfdV).norm();
-      
+      diffused_dfdV = sobolev_diffuse_gradients(dfdV, *tmp_solver.hullMesh, current_sobolev_lambda, sobolev_p);      
       dfdV = diffused_dfdV;
     }
     // DEBUG/visuals
     visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, 
                                       dfdV, diffused_dfdV, visualize_steps);
-
     // printf("line search\n");
-    double opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
-                                                   policy_general, normal_prob_pairs, fair_sides_count, 
-                                                   init_LS_step, dice_search_decay, frozen_G, 1000, LS_step_tol);
-    init_LS_step = opt_step_size; // TODO : adaptive step size
+    double opt_step_size = 1.;
+    if (dice_search_decay != 1.){
+      opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
+                                                    policy_general, normal_prob_pairs, fair_sides_count, 
+                                                    init_LS_step, dice_search_decay, frozen_G, 1000, LS_step_tol);
+      init_LS_step = opt_step_size < dice_energy_step/100. ? opt_step_size * 20 : opt_step_size; // TODO : adaptive step size
+    }
 
     std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
+    std::cout << ANSI_FG_MAGENTA << "  sobolev lambda: " << current_sobolev_lambda << ANSI_RESET << "\n";
     if (opt_step_size < LS_step_tol){
       if (!adaptive_reg){
         std::cout << ANSI_FG_RED << "  line search step size too small; breaking" << ANSI_RESET << "\n";
@@ -448,7 +444,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     tmp_solver.initialize_pre_computes();
     if (policy_general != "fair"){
       std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals = manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_pairs);
-      normal_prob_pairs = update_normal_prob_assignment(&tmp_solver, clustered_face_normals);
+      normal_prob_pairs = update_normal_prob_assignment(&tmp_solver, clustered_face_normals, update_with_max_prob_face);
     }
   }
 
@@ -469,6 +465,24 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   // polyscope::getSurfaceMesh("current hull")->addVertexVectorQuantity("ad total grads", -1.*dfdV)->setEnabled(true);
 }
 
+
+void save_params(std::string output_name){
+  std::ofstream param_file;
+  param_file.open("../meshes/hulls/params_" + std::string(output_name) + ".txt");
+  param_file << "bary reg: " << bary_reg << "\n";
+  param_file << "coplanar reg: " << coplanar_reg << "\n";
+  param_file << "cluster distance reg: " << cluster_distance_reg << "\n";
+  param_file << "unstable attraction thresh: " << unstable_attraction_thresh << "\n";
+  param_file << "fair sides count: " << fair_sides_count << "\n";
+  param_file << "dice energy step: " << dice_energy_step << "\n";
+  param_file << "dice search decay: " << dice_search_decay << "\n";
+  param_file << "sobolev lambda: " << sobolev_lambda << "\n";
+  param_file << "sobolev lambda decay: " << sobolev_lambda_decay << "\n";
+  param_file << "do sobolev grads: " << do_sobolev_dice_grads << "\n";
+  param_file << "adaptive reg: " << adaptive_reg << "\n";
+  param_file << "frozen G: " << frozen_G << "\n";
+  param_file.close();
+}
 
 // A user-defined callback, for creating control panels (etc)
 // Use ImGUI commands to build whatever you want here, see
@@ -501,30 +515,18 @@ void myCallback() {
   ImGui::SliderFloat("sobolev lambda", &sobolev_lambda, 0., 50.);
   ImGui::SliderFloat("decay sobolev lambda", &sobolev_lambda_decay, 0., 1.);
   ImGui::Checkbox("frozen G", &frozen_G);
+  ImGui::Checkbox("update clusterN with max prob face", &update_with_max_prob_face);
   ImGui::Checkbox("adaptive reg", &adaptive_reg);
   ImGui::Checkbox("visualize steps", &visualize_steps);
   if (ImGui::Button("dice energy opt")){
     dice_energy_opt(policy, bary_reg, coplanar_reg, frozen_G, DE_step_count);
   }
   if (ImGui::Button("save optimized hull")){
-    std::string output_name = input_name + "_optimized_dice";
+    std::string output_name = input_name + "_d" + std::to_string(fair_sides_count)+"_"+policy_general;
     writeSurfaceMesh(*optimized_mesh, *optimized_geometry, "../meshes/hulls/" + std::string(output_name) +".obj");
     // save parameters
-    std::ofstream param_file;
-    param_file.open("../meshes/hulls/params_" + std::string(output_name) + ".txt");
-    param_file << "bary reg: " << bary_reg << "\n";
-    param_file << "coplanar reg: " << coplanar_reg << "\n";
-    param_file << "cluster distance reg: " << cluster_distance_reg << "\n";
-    param_file << "unstable attraction thresh: " << unstable_attraction_thresh << "\n";
-    param_file << "fair sides count: " << fair_sides_count << "\n";
-    param_file << "dice energy step: " << dice_energy_step << "\n";
-    param_file << "dice search decay: " << dice_search_decay << "\n";
-    param_file << "sobolev lambda: " << sobolev_lambda << "\n";
-    param_file << "sobolev lambda decay: " << sobolev_lambda_decay << "\n";
-    param_file << "do sobolev grads: " << do_sobolev_dice_grads << "\n";
-    param_file << "adaptive reg: " << adaptive_reg << "\n";
-    param_file << "frozen G: " << frozen_G << "\n";
-    param_file.close();
+    save_params(output_name);
+
     // save G
     std::ofstream G_file;
     G_file.open("../meshes/hulls/G_" + std::string(output_name) + ".txt");
