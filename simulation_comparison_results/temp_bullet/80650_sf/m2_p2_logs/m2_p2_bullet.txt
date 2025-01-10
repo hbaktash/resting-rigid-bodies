@@ -1,0 +1,42 @@
+ -- f9	-> bullet_prob: 0.166667	-> my_prob : 0.16124
+ -- f20	-> bullet_prob: 0	-> my_prob : 0.00918125
+ -- f21	-> bullet_prob: 0	-> my_prob : 0.0020482
+ -- f52	-> bullet_prob: 0.0651754	-> my_prob : 0.148947
+ -- f56	-> bullet_prob: 0.0253728	-> my_prob : 0.00790535
+ -- f60	-> bullet_prob: 0.115921	-> my_prob : 0.182804
+ -- f69	-> bullet_prob: 0	-> my_prob : 0.0189277
+ -- f81	-> bullet_prob: 0	-> my_prob : 0.007681
+ -- f95	-> bullet_prob: 0	-> my_prob : 0.000492913
+ -- f96	-> bullet_prob: 0	-> my_prob : 0.00200784
+ -- f97	-> bullet_prob: 0	-> my_prob : 0.00899947
+ -- f100	-> bullet_prob: 0.0452741	-> my_prob : 0.0476685
+ -- f110	-> bullet_prob: 0	-> my_prob : 0.0160965
+ -- f147	-> bullet_prob: 0	-> my_prob : 0.00532519
+ -- f150	-> bullet_prob: 0	-> my_prob : 0.0125924
+ -- f195	-> bullet_prob: 0	-> my_prob : 0.00299456
+ -- f202	-> bullet_prob: 0	-> my_prob : 0.0486704
+ -- f216	-> bullet_prob: 0	-> my_prob : 0.0670924
+ -- f217	-> bullet_prob: 0	-> my_prob : 0.00173171
+ -- f277	-> bullet_prob: 0	-> my_prob : 0.00841878
+ -- f287	-> bullet_prob: 0.0507456	-> my_prob : 0.056784
+ -- f294	-> bullet_prob: 0	-> my_prob : 0.00181639
+ -- f312	-> bullet_prob: 0	-> my_prob : 0.0485301
+ -- f325	-> bullet_prob: 0	-> my_prob : 0.00388771
+ -- f333	-> bullet_prob: 0	-> my_prob : 0.00426044
+ -- f370	-> bullet_prob: 0	-> my_prob : 0.00868499
+ -- f401	-> bullet_prob: 0.0199013	-> my_prob : 0.0502759
+ -- f412	-> bullet_prob: 0	-> my_prob : 0.0343445
+ -- f417	-> bullet_prob: 0	-> my_prob : 0.00973846
+ -- f420	-> bullet_prob: 0	-> my_prob : 0.00109113
+ -- f428	-> bullet_prob: 0	-> my_prob : 0.0102379
+ -- f437	-> bullet_prob: 0	-> my_prob : 0.00545959
+ -- f450	-> bullet_prob: 0	-> my_prob : 0.000816362
+ -- f646	-> bullet_prob: 0	-> my_prob : 0.00148451
+ -- f647	-> bullet_prob: 0	-> my_prob : 0.00176274
+
+ --- KL div bullet|ours: -0.0980473	 ours|bullet: 0.247252
+
+ --- mesh size:	2310 --- hull size:	337
+ --- total Bullet time:	0.111121
+ --- invalid count:	29
+ --- ratio weights: 3.70732

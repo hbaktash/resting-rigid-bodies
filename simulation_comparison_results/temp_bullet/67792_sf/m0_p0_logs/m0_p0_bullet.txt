@@ -1,0 +1,41 @@
+ -- f10	-> bullet_prob: 0	-> my_prob : 0.00605146
+ -- f12	-> bullet_prob: 0	-> my_prob : 0.0390893
+ -- f19	-> bullet_prob: 0.0253728	-> my_prob : 0.0509245
+ -- f43	-> bullet_prob: 0	-> my_prob : 0.00627969
+ -- f61	-> bullet_prob: 0.0507456	-> my_prob : 0.00480826
+ -- f65	-> bullet_prob: 0	-> my_prob : 0.00711303
+ -- f70	-> bullet_prob: 0.0253728	-> my_prob : 0.0480412
+ -- f76	-> bullet_prob: 0	-> my_prob : 0.0124362
+ -- f119	-> bullet_prob: 0	-> my_prob : 0.00718672
+ -- f121	-> bullet_prob: 0	-> my_prob : 0.0426532
+ -- f122	-> bullet_prob: 0	-> my_prob : 0.00848868
+ -- f123	-> bullet_prob: 0	-> my_prob : 0.040992
+ -- f166	-> bullet_prob: 0	-> my_prob : 0.0447137
+ -- f203	-> bullet_prob: 0	-> my_prob : 0.0067884
+ -- f241	-> bullet_prob: 0	-> my_prob : 0.0383909
+ -- f246	-> bullet_prob: 0.0253728	-> my_prob : 0.0430225
+ -- f249	-> bullet_prob: 0.0706469	-> my_prob : 0.0517658
+ -- f255	-> bullet_prob: 0.0199013	-> my_prob : 0.0502262
+ -- f333	-> bullet_prob: 0	-> my_prob : 0.0538445
+ -- f360	-> bullet_prob: 0	-> my_prob : 0.0467302
+ -- f400	-> bullet_prob: 0	-> my_prob : 0.0491849
+ -- f433	-> bullet_prob: 0.0253728	-> my_prob : 0.0414918
+ -- f434	-> bullet_prob: 0	-> my_prob : 0.00390763
+ -- f489	-> bullet_prob: 0.0452741	-> my_prob : 0.0517333
+ -- f544	-> bullet_prob: 0.0253728	-> my_prob : 0.00310102
+ -- f786	-> bullet_prob: 0	-> my_prob : 0.0372744
+ -- f787	-> bullet_prob: 0	-> my_prob : 0.00853104
+ -- f795	-> bullet_prob: 0	-> my_prob : 0.0450056
+ -- f808	-> bullet_prob: 0	-> my_prob : 0.0442656
+ -- f810	-> bullet_prob: 0	-> my_prob : 0.00749992
+ -- f852	-> bullet_prob: 0.0253728	-> my_prob : 0.0415594
+ -- f871	-> bullet_prob: 0.0253728	-> my_prob : 0.00631385
+ -- f1000	-> bullet_prob: 0.0253728	-> my_prob : 0.0443565
+ -- f1147	-> bullet_prob: 0.0253728	-> my_prob : 0.00622856
+
+ --- KL div bullet|ours: 0.154906	 ours|bullet: 0.156474
+
+ --- mesh size:	26521 --- hull size:	583
+ --- total Bullet time:	0.153783
+ --- invalid count:	32
+ --- ratio weights: 1.9105

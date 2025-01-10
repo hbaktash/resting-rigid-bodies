@@ -1,0 +1,44 @@
+ -- f47	-> bullet_prob: 0	-> my_prob : 0.0177034
+ -- f75	-> bullet_prob: 0.0706469	-> my_prob : 0.0399484
+ -- f184	-> bullet_prob: 0.0452741	-> my_prob : 0.0445087
+ -- f186	-> bullet_prob: 0	-> my_prob : 0.0244486
+ -- f187	-> bullet_prob: 0.0253728	-> my_prob : 0.0353604
+ -- f190	-> bullet_prob: 0	-> my_prob : 0.0395011
+ -- f299	-> bullet_prob: 0	-> my_prob : 0.00257491
+ -- f346	-> bullet_prob: 0.0507456	-> my_prob : 0.118625
+ -- f367	-> bullet_prob: 0	-> my_prob : 0.00102292
+ -- f373	-> bullet_prob: 0	-> my_prob : 0.0214021
+ -- f405	-> bullet_prob: 0	-> my_prob : 0.0389261
+ -- f598	-> bullet_prob: 0	-> my_prob : 0.00364779
+ -- f600	-> bullet_prob: 0	-> my_prob : 0.0455949
+ -- f697	-> bullet_prob: 0	-> my_prob : 0.00498821
+ -- f700	-> bullet_prob: 0.0253728	-> my_prob : 0.0966612
+ -- f714	-> bullet_prob: 0	-> my_prob : 0.0682089
+ -- f723	-> bullet_prob: 0	-> my_prob : 0.0737357
+ -- f728	-> bullet_prob: 0	-> my_prob : 0.000967566
+ -- f778	-> bullet_prob: 0	-> my_prob : 0.000560053
+ -- f780	-> bullet_prob: 0	-> my_prob : 0.10535
+ -- f791	-> bullet_prob: 0	-> my_prob : 0.000227372
+ -- f792	-> bullet_prob: 0	-> my_prob : 0.0215399
+ -- f793	-> bullet_prob: 0	-> my_prob : 0.00031045
+ -- f803	-> bullet_prob: 0.0706469	-> my_prob : 0.0812284
+ -- f811	-> bullet_prob: 0	-> my_prob : 0.000606449
+ -- f815	-> bullet_prob: 0	-> my_prob : 4.74097e-05
+ -- f832	-> bullet_prob: 0	-> my_prob : 0.0493218
+ -- f834	-> bullet_prob: 0	-> my_prob : 0.0369951
+ -- f838	-> bullet_prob: 0	-> my_prob : 0.00186649
+ -- f850	-> bullet_prob: 0	-> my_prob : 0.00150687
+ -- f852	-> bullet_prob: 0	-> my_prob : 0.000921128
+ -- f853	-> bullet_prob: 0	-> my_prob : 0.00273945
+ -- f894	-> bullet_prob: 0	-> my_prob : 0.0028325
+ -- f930	-> bullet_prob: 0	-> my_prob : 0.0106254
+ -- f992	-> bullet_prob: 0	-> my_prob : 0.000668059
+ -- f993	-> bullet_prob: 0	-> my_prob : 0.00183853
+ -- f1000	-> bullet_prob: 0	-> my_prob : 0.00298856
+
+ --- KL div bullet|ours: -0.0542608	 ours|bullet: 0.229556
+
+ --- mesh size:	14869 --- hull size:	584
+ --- total Bullet time:	0.138499
+ --- invalid count:	35
+ --- ratio weights: 5.23204

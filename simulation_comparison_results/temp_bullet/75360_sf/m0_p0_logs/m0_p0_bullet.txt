@@ -1,0 +1,44 @@
+ -- f20	-> bullet_prob: 0	-> my_prob : 0.00356549
+ -- f60	-> bullet_prob: 0.237314	-> my_prob : 0.223986
+ -- f86	-> bullet_prob: 0	-> my_prob : 0.00555584
+ -- f87	-> bullet_prob: 0	-> my_prob : 0.0316563
+ -- f91	-> bullet_prob: 0	-> my_prob : 0.00448037
+ -- f93	-> bullet_prob: 0	-> my_prob : 0.00112336
+ -- f99	-> bullet_prob: 0	-> my_prob : 0.000437306
+ -- f127	-> bullet_prob: 0	-> my_prob : 0.00288938
+ -- f149	-> bullet_prob: 0	-> my_prob : 0.00230247
+ -- f150	-> bullet_prob: 0	-> my_prob : 0.00210093
+ -- f152	-> bullet_prob: 0.0253728	-> my_prob : 0.058111
+ -- f172	-> bullet_prob: 0.121393	-> my_prob : 0.0792945
+ -- f232	-> bullet_prob: 0	-> my_prob : 0.0274917
+ -- f241	-> bullet_prob: 0	-> my_prob : 0.000512863
+ -- f245	-> bullet_prob: 0	-> my_prob : 0.00337387
+ -- f257	-> bullet_prob: 0.0507456	-> my_prob : 0.0362615
+ -- f322	-> bullet_prob: 0.0199013	-> my_prob : 0.00542685
+ -- f325	-> bullet_prob: 0.0253728	-> my_prob : 0.00400466
+ -- f326	-> bullet_prob: 0	-> my_prob : 0.000986353
+ -- f331	-> bullet_prob: 0.0706469	-> my_prob : 0.0669539
+ -- f479	-> bullet_prob: 0	-> my_prob : 0.0246775
+ -- f481	-> bullet_prob: 0.0253728	-> my_prob : 0.0301833
+ -- f483	-> bullet_prob: 0	-> my_prob : 0.000664986
+ -- f485	-> bullet_prob: 0	-> my_prob : 0.00158609
+ -- f645	-> bullet_prob: 0.0706469	-> my_prob : 0.0802893
+ -- f651	-> bullet_prob: 0	-> my_prob : 0.00434027
+ -- f673	-> bullet_prob: 0	-> my_prob : 0.0110806
+ -- f676	-> bullet_prob: 0	-> my_prob : 0.0212287
+ -- f780	-> bullet_prob: 0.0199013	-> my_prob : 0.0016677
+ -- f790	-> bullet_prob: 0.0253728	-> my_prob : 0.00262206
+ -- f792	-> bullet_prob: 0	-> my_prob : 0.00196596
+ -- f892	-> bullet_prob: 0	-> my_prob : 0.00453966
+ -- f995	-> bullet_prob: 0	-> my_prob : 0.00548617
+ -- f1003	-> bullet_prob: 0	-> my_prob : 0.00465008
+ -- f1015	-> bullet_prob: 0.0199013	-> my_prob : 0.0656006
+ -- f1034	-> bullet_prob: 0	-> my_prob : 0.00174191
+ -- f1335	-> bullet_prob: 0.192039	-> my_prob : 0.17716
+
+ --- KL div bullet|ours: 0.223174	 ours|bullet: 0.0406021
+
+ --- mesh size:	41842 --- hull size:	712
+ --- total Bullet time:	0.150429
+ --- invalid count:	19
+ --- ratio weights: 4.43752
