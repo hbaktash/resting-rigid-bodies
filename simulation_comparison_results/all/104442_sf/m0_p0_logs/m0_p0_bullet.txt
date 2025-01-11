@@ -1,0 +1,42 @@
+ -- f4	-> bullet_prob: 0	-> my_prob : 0.0319702
+ -- f7	-> bullet_prob: 0.0905482	-> my_prob : 0.152898
+ -- f8	-> bullet_prob: 0.0253728	-> my_prob : 0.124238
+ -- f13	-> bullet_prob: 0.0960197	-> my_prob : 0.0833443
+ -- f14	-> bullet_prob: 0	-> my_prob : 0.0653545
+ -- f32	-> bullet_prob: 0.0452741	-> my_prob : 0.041152
+ -- f39	-> bullet_prob: 0	-> my_prob : 0.00419081
+ -- f41	-> bullet_prob: 0	-> my_prob : 0.00609511
+ -- f44	-> bullet_prob: 0	-> my_prob : 0.00528978
+ -- f57	-> bullet_prob: 0	-> my_prob : 0.139484
+ -- f76	-> bullet_prob: 0	-> my_prob : 0.00315668
+ -- f111	-> bullet_prob: 0	-> my_prob : 0.00129446
+ -- f112	-> bullet_prob: 0	-> my_prob : 0.00321467
+ -- f158	-> bullet_prob: 0	-> my_prob : 0.00215173
+ -- f159	-> bullet_prob: 0	-> my_prob : 0.00827527
+ -- f165	-> bullet_prob: 0	-> my_prob : 0.00484291
+ -- f196	-> bullet_prob: 0	-> my_prob : 0.00566197
+ -- f197	-> bullet_prob: 0.0253728	-> my_prob : 0.00627502
+ -- f198	-> bullet_prob: 0	-> my_prob : 0.00723556
+ -- f199	-> bullet_prob: 0	-> my_prob : 0.00395401
+ -- f251	-> bullet_prob: 0	-> my_prob : 0.00120407
+ -- f334	-> bullet_prob: 0	-> my_prob : 0.000261662
+ -- f336	-> bullet_prob: 0.0253728	-> my_prob : 0.0029743
+ -- f377	-> bullet_prob: 0	-> my_prob : 0.00149634
+ -- f379	-> bullet_prob: 0.0253728	-> my_prob : 0.00928354
+ -- f382	-> bullet_prob: 0	-> my_prob : 0.0133732
+ -- f386	-> bullet_prob: 0	-> my_prob : 0.00353852
+ -- f387	-> bullet_prob: 0	-> my_prob : 0.00190534
+ -- f518	-> bullet_prob: 0	-> my_prob : 0.0273171
+ -- f520	-> bullet_prob: 0	-> my_prob : 0.00512143
+ -- f521	-> bullet_prob: 0	-> my_prob : 0.00583818
+ -- f858	-> bullet_prob: 0	-> my_prob : 0.00346153
+ -- f880	-> bullet_prob: 0	-> my_prob : 0.0020007
+ -- f909	-> bullet_prob: 0.0960197	-> my_prob : 0.0846899
+ -- f969	-> bullet_prob: 0.0199013	-> my_prob : 0.137455
+
+ --- KL div bullet|ours: 0.0191199	 ours|bullet: 0.492251
+
+ --- mesh size:	13984 --- hull size:	524
+ --- total Bullet time:	0.130714
+ --- invalid count:	36
+ --- ratio weights: 4.18072

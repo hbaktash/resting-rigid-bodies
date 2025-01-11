@@ -1,0 +1,6 @@
+ -- f778	-> IPC_prob: 0.497708	-> my_prob : 0.499644
+ -- f1299	-> IPC_prob: 0	-> my_prob : 0.262795
+ -- f1300	-> IPC_prob: 0.502292	-> my_prob : 0.237562
+
+ --- mesh size:	2188 --- hull size:	672
+ --- time:	202029

@@ -1,0 +1,41 @@
+ -- f20	-> IPC_prob: 0.0845352	-> my_prob : 0.0846899
+ -- f75	-> IPC_prob: 0.00217703	-> my_prob : 0.00315668
+ -- f85	-> IPC_prob: 0.000980862	-> my_prob : 0.00419081
+ -- f101	-> IPC_prob: 0.142121	-> my_prob : 0.135264
+ -- f107	-> IPC_prob: 0.00635305	-> my_prob : 0.0322195
+ -- f123	-> IPC_prob: 0.0201263	-> my_prob : 0.0653545
+ -- f126	-> IPC_prob: 0.0658667	-> my_prob : 0.00928354
+ -- f139	-> IPC_prob: 0.264443	-> my_prob : 0.152898
+ -- f140	-> IPC_prob: 0.00995787	-> my_prob : 0.124238
+ -- f199	-> IPC_prob: 0.138662	-> my_prob : 0.137455
+ -- f218	-> IPC_prob: 0.0864043	-> my_prob : 0.0833443
+ -- f219	-> IPC_prob: 0.000598479	-> my_prob : 0.0029743
+ -- f220	-> IPC_prob: 0	-> my_prob : 0.000261662
+ -- f231	-> IPC_prob: 0.000940872	-> my_prob : 0.00609511
+ -- f238	-> IPC_prob: 0.000753633	-> my_prob : 0.0133732
+ -- f390	-> IPC_prob: 0	-> my_prob : 0.00149634
+ -- f391	-> IPC_prob: 0	-> my_prob : 0.00190534
+ -- f393	-> IPC_prob: 0.000903497	-> my_prob : 0.00129446
+ -- f394	-> IPC_prob: 0.0170436	-> my_prob : 0.00566197
+ -- f395	-> IPC_prob: 0.00254952	-> my_prob : 0.00627503
+ -- f400	-> IPC_prob: 0.00683575	-> my_prob : 0.00353852
+ -- f454	-> IPC_prob: 0.00520224	-> my_prob : 0.00215173
+ -- f456	-> IPC_prob: 0.0175846	-> my_prob : 0.00827527
+ -- f464	-> IPC_prob: 0.117782	-> my_prob : 0.041152
+ -- f465	-> IPC_prob: 0	-> my_prob : 0.00512143
+ -- f651	-> IPC_prob: 0	-> my_prob : 0.00120407
+ -- f732	-> IPC_prob: 0	-> my_prob : 0.00528978
+ -- f734	-> IPC_prob: 0	-> my_prob : 0.00321467
+ -- f753	-> IPC_prob: 0.000868508	-> my_prob : 0.00723556
+ -- f798	-> IPC_prob: 0.00417688	-> my_prob : 0.00484291
+ -- f807	-> IPC_prob: 0.000868508	-> my_prob : 0.00583818
+ -- f808	-> IPC_prob: 0	-> my_prob : 0.0273171
+ -- f1012	-> IPC_prob: 0.000835698	-> my_prob : 0.00395401
+ -- f1293	-> IPC_prob: 0.000748603	-> my_prob : 0.00346153
+ -- f1352	-> IPC_prob: 0.000679824	-> my_prob : 0.0020007
+
+ --- KL div ipc|ours: 0.373938	 ours|ipc: 0.378946
+
+ --- mesh size:	13984 --- hull size:	703
+ --- total IPC time:	13165.8
+ --- invalid count:	273

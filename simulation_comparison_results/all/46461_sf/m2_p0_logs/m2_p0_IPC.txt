@@ -1,0 +1,20 @@
+ -- f8	-> IPC_prob: 0.19975	-> my_prob : 0.196336
+ -- f88	-> IPC_prob: 0.0158008	-> my_prob : 0.0175678
+ -- f137	-> IPC_prob: 0.546349	-> my_prob : 0.247316
+ -- f256	-> IPC_prob: 0.00084168	-> my_prob : 0.00144468
+ -- f259	-> IPC_prob: 0.0238301	-> my_prob : 0.0150958
+ -- f261	-> IPC_prob: 0.0254941	-> my_prob : 0.042441
+ -- f306	-> IPC_prob: 0	-> my_prob : 0.0125654
+ -- f312	-> IPC_prob: 0.0304224	-> my_prob : 0.0384824
+ -- f422	-> IPC_prob: 0	-> my_prob : 0.00038168
+ -- f423	-> IPC_prob: 0.00178255	-> my_prob : 0.00949594
+ -- f496	-> IPC_prob: 0.0123298	-> my_prob : 0.00708142
+ -- f506	-> IPC_prob: 0.00405149	-> my_prob : 0.00530602
+ -- f575	-> IPC_prob: 0.124022	-> my_prob : 0.247325
+ -- f648	-> IPC_prob: 0.00576925	-> my_prob : 0.126985
+ -- f725	-> IPC_prob: 0.00269142	-> my_prob : 0.00489433
+ -- f856	-> IPC_prob: 0.00611568	-> my_prob : 0.0157228
+ -- f861	-> IPC_prob: 0.000748603	-> my_prob : 0.0115586
+
+ --- mesh size:	16316 --- hull size:	546
+ --- time:	95044.1

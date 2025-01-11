@@ -1,0 +1,23 @@
+ -- f3	-> IPC_prob: 0.297077	-> my_prob : 0.295779
+ -- f21	-> IPC_prob: 0.0321066	-> my_prob : 0.0792403
+ -- f45	-> IPC_prob: 0.0107239	-> my_prob : 0.145138
+ -- f73	-> IPC_prob: 0	-> my_prob : 0.0113882
+ -- f81	-> IPC_prob: 0.00395661	-> my_prob : 0.01837
+ -- f84	-> IPC_prob: 0	-> my_prob : 0.000670354
+ -- f94	-> IPC_prob: 0	-> my_prob : 0.000493434
+ -- f115	-> IPC_prob: 0.120095	-> my_prob : 0.0648771
+ -- f183	-> IPC_prob: 0.00578355	-> my_prob : 0.0194584
+ -- f314	-> IPC_prob: 0.00239482	-> my_prob : 0.00590908
+ -- f316	-> IPC_prob: 0	-> my_prob : 0.00118862
+ -- f333	-> IPC_prob: 0.110665	-> my_prob : 0.194783
+ -- f343	-> IPC_prob: 0.412377	-> my_prob : 0.11779
+ -- f361	-> IPC_prob: 0	-> my_prob : 0.00802515
+ -- f487	-> IPC_prob: 0	-> my_prob : 0.000459259
+ -- f489	-> IPC_prob: 0.000810522	-> my_prob : 0.00749226
+ -- f494	-> IPC_prob: 0.00400974	-> my_prob : 0.0142353
+
+ --- KL div ipc|ours: 0.450329	 ours|ipc: 0.462836
+
+ --- mesh size:	8250 --- hull size:	250
+ --- total IPC time:	29132.8
+ --- invalid count:	0

@@ -1,0 +1,16 @@
+ -- f3	-> bullet_prob: 0.0694366	-> my_prob : 0.0499295
+ -- f5	-> bullet_prob: 0.000748603	-> my_prob : 0.00271923
+ -- f14	-> bullet_prob: 0.000868508	-> my_prob : 0.00753373
+ -- f26	-> bullet_prob: 0.00800265	-> my_prob : 0.0462817
+ -- f37	-> bullet_prob: 0.0109821	-> my_prob : 0.0763865
+ -- f62	-> bullet_prob: 0.00673499	-> my_prob : 0.0288452
+ -- f64	-> bullet_prob: 0.0246547	-> my_prob : 0.166091
+ -- f178	-> bullet_prob: 0.361835	-> my_prob : 0.276956
+ -- f336	-> bullet_prob: 0.332524	-> my_prob : 0.345257
+
+ --- KL div bullet|ours: 0.0121209	 ours|bullet: 0.530418
+
+ --- mesh size:	1913 --- hull size:	194
+ --- total Bullet time:	2.75885
+ --- invalid count:	1012
+ --- ratio weights: 2.06845

@@ -1,0 +1,8 @@
+ -- f26	-> IPC_prob: 0.0972218	-> my_prob : 0.128161
+ -- f117	-> IPC_prob: 0.145346	-> my_prob : 0.141306
+ -- f150	-> IPC_prob: 0.254396	-> my_prob : 0.217824
+ -- f155	-> IPC_prob: 0.211848	-> my_prob : 0.221192
+ -- f169	-> IPC_prob: 0.291188	-> my_prob : 0.291517
+
+ --- mesh size:	5181 --- hull size:	93
+ --- time:	15737.5

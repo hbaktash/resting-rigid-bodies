@@ -1,0 +1,12 @@
+ -- f7	-> IPC_prob: 0.198591	-> my_prob : 0.192925
+ -- f36	-> IPC_prob: 0.155586	-> my_prob : 0.148402
+ -- f42	-> IPC_prob: 0.242197	-> my_prob : 0.247953
+ -- f59	-> IPC_prob: 0.0670521	-> my_prob : 0.0845866
+ -- f72	-> IPC_prob: 0.247844	-> my_prob : 0.24475
+ -- f79	-> IPC_prob: 0.0887308	-> my_prob : 0.081384
+
+ --- KL div ipc|ours: 0.0026203	 ours|ipc: 0.00276571
+
+ --- mesh size:	522 --- hull size:	62
+ --- total IPC time:	1336.64
+ --- invalid count:	787
