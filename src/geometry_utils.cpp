@@ -381,17 +381,13 @@ DenseMatrix<double> solve_dense_b(LinearSolver<double> *solver, DenseMatrix<doub
 }
 
 
-Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurfaceMesh &hull_mesh, 
-                                              double sobolev_lambda, size_t sobolev_p){
-    if (sobolev_lambda == 0.){
-        return grads;
-    }
-    size_t n = hull_mesh.nVertices(), 
-           e = hull_mesh.nEdges();
+SparseMatrix<double> graph_laplacian(ManifoldSurfaceMesh &mesh){
+    size_t n = mesh.nVertices(), 
+           e = mesh.nEdges();
     SparseMatrix<double> graph_L(n, n);
     std::vector<Eigen::Triplet<double>> gL_tripletList;
     gL_tripletList.reserve(4*e);
-    for (Edge e: hull_mesh.edges()){
+    for (Edge e: mesh.edges()){
         Vertex v1 = e.halfedge().vertex(),
                v2 = e.halfedge().twin().vertex();
         gL_tripletList.push_back(Eigen::Triplet<double>(v1.getIndex(), v2.getIndex(), -1.));
@@ -400,9 +396,24 @@ Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurface
         gL_tripletList.push_back(Eigen::Triplet<double>(v2.getIndex(), v2.getIndex(), 1.));
     }
     graph_L.setFromTriplets(gL_tripletList.begin(), gL_tripletList.end());
+    return graph_L;
+}
 
+
+
+
+Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry,
+                                              double sobolev_lambda, size_t sobolev_p){
+    if (sobolev_lambda == 0.){
+        return grads;
+    }
+    size_t n = mesh.nVertices(), 
+           e = mesh.nEdges();
+    SparseMatrix<double> L = graph_laplacian(mesh);
+    // geometry
+    // SparseMatrix<double> L = geometry.requireLaplaceMatrix();
     // Sobolev operator
-    SparseMatrix<double> sobolevOp = sobolev_lambda * graph_L + identityMatrix<double>(n);
+    SparseMatrix<double> sobolevOp = sobolev_lambda * L + identityMatrix<double>(n);
     PositiveDefiniteSolver<double> sobolevSolver(sobolevOp);
     DenseMatrix<double> sobolev_grads;
     for (size_t i = 0; i < sobolev_p; i++){
@@ -413,8 +424,9 @@ Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurface
 }
 
 
-VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, ManifoldSurfaceMesh &hull_mesh, double sobolev_lambda, size_t sobolev_p){
-    Eigen::MatrixXd sobolev_grads = sobolev_diffuse_gradients(vertex_data_to_matrix(grads), hull_mesh, sobolev_lambda, sobolev_p);
+VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, ManifoldSurfaceMesh &hull_mesh, VertexPositionGeometry &geometry,
+                                              double sobolev_lambda, size_t sobolev_p){
+    Eigen::MatrixXd sobolev_grads = sobolev_diffuse_gradients(vertex_data_to_matrix(grads), hull_mesh, geometry, sobolev_lambda, sobolev_p);
     VertexData<Vector3> sobolev_grads_vd(hull_mesh);
     for (Vertex v: hull_mesh.vertices()){
         sobolev_grads_vd[v] = vec2vec3(sobolev_grads.row(v.getIndex()));

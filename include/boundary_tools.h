@@ -100,35 +100,15 @@ class BoundaryBuilder {
         // FaceData<std::vector<BoundaryNormal*>> face_attraction_boundary; // for future passes over face region boundaries  
         FaceData<std::vector<std::tuple<BoundaryNormal*, BoundaryNormal*, double>>> face_chain_area;
         FaceData<double> face_region_area;
-        // //TESTING speed up
-        // FaceData<autodiff::Vector2var> face_region_area_complex_value_ad;
-        // // FaceData<autodiff::var> face_region_area_ad;
+
+        // to store local minima distances to neighboring regions
+        FaceData<FaceData<double>> MS_neighbor_distances;
         
-        // autodiff::MatrixX3var var_positions;     // = vertex_data_to_matrix(forward_solver->hullGeometry->inputVertexPositions);
-        // // VertexData<autodiff::Vector3var> var_positions;
-        // autodiff::Vector3var  var_G;             // = vec32vec(forward_solver->get_G());
-        // autodiff::VectorXvar  var_positions_vec; // = autodiff::VectorXvar{var_positions.reshaped ()};
-  
         // FaceData<autodiff::Vector3var> face_normals_ad;
 
         FaceData<Eigen::MatrixX3d> df_dv_grads_ad;
         FaceData<Eigen::Vector3d> df_dG_grads;
         // FaceData<VertexData<Eigen::Vector3d>> df_dv_grads_ad;
-
-
-        // autodiff::Vector3var point_to_segment_normal_ad(Edge e);
-        // autodiff::Vector3var intersect_arcs_ad(Vertex v, autodiff::Vector3var &R2, autodiff::Vector3var &A, autodiff::Vector3var &B,
-        //                                        bool sign_change);
-        // autodiff::var triangle_patch_area_on_sphere_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C);
-        // // TESTING speed up
-        // autodiff::Vector2var solid_angle_complex_ad(autodiff::Vector3var &A, autodiff::Vector3var &B, autodiff::Vector3var &C);
-        // autodiff::Vector2var complex_mult(autodiff::Vector2var &A, autodiff::Vector2var &B);
-        // void evaluate_boundary_patch_area_and_grads_ad(BoundaryNormal* bnd_normal1, autodiff::Vector3var bnd_normal1_ad, 
-        //                                                BoundaryNormal* bnd_normal2, autodiff::Vector3var bnd_normal2_ad, 
-        //                                                double f1_area_sign,
-        //                                                bool complex_accum = false
-        //                                             //    , std::set<Vertex> &effective_vertices
-        //                                                );
 
         std::vector<Edge> find_terminal_edges();
         // backtrack and boundary normals starting from singular edges leading to different stable faces 
@@ -137,19 +117,10 @@ class BoundaryBuilder {
         bool flow_back_boundary_on_edge(BoundaryNormal* bnd_normal, Edge src_e, Vertex common_vertex,
                                         double f1_area_sign, double f2_area_sign);
 
-        // // same shit but for autodiff
-        // void build_boundary_normals_for_autodiff( // autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G, 
-        //                                          bool generate_gradients);
-        // bool flow_back_boundary_on_edge_for_autodiff(BoundaryNormal* bnd_normal, autodiff::Vector3var bnd_normal_ad, Edge src_e, Vertex common_vertex,
-        //                                              double f1_area_sign //, autodiff::MatrixX3var &var_positions, autodiff::Vector3var &var_G
-        //                                             //  ,std::set<Vertex> &effective_vertices
-        //                                              );
-        // // get actual gradients
-        // void compute_df_dv_grads_autodiff();
-
         void print_area_of_boundary_loops();
         double get_fair_dice_energy(size_t side_count);
 
+        double print_pairwise_distances(bool verbose = false);
 
 
         // TODO template

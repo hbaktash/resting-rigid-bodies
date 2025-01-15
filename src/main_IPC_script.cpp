@@ -164,22 +164,22 @@ void generate_polyhedron_example(std::string mesh_full_path, bool preprocess = t
   SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
   VertexPositionGeometry *nm_geometry = nm_geometry_ptr.release();
   nm_mesh->greedilyOrientFaces();
-  for (Vertex v: nm_mesh->vertices()){
-    if (!v.isManifold()){
-      std::cout << "non-manifold vertex "<< v.getIndex() << "\n";
-    }
-  }
-  for (Edge e: nm_mesh->edges()){
-    if (!e.isManifold()){
-      std::cout << "non-manifold edge "<< e.getIndex()<< ": " << e.firstVertex().getIndex() << " " << e.secondVertex().getIndex() << "\n";
-      std::cout << "sibling: " << e.halfedge().sibling().getIndex() << ": "
-                << e.halfedge().sibling().tailVertex().getIndex() << " " 
-                << e.halfedge().sibling().tipVertex().getIndex() << "\n";
-      std::cout << "sibling.sibling: " << e.halfedge().sibling().sibling().getIndex() << ": "
-                << e.halfedge().sibling().sibling().tailVertex().getIndex() << " " 
-                << e.halfedge().sibling().sibling().tipVertex().getIndex() << "\n";
-    }
-  }
+  // for (Vertex v: nm_mesh->vertices()){
+  //   if (!v.isManifold()){
+  //     std::cout << "non-manifold vertex "<< v.getIndex() << "\n";
+  //   }
+  // }
+  // for (Edge e: nm_mesh->edges()){
+  //   if (!e.isManifold()){
+  //     std::cout << "non-manifold edge "<< e.getIndex()<< ": " << e.firstVertex().getIndex() << " " << e.secondVertex().getIndex() << "\n";
+  //     std::cout << "sibling: " << e.halfedge().sibling().getIndex() << ": "
+  //               << e.halfedge().sibling().tailVertex().getIndex() << " " 
+  //               << e.halfedge().sibling().tipVertex().getIndex() << "\n";
+  //     std::cout << "sibling.sibling: " << e.halfedge().sibling().sibling().getIndex() << ": "
+  //               << e.halfedge().sibling().sibling().tailVertex().getIndex() << " " 
+  //               << e.halfedge().sibling().sibling().tipVertex().getIndex() << "\n";
+  //   }
+  // }
   nm_mesh->compress();
 
   mesh_ptr = nm_mesh->toManifoldMesh();
@@ -945,7 +945,7 @@ void process_single_shape_for_experiment(std::string full_shape_path,
       if (outputFile.is_open()) {
         for (Face f: forwardSolver->hullMesh->faces()){
           if (dual_face_areas_ipc[f] != 0. && !forwardSolver->face_is_stable(f) && verbose){
-            std::cout << " $$$$^#$^&$%^#%#$ shit: --- f" << f.getIndex() << " IPC non zero, ours zero" << std::endl;
+            std::cout << "IPC INVALID outcome: --- f" << f.getIndex() << " IPC non zero, ours zero" << std::endl;
           }
           if (forwardSolver->face_is_stable(f)){
             outputFile << " -- f" << f.getIndex() << "\t-> IPC_prob: " << dual_face_areas_ipc[f]/total_icosphere_area
@@ -956,6 +956,8 @@ void process_single_shape_for_experiment(std::string full_shape_path,
         outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
         outputFile << " --- total IPC time:\t" << total_time_ipc << "\n";
         outputFile << " --- invalid count:\t" << invalids << "\n";
+        double ratio_weights = boundary_builder->print_pairwise_distances();
+        outputFile << " --- ratio weights: " << ratio_weights << "\n";
         outputFile.close();
       }
       else {
@@ -990,6 +992,8 @@ void process_single_shape_for_experiment(std::string full_shape_path,
         outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
         outputFile << " --- total Bullet time:\t" << total_time_bullet << "\n";
         outputFile << " --- invalid count:\t" << invalids << "\n";
+        double ratio_weights = boundary_builder->print_pairwise_distances();
+        outputFile << " --- ratio weights: " << ratio_weights << "\n";
         outputFile.close();
       }
       else {
@@ -1008,6 +1012,8 @@ void process_single_shape_for_experiment(std::string full_shape_path,
           }
         }
         outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
+        double ratio_weights = boundary_builder->print_pairwise_distances();
+        outputFile << " --- ratio weights: " << ratio_weights << "\n";
         outputFile.close();
       }
       else {
@@ -1225,6 +1231,7 @@ int main(int argc, char* argv[])
       vis_utils = VisualUtils();
       generate_polyhedron_example(SINGLE_MESH_PATH);
       update_solver();
+
       init_visuals();
 
       // make ICOSphere 
@@ -1261,6 +1268,10 @@ int main(int argc, char* argv[])
       in_file.close();
     }
     update_solver(); 
+    boundary_builder->print_area_of_boundary_loops();
+    // ----------------- //
+    double ratio_weights = boundary_builder->print_pairwise_distances();
+    std::cout << "ratio weights: " << ratio_weights << "\n";
     init_visuals();
     
     FaceData<double> accum_probs(*forwardSolver->hullMesh);

@@ -655,13 +655,11 @@ auto DeformationSolver::get_tinyAD_membrane_function(){
         return rest_face_areas[f] * ((simil_matrix.transpose() * simil_matrix).trace() * 0.5/simil_matrix.determinant() -1.);
         // -- from "Discrete Shells" - Grinspun et al.
         // return rest_face_areas[f] * 
-        //         (membrane_mu * simil_matrix.trace()/2. + membrane_lambda * simil_matrix.determinant()/4. -
-        //          (membrane_mu/4. + membrane_lambda/2.) * log(simil_matrix.determinant()));
+        //         (membrane_mu * simil_matrix.trace()/2. + membrane_lambda * simil_matrix.determinant()/4.
+        //          -(membrane_mu/4. + membrane_lambda/2.) * log(simil_matrix.determinant()));
         // return rest_face_areas[f] * log((simil_matrix.transpose() * simil_matrix).trace()*0.5 / simil_matrix.determinant()); // 
         // return rest_face_areas[f] * current_triangle_area  * log((simil_matrix.transpose() * simil_matrix).trace()*0.5 / simil_matrix.determinant()); // 
         // return rest_face_areas[f] * current_triangle_area * (simil_matrix.transpose() * simil_matrix).trace()*0.5 / simil_matrix.determinant();
-        
-        
     });
     return membraneEnergy_func;
 }
@@ -699,14 +697,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     std::cout << "initial mean edge length: " << initial_mean_edge_len << std::endl;
 
     Eigen::SparseMatrix<double> cv_gauss_curve_diag;
-    if (curvature_weighted_CP){
-        convex_geometry->requireVertexGaussianCurvatures();
-        Eigen::VectorXd convex_gaussian_curvatures = convex_geometry->vertexGaussianCurvatures.toVector();
-        Eigen::VectorXd convex_gaussian_curvatures_for_flat(3*convex_gaussian_curvatures.size());
-        convex_gaussian_curvatures_for_flat << convex_gaussian_curvatures, convex_gaussian_curvatures, convex_gaussian_curvatures; 
-        std::cout << "convex_gaussian_curvatures min and max " << convex_gaussian_curvatures.minCoeff() << " " << convex_gaussian_curvatures.maxCoeff() << std::endl;
-        cv_gauss_curve_diag = convex_gaussian_curvatures_for_flat.asDiagonal();
-    }
 
     // tinyAD stuff
     std::cout << " initializing variables1\n";
@@ -829,14 +819,9 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         double CP_energy = closest_point_energy(x);
         Eigen::VectorXd x_cv_flat = tinyAD_flatten(vertex_data_to_matrix(convex_geometry->inputVertexPositions));
         Eigen::SparseMatrix<double> A_CP = closest_point_flat_operator;
-        if (curvature_weighted_CP){
-            x_cv_flat = cv_gauss_curve_diag * x_cv_flat;
-            A_CP = cv_gauss_curve_diag * A_CP;
-        }
         Eigen::VectorX<double> CP_g = 2. * A_CP.transpose() * (A_CP * x - x_cv_flat); 
         Eigen::SparseMatrix<double> CP_H = 2. * A_CP.transpose() * A_CP;
         
-
         // get G diff energy and derivative
         // double Gdiff_f = (current_G - goal_G).norm2();
         // Eigen::VectorXd Gdiff_g = tinyAD_flatten(per_vertex_G_derivative(tmp_geometry));
@@ -844,7 +829,7 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
 
         // x - x_0 regularizer
         // Eigen::VectorXd reg_g = Eigen::VectorXd::Zero(x.size());
-        Eigen::SparseMatrix<double> reg_H = 2.* identityMatrix<double>(x.size());
+        // Eigen::SparseMatrix<double> reg_H = 2.* identityMatrix<double>(x.size());
 
         // elastic stuff
         auto [bending_f, bending_g, bending_H_proj] = bendingEnergy_func.eval_with_hessian_proj(x); //
@@ -893,14 +878,14 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
                                 double bending_e = bendingEnergy_func.eval(curr_x),
                                     membrane_e = membraneEnergy_func.eval(curr_x),
                                     CP_e = get_raw_CP_energy(*mesh, curr_x, *convex_mesh, *convex_geometry), // assigns CP at every step
-                                    reg_e = (curr_x - old_x).squaredNorm();
+                                    reg_e = 0;  //(curr_x - old_x).squaredNorm();
                                 double f_new = bending_lambda * bending_e + membrane_lambda * membrane_e + CP_lambda * CP_e + reg_lambda * reg_e; // + barrier_lambda * log_barr_e;  
                                 return f_new;
                             },
                         initial_LS_step_size, 0.9, 200);
                     // smax, decay, max_iter
         x += opt_step * d;
-        initial_LS_step_size = opt_step != 0 ? 10. * opt_step : 1.; // adds 22 steps to the current step size
+        // initial_LS_step_size = opt_step != 0 ? 10. * opt_step : 1.; // adds 22 steps to the current step size
         std::cout << ANSI_FG_YELLOW << "step size: " << opt_step << " next init LS step " << initial_LS_step_size << ANSI_RESET << std::endl;
         // update tmp geometry
         VertexData<Vector3> old_positions = tmp_geometry->inputVertexPositions;
@@ -915,8 +900,8 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
         double step_norm = (x - old_x).norm();
         std::cout << ANSI_FG_YELLOW << "step norm: " << step_norm << ANSI_RESET << std::endl;
         // internal_pt *= internal_growth_p;
-
-        if (step_norm < 0.06){
+        
+        if (step_norm < 0.06){ // 0.06 for conformal
             if (CP_lambda == final_CP_lambda){ // && G_lambda == final_G_lambda
                 break;
             }
@@ -949,8 +934,6 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     deformed_geometry = new VertexPositionGeometry(*mesh, new_points_mat); // TODO: update earlier? per temp geo?
     return new_points_mat;
 }
-
-
 
 VertexData<DenseMatrix<double>> DeformationSolver::per_vertex_G_jacobian(VertexPositionGeometry *tmp_geometry){
     DenseMatrix<double> zmat = DenseMatrix<double>::Zero(3,3);
@@ -1106,7 +1089,7 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
         // polyscope::getSurfaceMesh("temp sol")->addVertexVectorQuantity("total g un-wieghted", -1*unflat_tinyAD(total_g))->setEnabled(false);
         
         // // sobolev diffuse grads
-        Eigen::VectorXd diffused_total_g = tinyAD_flatten(sobolev_diffuse_gradients(unflat_tinyAD(total_g), *mesh, G_deform_sobolev_lambda, sobolev_p));
+        Eigen::VectorXd diffused_total_g = tinyAD_flatten(sobolev_diffuse_gradients(unflat_tinyAD(total_g), *mesh, *tmp_geometry, G_deform_sobolev_lambda, sobolev_p));
         
         total_g = diffused_total_g.cwiseProduct(flat_dist_mult.cwiseAbs2());
         // total_g = total_g.cwiseProduct(flat_dist_mult.cwiseAbs2());

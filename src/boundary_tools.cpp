@@ -395,8 +395,14 @@ void BoundaryBuilder::build_boundary_normals(){
     // printf("  finding terminal edges \n");
     std::vector<Edge> terminal_edges = find_terminal_edges();
 
-    // for quick assignment of face-boundary-loops
+    // final separatrix areas
     face_region_area = FaceData<double>(*forward_solver->hullMesh, 0.);
+    
+    // 
+    MS_neighbor_distances = FaceData<FaceData<double>>(*forward_solver->hullMesh);
+    for (Face f: forward_solver->hullMesh->faces()){
+        MS_neighbor_distances[f] = FaceData<double>(*forward_solver->hullMesh, -1.);
+    }
     // back-flow from all terminal edges
     // printf("  back-flowing terminal edges \n");
     int i = 0;
@@ -419,6 +425,10 @@ void BoundaryBuilder::build_boundary_normals(){
         bnd_normal->f2 = forward_solver->face_last_face[f2];
         bnd_normal->host_e = e;
         
+        MS_neighbor_distances[bnd_normal->f1][bnd_normal->f2] = angle(forward_solver->hullGeometry->faceNormal(bnd_normal->f1), 
+                                                                      stable_edge_normal);
+        MS_neighbor_distances[bnd_normal->f2][bnd_normal->f1] = angle(forward_solver->hullGeometry->faceNormal(bnd_normal->f2), 
+                                                                      stable_edge_normal);
         // // DEBUG
         // tmp_arc_vis(forward_solver->hullGeometry->faceNormal(f1), 
         //                           forward_solver->hullGeometry->faceNormal(f2), 
@@ -658,6 +668,35 @@ void BoundaryBuilder::print_area_of_boundary_loops(){
     printf("sum: %f\n", sum);
 }
 
+
+double BoundaryBuilder::print_pairwise_distances(bool verbose){
+  std::vector<std::pair<std::pair<Face, Face>, double>> ratio_pairs;
+  for (Face f1: forward_solver->hullMesh->faces()){
+    for (Face f2: forward_solver->hullMesh->faces()){
+      if (MS_neighbor_distances[f1][f2] != -1.){
+        double distance_sum = MS_neighbor_distances[f1][f2] + MS_neighbor_distances[f2][f1];
+        // std::cout << "distance sum: " << distance_sum << std::endl;
+        if (distance_sum > 0)
+          ratio_pairs.push_back({{f1, f2}, std::max({MS_neighbor_distances[f1][f2]/distance_sum, MS_neighbor_distances[f2][f1]/distance_sum})});
+      }
+    }
+  }
+  std::sort(ratio_pairs.begin(), ratio_pairs.end(), 
+            [&] (auto a, auto b) { return a.second > b.second; });
+  if (verbose)
+    printf("sorted ratios: \n");
+  double area_weighted_ratio_test = 0.;
+  for (auto pair: ratio_pairs){
+    Face f1 = pair.first.first, 
+         f2 = pair.first.second;
+    if (verbose){
+      std:: cout << "faces: \t" << f1.getIndex() << " \t" << f2.getIndex() << " \t ratio: " << pair.second << 
+      " \n\t\tdist:" << MS_neighbor_distances[f1][f2] <<  " \trevert: " << MS_neighbor_distances[f2][f1] << "\n";
+    }
+    area_weighted_ratio_test += (pair.second - 0.5) * (std::min({face_region_area[f1], face_region_area[f2]}));
+  }
+  return area_weighted_ratio_test;
+}
 
 // ========================================================================================== TOOD: move to optimization and generalize
 

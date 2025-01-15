@@ -29,8 +29,6 @@ using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 
-
-
 class InverseSolver{
     public:
         Forward3DSolver* forwardSolver;
@@ -104,10 +102,4 @@ class InverseSolver{
         // Greedy stuff
         VertexData<Vector3> trivial_update_positions(VertexData<Vector3> hull_updates);
         VertexData<Vector3> diffusive_update_positions(VertexData<Vector3> hull_updates);
-
-        // Diffuse gradients
-        VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, 
-                                              double sobolev_lambda, size_t sobolev_p = 2);
-        VertexData<Vector3> sobolev_diffuse_gradients(Eigen::MatrixXd grads, 
-                                              double sobolev_lambda, size_t sobolev_p = 2);
 };

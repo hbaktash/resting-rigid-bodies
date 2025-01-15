@@ -601,9 +601,6 @@ VertexData<Vector3> InverseSolver::diffusive_update_positions(VertexData<Vector3
 
 
 // =========== Graveyard ===========
-// VertexData<Vector3> InverseSolver::sobolev_diffuse_gradients(Eigen::MatrixXd grads, double sobolev_lambda, size_t sobolev_p = 2){
-//     vertex_data_to_matrix
-// }
 // void InverseSolver::subdivide_for_aggressive_updates(VertexData<Vector3> hull_updates){
 //     // sub-dividing for aggressive updates
 //     std::vector<Edge> to_split_edges;

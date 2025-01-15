@@ -75,8 +75,8 @@ Edge single_convexity_repair(ManifoldSurfaceMesh* input_mesh, VertexPositionGeom
 
 DenseMatrix<double> solve_dense_b(LinearSolver<double> *solver, DenseMatrix<double> b);
 
-VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, ManifoldSurfaceMesh &hull_mesh, 
+VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry,
                                               double sobolev_lambda, size_t sobolev_p = 2);
-Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurfaceMesh &hull_mesh,
+Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry,
                                               double sobolev_lambda, size_t sobolev_p = 2);
 

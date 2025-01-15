@@ -82,44 +82,44 @@ else ()
   message(STATUS "Gurobi not found!")
 endif ()
 
-add_executable(hullFill src/main_hull_fill.cpp src/deformation.cpp src/optimization.cpp src/CP_tools.cpp)
-target_include_directories(hullFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
-target_link_libraries(hullFill
-PRIVATE
-rolling_dragons::rolling_dragons
-taywee::args
-${GUROBI_LIBRARY}
-${GUROBI_CXX_LIBRARY}
-)
-set_property(TARGET hullFill PROPERTY CXX_STANDARD 20)
-
-
-# # Add executables
-
-add_executable(convexDice src/main_convex_dice.cpp)
-target_link_libraries(convexDice
-PRIVATE
-rolling_dragons::rolling_dragons
-taywee::args
-)
-set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
-
-
-# # Add executables
-
-# include(json)
-# # include(rigid-ipc)
-# include(bullet3)
-# add_executable(scriptIPC src/main_IPC_script.cpp src/bullet_sim.cpp)
-# target_link_libraries(scriptIPC
+# add_executable(hullFill src/main_hull_fill.cpp src/deformation.cpp src/optimization.cpp src/CP_tools.cpp)
+# target_include_directories(hullFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
+# target_link_libraries(hullFill
 # PRIVATE
 # rolling_dragons::rolling_dragons
 # taywee::args
-# nlohmann::json
-# bullet3::bullet3
-# # ipc::toolkit
+# ${GUROBI_LIBRARY}
+# ${GUROBI_CXX_LIBRARY}
 # )
-# set_property(TARGET scriptIPC PROPERTY CXX_STANDARD 20)
+# set_property(TARGET hullFill PROPERTY CXX_STANDARD 20)
+
+
+# # # Add executables
+
+# add_executable(convexDice src/main_convex_dice.cpp)
+# target_link_libraries(convexDice
+# PRIVATE
+# rolling_dragons::rolling_dragons
+# taywee::args
+# )
+# set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
+
+
+# # Add executables
+
+include(json)
+# include(rigid-ipc)
+include(bullet3)
+add_executable(scriptIPC src/main_IPC_script.cpp src/bullet_sim.cpp)
+target_link_libraries(scriptIPC
+PRIVATE
+rolling_dragons::rolling_dragons
+taywee::args
+nlohmann::json
+bullet3::bullet3
+# ipc::toolkit
+)
+set_property(TARGET scriptIPC PROPERTY CXX_STANDARD 20)
 
 # Add executables
 
