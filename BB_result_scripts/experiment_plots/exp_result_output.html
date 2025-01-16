@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    #vis.vega-embed {
+      width: 100%;
+      display: flex;
+    }
+
+    #vis.vega-embed details,
+    #vis.vega-embed details summary {
+      position: relative;
+    }
+  </style>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vega-lite@5.8.0"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+</head>
+<body>
+  <div id="vis"></div>
+  <script>
+    (function(vegaEmbed) {
+      var spec = {"config": {"view": {"continuousWidth": 300, "continuousHeight": 300}, "title": {"anchor": "end", "color": "gray", "fontSize": 12}}, "data": {"name": "data-8b339f36da7bc706e9c44036c90b52cb"}, "facet": {"column": {"field": "part", "header": {"labelAnchor": "end", "labelColor": "gray", "labelFontSize": 12, "labelPadding": 0}, "title": null, "type": "nominal"}, "row": {"field": "model", "header": {"labelAngle": 0, "labelAlign": "right", "labelColor": "gray", "labelFontSize": 16, "labelPadding": 0, "titlePadding": 0}, "title": null, "type": "nominal"}}, "spec": {"mark": {"type": "bar"}, "encoding": {"color": {"field": "index", "legend": null, "type": "nominal"}, "x": {"field": "value", "scale": {"domain": [0, 1]}, "title": null, "type": "quantitative"}, "y": {"axis": {"labelColor": "gray", "labelPadding": 2, "labelLimit": 30, "ticks": false, "domain": false}, "field": "variable", "title": null, "type": "nominal"}}, "height": 40, "transform": [{"fold": ["Bullet", "IPC", "Ours", "experiments"], "as": ["variable", "value"]}], "width": 150}, "spacing": 5, "$schema": "https://vega.github.io/schema/vega-lite/v5.8.0.json", "datasets": {"data-8b339f36da7bc706e9c44036c90b52cb": [{"Bullet": 0.34418022528160197, "IPC": 0.3308609802545856, "Ours": 0.33879075542738124, "experiment": 0.311178247734139, "index": 0}, {"Bullet": 0.13744859645986054, "IPC": 0.3183321639771475, "Ours": 0.33765921653448694, "experiment": 0.3323262839879154, "index": 1}, {"Bullet": 0.5183711782585375, "IPC": 0.35080685576826703, "Ours": 0.3235500280381319, "experiment": 0.3564954682779456, "index": 2}]}};
+      var embedOpt = {"mode": "vega-lite"};
+
+      function showError(el, error){
+          el.innerHTML = ('<div style="color:red;">'
+                          + '<p>JavaScript Error: ' + error.message + '</p>'
+                          + "<p>This usually means there's a typo in your chart specification. "
+                          + "See the javascript console for the full traceback.</p>"
+                          + '</div>');
+          throw error;
+      }
+      const el = document.getElementById('vis');
+      vegaEmbed("#vis", spec, embedOpt)
+        .catch(error => showError(el, error));
+    })(vegaEmbed);
+
+  </script>
+</body>
+</html>
