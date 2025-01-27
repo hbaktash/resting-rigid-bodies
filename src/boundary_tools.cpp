@@ -704,7 +704,6 @@ double BoundaryBuilder::print_pairwise_distances(bool verbose){
 
 
 // hull update stuff
-// frozen G so far
 double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
                                double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
                                std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 

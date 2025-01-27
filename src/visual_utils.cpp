@@ -197,7 +197,7 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
   // printf("  drawing the arc network on GM\n ");
   draw_arc_network_on_sphere(ind_pairs_vector, boundary_normals, 
                             center, radius, seg_count, 
-                            "region boundaries", 1., arc_color);
+                            "region boundaries", 1., arc_color, 0.005); // larger radius for separatrix arcs
   if (on_height_surface){
     // printf("  drawing the arc network on height surface\n ");
     draw_arc_network_on_lifted_suface(ind_pairs_vector, boundary_normals, *boundary_builder->forward_solver, 
@@ -253,7 +253,7 @@ void VisualUtils::draw_edge_arcs_on_gauss_map(Forward3DSolver* forwardSolver){
   }
   else {
     draw_arc_network_on_sphere(all_edge_inds, positions, center, gm_radi, arcs_seg_count,
-                              "all edge arcs", 1., stabilizable_edge_color);
+                              "all edge arcs", 1., stabilizable_edge_color, 0.002);
   }
 }
 
@@ -270,7 +270,7 @@ void VisualUtils::draw_stable_vertices_on_gauss_map(Forward3DSolver* forwardSolv
   }
   polyscope::PointCloud* stable_vertices_gm_pc = polyscope::registerPointCloud("stable Vertices Normals", 
                                                                                stable_vertices);
-  stable_vertices_gm_pc->setPointRadius(gm_pt_radi, false);
+  stable_vertices_gm_pc->setPointRadius(gm_pt_radi*3, false);
   stable_vertices_gm_pc->setPointColor({0.1,0.9,0.1});
   stable_vertices_gm_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 
@@ -310,7 +310,7 @@ void VisualUtils::draw_stable_face_normals_on_gauss_map(Forward3DSolver* forward
   }
   polyscope::PointCloud* stable_face_normals_pc = polyscope::registerPointCloud("stable Face Normals", stable_face_normals);
   stable_face_normals_pc->addScalarQuantity("stable face probs", stable_face_probs);
-  stable_face_normals_pc->setPointRadius(gm_pt_radi*1.1, false);
+  stable_face_normals_pc->setPointRadius(gm_pt_radi*3., false);
   stable_face_normals_pc->setPointColor({0.9,0.1,0.1});
   stable_face_normals_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere); 
 
@@ -319,6 +319,7 @@ void VisualUtils::draw_stable_face_normals_on_gauss_map(Forward3DSolver* forward
   face_normals_pc->setPointRadius(gm_pt_radi, false);
   face_normals_pc->setPointColor({0.9,0.9,0.9});
   face_normals_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  face_normals_pc->setEnabled(false);
 }
 
 
@@ -414,19 +415,19 @@ void VisualUtils::show_edge_equilibria_on_gauss_map(Forward3DSolver* forwardSolv
     }
   }
   polyscope::PointCloud* edge_equilibria_pc = polyscope::registerPointCloud("Edge equilibria", edge_equilibria_points);
-  edge_equilibria_pc->setPointRadius(gm_pt_radi, false);
+  edge_equilibria_pc->setPointRadius(gm_pt_radi*3., false);
   edge_equilibria_pc->setPointColor({0.2, 0.2, 0.9});
   edge_equilibria_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 
   if (draw_stable_g_vec_for_unstable_edge_arcs){
     polyscope::PointCloud* stabilizable_edge_pc = polyscope::registerPointCloud(
                       "Stabilizable Edge equilibria", stabilizable_edge_equilibria_points);
-    stabilizable_edge_pc->setPointRadius(gm_pt_radi, false);
+    stabilizable_edge_pc->setPointRadius(gm_pt_radi*3., false);
     stabilizable_edge_pc->setPointColor(stabilizable_edge_color);
     stabilizable_edge_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 
     polyscope::PointCloud* stable_edge_pc = polyscope::registerPointCloud("stable Edge equilibria", stable_edge_equilibria_points);
-    stable_edge_pc->setPointRadius(gm_pt_radi, false);
+    stable_edge_pc->setPointRadius(gm_pt_radi*3., false);
     stable_edge_pc->setPointColor(stable_edge_color);
     stable_edge_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
   }
@@ -499,7 +500,7 @@ void VisualUtils::visualize_stable_vertices(Forward3DSolver* forwardSolver){
   polyscope::PointCloud* psCloud = polyscope::registerPointCloud("stabilizable vertices", positions);
   // set some options
   psCloud->setPointColor({0.1, .9, .1});
-  psCloud->setPointRadius(gm_pt_radi);
+  psCloud->setPointRadius(gm_pt_radi*3., false);
   psCloud->setPointRenderMode(polyscope::PointRenderMode::Sphere);
 }
 

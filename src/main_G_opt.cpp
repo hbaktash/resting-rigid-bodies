@@ -90,7 +90,7 @@ std::string input_name = "6 prism";
 std::string policy_general = "manualCluster"; // "fair", "manualCluster ", "manual"
 // std::string policy_shape = "dodecahedron binomial"; // "dodecahedron binomial", "octahedron binomial", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
 std::string policy;
-
+    
 
 void visualize_gauss_map(Forward3DSolver* forwardSolver){
   std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
@@ -128,91 +128,11 @@ void generate_polyhedron_example(std::string poly_str){
 }
 
 
-// void find_best_bunny_G(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry){
-//   Forward3DSolver* forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
-//   forwardSolver->set_uniform_G();
-//   forwardSolver->initialize_pre_computes();
-//   BoundaryBuilder* boundary_builder = new BoundaryBuilder(forwardSolver);
-//   boundary_builder->build_boundary_normals();
-
-//   size_t side_count = 6;
-//   double old_dice_E = boundary_builder->get_fair_dice_energy(side_count);
-//   int resolution_x = 10,
-//       resolution_z = 10,
-//       resolution_y = 10;
-//   // double x0 = 0.23,
-//   //        y0 = 0.23,
-//   //        z0 = 0.23;
-//   double Dx = 0.022,
-//          Dy = 0.14,
-//          Dz = 0.2;
-//   G = forwardSolver->get_G();
-//   double x0 = G.x,
-//          y0 = G.y,
-//          z0 = G.z;
-//   std::cout << "initial G: " << x0 << ", " << y0 << ", " << z0 << "\n";
-//   std::cout << "initial probs: \n";
-//   boundary_builder->print_area_of_boundary_loops();
-
-//   polyscope::registerPointCloud("starting COM", std::vector<Vector3>{forwardSolver->get_G()})->setPointColor({0.1,0.9,0.1});
-//   double lowest_dice_E = old_dice_E;
-//   Vector3 best_G = forwardSolver->get_G();
-//   std::cout <<" starting dice E: " << old_dice_E << "\n";
-//   for (int i = 0; i < resolution_x; i++){
-//     printf(" at i: %d\n", i);
-//     double h_x = - Dx + x0 + Dx*0.5*(double)i/(double)resolution_x;
-//     for (int k = 0; k < resolution_y; k++){
-//       double h_y = -Dy + y0 + Dy*0.5*(double)k/(double)resolution_y;
-//       for (int j = 0; j < resolution_z; j++){
-//         double h_z = -Dz + z0 + Dz*0.5*(double)j/(double)resolution_z;
-//         Vector3 tmp_G({h_x, h_y, h_z});
-//         // polyscope::registerPointCloud("tmp COM", std::vector<Vector3>{tmp_G})->setPointColor({0.9,0.1,0.1});
-//         // polyscope::show();
-
-//         if (G_is_inside(*forwardSolver->hullMesh, *forwardSolver->hullGeometry, tmp_G)){
-//           forwardSolver->set_G(tmp_G);
-//           forwardSolver->initialize_pre_computes();
-//           boundary_builder = new BoundaryBuilder(forwardSolver);
-//           boundary_builder->build_boundary_normals();
-//           double dice_E = boundary_builder->get_fair_dice_energy(side_count);
-//           if (dice_E < lowest_dice_E){
-//             std::cout << "LOWER dice E: " << dice_E << "\n";
-//             lowest_dice_E = dice_E;
-//             best_G = tmp_G;
-//             printf("current dice E  : %f\n", lowest_dice_E);
-//           }
-//         }
-//         else{
-//           printf("tmp G is outside\n");
-//         }
-//       }
-//     }
-//   }
-//   std::cout << "lowest dice E: " << lowest_dice_E << "\n";
-//   forwardSolver->set_G(best_G);
-//   forwardSolver->initialize_pre_computes();
-//   boundary_builder = new BoundaryBuilder(forwardSolver);
-//   boundary_builder->build_boundary_normals();
-//   boundary_builder->print_area_of_boundary_loops();
-//   printf("best G is: %f, %f, %f\n", best_G.x, best_G.y, best_G.z);
-//   printf("with best Dice E        : %f\n", lowest_dice_E);   
-//   printf("initial dice E: %f\n", old_dice_E);
-//   auto G_pc = polyscope::registerPointCloud("best COM", std::vector<Vector3>{best_G});
-//   G_pc->setPointColor({0.1,0.9,0.1});
-//   G_pc->setPointRadius(0.2, false);
-//   G_pc->setEnabled(true);
-// }
-
-
 void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, 
                                        std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
-                                       Eigen::MatrixXd dfdV, Eigen::MatrixXd diffused_dfdV, 
                                        bool show, bool print_probs = false){
   polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>{tmp_solver.get_G()});
   auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
-  // curr_hull_psmesh->addVertexVectorQuantity("dfdV", dfdV)->setEnabled(false);
-  // if (diffused_dfdV.size() > 0)
-  //   curr_hull_psmesh->addVertexVectorQuantity("diffused dfdV", diffused_dfdV)->setEnabled(false);
 
   curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
   if (policy_general == "manual"){ // first word
@@ -270,8 +190,6 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
 }
 
 
-
-
 void initialize_state(std::string input_name){
     generate_polyhedron_example(input_name);
     bool triangulate = false;
@@ -301,127 +219,91 @@ void initialize_state(std::string input_name){
 }
 
 
-std::vector<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Eigen::MatrixX3d hull_positions){
-  ManifoldSurfaceMesh *tmp_hull_mesh;
-  VertexPositionGeometry *tmp_hull_geometry;
-  std::tie(tmp_hull_mesh, tmp_hull_geometry) = get_mesh_for_convex_set(hull_positions);
-  auto G_V_pair = find_center_of_mass(*tmp_hull_mesh, *tmp_hull_geometry);
-  Vector3 tmp_G = G_V_pair.first;
-  double volume = G_V_pair.second;
-
-  Eigen::Matrix3d zmat = Eigen::Matrix3d::Zero();
-  std::vector<Eigen::Matrix3d> dG_dv(hull_positions.rows());
-  for (size_t i = 0; i < hull_positions.rows(); i++)
-      dG_dv[i] = zmat;
-  for (Face f: tmp_hull_mesh->faces()){
-      // double face_area = tmp_solver->hullGeometry->faceArea(f);
-      double face_area = polygonal_face_area(f, *tmp_hull_geometry);
-
-      Vector3 face_normal = tmp_hull_geometry->faceNormal(f); // assuming outward normals
-      size_t face_degree = f.degree();
-      // assuming polygon faces here; 
-      // TODO; check correctness for polygons
-      Vector3 vert_sum = Vector3::zero();
-      for (Vertex tmp_v: f.adjacentVertices())
-          vert_sum += tmp_hull_geometry->inputVertexPositions[tmp_v];
-      for (Halfedge he: f.adjacentHalfedges()){
-          Vertex v = he.tailVertex();
-          Vector3 p = tmp_hull_geometry->inputVertexPositions[v];
-          Vector3 Gf_G = (vert_sum + p)/(double)(face_degree + 1) - tmp_G;
-          DenseMatrix<double> tmp_mat = vec32vec(Gf_G) * 
-                                        vec32vec(face_normal).transpose();
-          assert(tmp_mat.cols() == 3);
-          assert(tmp_mat.rows() == 3);
-          dG_dv[v.getIndex()] += face_area * tmp_mat;
-      }
-  }
-  for (size_t i = 0; i < hull_positions.rows(); i++)
-      dG_dv[i] /= 3.*volume;
-  return dG_dv;
-}
-
-
 void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attraction_thresh,
-                           Eigen::MatrixX3d &df_dv, Eigen::Vector3d &df_dG, double &dice_energy,
-                           bool use_autodiff, bool frozen_G, 
+                           Eigen::Vector3d &df_dG, double &dice_energy,
                            std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_pairs, 
                            int fair_sides){
-    
-  if (!use_autodiff){
-    Forward3DSolver fwd_solver(hull_positions, G_vec, true); // when getting grads, the input must be convex
-    
-    assert(hull_positions.rows() == fwd_solver.hullMesh->nVertices()); // check if input was convex
-
-    if (!frozen_G){
-      std::pair<Vector3, double> G_V_pair = find_center_of_mass(*fwd_solver.hullMesh, *fwd_solver.hullGeometry);
-      fwd_solver.volume = G_V_pair.second;
-      fwd_solver.set_G(G_V_pair.first); // since it deosn't make sense to gave non-uniform G with dependent G
-    }
-    
-    fwd_solver.initialize_pre_computes();
-    printf("   initialized for diffs\n");
-    BoundaryBuilder *bnd_builder = new BoundaryBuilder(&fwd_solver);
-    bnd_builder->build_boundary_normals();
-    InverseSolver *inv_solver = new InverseSolver(bnd_builder);
-    inv_solver->find_uni_mass_d_pf_dv(frozen_G);
-    // distribution is set internally here
-
-    // d_pf/dv
-    inv_solver->set_fair_distribution_for_sink_faces(fair_sides); // top k faces are set
-    VertexData<Vector3> approx_dice_energy_grads = inv_solver->find_uni_mass_total_vertex_grads(0.01);
-    
-    // d_pf/dG
-    inv_solver->find_d_pf_d_Gs();
-    Vector3 G_grad = inv_solver->find_total_g_grad();
-    
-    // convert to eigen
-    dice_energy = bnd_builder->get_fair_dice_energy(fair_sides);
-
-    // NOTE; forward solver reshuffles the vertices when taking hull, so need to map back
-    for (Vertex v: fwd_solver.hullMesh->vertices()){
-      df_dv.row(fwd_solver.org_hull_indices[v]) = vec32vec(approx_dice_energy_grads[v]);
-    }
-    df_dG = vec32vec(G_grad);
-  }
-  else { // autodiff
     // Eigen::MatrixX3d hull_positions = vertex_data_to_matrix(fwd_solver.hullGeometry->inputVertexPositions); 
     Forward3DSolver tmp_solver(hull_positions, G_vec, true); // indices shouldnt be shuffled here
     auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
-      // decompose flat vector to positions and center of mass; G is the last 3 elements
-      Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
-      size_t flat_n = hull_poses_G_append_vec.rows();
-      Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-      return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, 
-                                                  bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
-                                                  policy_general, normal_prob_pairs, fair_sides, true);
+        // decompose flat vector to positions and center of mass; G is the last 3 elements
+        Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
+        size_t flat_n = hull_poses_G_append_vec.rows();
+        Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
+        return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, 
+                                                    bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
+                                                    policy_general, normal_prob_pairs, fair_sides, true);
     };
     Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
     Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
     hull_poses_and_G_vec << hull_poses_vec, G_vec;
-    
+
     Eigen::VectorXd dfdU_vec;
     double dice_e;
     stan::math::gradient(dice_energy_lambda, hull_poses_and_G_vec, dice_e, dfdU_vec);
     dice_energy = dice_e;
     size_t flat_n = dfdU_vec.rows();
     df_dG = dfdU_vec.tail(3);
-    Eigen::Map<Eigen::MatrixXd> dfdV(dfdU_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
+}
 
-    // populate df_dv by mapping to original input indices
-    if (frozen_G){
-      df_dv = dfdV;
+double G_update_line_search(Eigen::Vector3d dfdG, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
+                            double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
+                            std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
+                            size_t dice_side_count, 
+                            double step_size, double decay, size_t max_iter, double step_tol){
+  
+  Forward3DSolver tmp_solver(hull_positions, G_vec, true); // assuming input is convex; will be asserted internally in the constructor
+  tmp_solver.initialize_pre_computes();
+  
+  // std::cout << "getting fair dice energy for the initial hull\n";
+  double min_dice_energy = BoundaryBuilder::dice_energy<double>(hull_positions, G_vec, 
+                                                                tmp_solver, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attaction_thresh,
+                                                                policy_general, normal_prob_assignment, 
+                                                                dice_side_count, false);
+  double s = step_size; //
+
+  bool found_smth_optimal = false;
+  double tmp_dice_energy;
+  int j;
+  for (j = 0; j < max_iter; j++) {
+    tmp_solver = Forward3DSolver(hull_positions , G_vec - s * dfdG, false); // not necessarily convex
+    if (frozen_G && !G_is_inside(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, tmp_solver.get_G())){
+        // printf("  - G outside! \n");
+        s *= decay;
+        continue;
     }
-    else {
-      std::vector<Eigen::Matrix3d> dG_dv = get_COM_grads_for_convex_uniform_shape(hull_positions);
-      for (size_t i = 0; i < hull_positions.rows(); i++){
-        df_dv.row(i) = dfdV.row(i) + (dG_dv[i].transpose() * df_dG).transpose();
-      }
+    tmp_solver.initialize_pre_computes();
+    // re-assign since qhull inside solver reshuffles points
+    Eigen::MatrixX3d tmp_hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
+    Eigen::Vector3d tmp_G_vec = vec32vec(tmp_solver.get_G());
+    Forward3DSolver tmp_solver2(tmp_hull_positions, tmp_G_vec, true);
+    bool verbose = false;
+    if (s < step_tol){
+      verbose = true;
+      printf("   ---   LS step %d -----\n", j);
     }
-  }    
+    tmp_dice_energy = BoundaryBuilder::dice_energy<double>(tmp_hull_positions, tmp_G_vec,
+                                                           tmp_solver2, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attaction_thresh,
+                                                           policy_general, normal_prob_assignment, 
+                                                           dice_side_count, verbose);
+
+    if (tmp_dice_energy < min_dice_energy){
+        found_smth_optimal = true;
+        break; //  x new is good
+    }
+    else if(s >= step_tol)
+        s *= decay;
+    else
+      break;
+  }
+  s = found_smth_optimal ? s : 0.;
+  printf("line search for dice ended at iter %d, s: %.10f, \n", j, s);
+  // printf("\t\t - line ended at iter %d/%d with s: %f \n", j, max_iter, s);
+  return s;
 }
 
 
-void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, bool frozen_G, size_t step_count){
+void dice_energy_G_opt(std::string policy, double bary_reg, double coplanar_reg, bool frozen_G, size_t step_count){
   polyscope::getSurfaceMesh("hull mesh")->setTransparency(0.5)->setEnabled(false);
 
   Forward3DSolver tmp_solver(mesh, geometry, G, true);
@@ -454,37 +336,27 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   double current_sobolev_lambda = sobolev_lambda;
   double init_LS_step = dice_energy_step;
   double LS_step_tol = 1e-9;
-  Eigen::MatrixX3d dfdV, diffused_dfdV;
   for (size_t iter = 0; iter < step_count; iter++){
     double dice_e;
     Eigen::Vector3d dfdG;
-    dfdV = Eigen::MatrixX3d::Zero(hull_positions.rows(), 3);
-
+    
     printf("getting grads\n");
     FaceData<double> goal_probs;
     get_dice_energy_grads(hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
-                          dfdV, dfdG, dice_e, 
-                          use_autodiff_for_dice_grad, frozen_G,
+                          dfdG, dice_e, 
                           policy_general, normal_prob_pairs, fair_sides_count);
     // update_visuals_with_G(&tmp_solver, &tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << "i: "<< iter << "\tDE: " << dice_e << ANSI_RESET << "\n";
 
-    // diffused grads
-    if (do_sobolev_dice_grads){
-      current_sobolev_lambda *= sobolev_lambda_decay;
-      diffused_dfdV = sobolev_diffuse_gradients(dfdV, *tmp_solver.hullMesh, *tmp_solver.hullGeometry , 
-                                                current_sobolev_lambda, sobolev_p);      
-      dfdV = diffused_dfdV;
-    }
     // DEBUG/visuals
-    visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, 
-                                      dfdV, diffused_dfdV, visualize_steps);
+    visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, visualize_steps);
+
     // printf("line search\n");
     double opt_step_size = 1.;
     if (dice_search_decay != 1.){
-      opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
-                                                    policy_general, normal_prob_pairs, fair_sides_count, 
-                                                    init_LS_step, dice_search_decay, frozen_G, 1000, LS_step_tol);
+      opt_step_size = G_update_line_search(dfdG, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
+                                           policy_general, normal_prob_pairs, fair_sides_count, 
+                                           init_LS_step, dice_search_decay, 1000, LS_step_tol);
       init_LS_step = opt_step_size < dice_energy_step/100. ? opt_step_size * 20 : opt_step_size; // TODO : adaptive step size
     }
 
@@ -509,13 +381,8 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
         }
       }
     }
-    hull_positions = hull_positions - opt_step_size * dfdV;
-
+    G_vec = G_vec - opt_step_size * dfdG;
     tmp_solver = Forward3DSolver(hull_positions, G_vec, false); // could have been convaved
-    if (!frozen_G){
-      tmp_solver.set_uniform_G();
-      G_vec = vec32vec(tmp_solver.get_G());
-    }
     // IMPORTANT step; tmo solver's conv hull will shuffle the order of vertices
     hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);
     tmp_solver.initialize_pre_computes();
@@ -526,7 +393,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   }
 
   // DEBUG/visuals
-  visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, dfdV, diffused_dfdV, false, true);
+  visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, false, true);
 
   optimized_mesh = tmp_solver.hullMesh;
   optimized_geometry = tmp_solver.hullGeometry; 
@@ -610,9 +477,6 @@ void myCallback() {
     G_file << G.x << " " << G.y << " " << G.z << "\n";
     G_file.close();
   }
-  // if (ImGui::Button("find best G")){
-  //   find_best_bunny_G(mesh, geometry);
-  // }
 }
 
 

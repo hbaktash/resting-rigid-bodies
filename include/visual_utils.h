@@ -45,7 +45,7 @@ class VisualUtils{
         float stable_edge_radi = 0.007,
               stablizable_edge_radi = 0.009,
               both_edge_radi = 0.013,
-              gm_pt_radi = 0.01,
+              gm_pt_radi = 0.005,
               G_radi = 0.05;
 
         glm::vec3 stable_edge_color = glm::vec3({0.2, 0.3, 0.3}),
@@ -68,7 +68,7 @@ class VisualUtils{
         // float arc_curve_radi = 0.0005;
         glm::vec3 patch_arc_fancy_color = glm::vec3({0.9,0.1,0.1});
 
-        int arcs_seg_count = 12,
+        int arcs_seg_count = 15,
             arc_counter = 0;
 
         VisualUtils(){

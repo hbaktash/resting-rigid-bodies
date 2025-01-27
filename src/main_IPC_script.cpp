@@ -267,14 +267,15 @@ void init_visuals(){
   auto psInputMesh = polyscope::registerSurfaceMesh(
     "init input mesh",
     geometry->inputVertexPositions, mesh->getFaceVertexList());
-  psInputMesh->setTransparency(0.75);
+  psInputMesh->setTransparency(1.0);
   psInputMesh->setEnabled(true);
   auto psHullMesh = polyscope::registerSurfaceMesh(
     "init hull mesh",
     forwardSolver->hullGeometry->inputVertexPositions, forwardSolver->hullMesh->getFaceVertexList(),
     polyscopePermutations(*forwardSolver->hullMesh));
   psHullMesh->setEnabled(true);
-  psHullMesh->setTransparency(0.95);
+  psHullMesh->setEdgeWidth(0.7);
+  psHullMesh->setTransparency(1.);
   // visualize_colored_polyhedra();
   vis_utils.draw_G(forwardSolver->get_G());
   visualize_gauss_map(forwardSolver);//
@@ -926,8 +927,11 @@ void process_single_shape_for_experiment(std::string full_shape_path,
       // re-write for IPC use
       writeSurfaceMesh(*mesh, *geometry, file_dir + "/" + file_name + "_normalized.obj");
     }
+    auto t1 = clock_type::now();
     update_solver();
-
+    double total_ours_time = chrono::duration_cast<seconds_fp>(clock_type::now() - t1).count();
+    if (verbose)
+      std::cout << " total Ours time: " << total_ours_time << "\n";
     if (ipc_sim){
       // run the IPC simulation
       auto t0 = clock_type::now();
@@ -1014,13 +1018,13 @@ void process_single_shape_for_experiment(std::string full_shape_path,
         outputFile << "\n --- mesh size:\t" << mesh->nVertices() << " --- hull size:\t" << forwardSolver->hullMesh->nVertices() << "\n";
         double ratio_weights = boundary_builder->print_pairwise_distances();
         outputFile << " --- ratio weights: " << ratio_weights << "\n";
+        outputFile << " --- total our time: " << total_ours_time << "\n";
         outputFile.close();
       }
       else {
         std::cout << "Failed to create the file." << std::endl;
       }
     }
-
   }
   catch(const std::exception& e) { // probably couldnt make the mesh manifold
     std::cout << " \n file dir: " << file_dir << std::endl;
@@ -1342,3 +1346,8 @@ int main(int argc, char* argv[])
     // if (ImGui::Button("refresh")){
     //     old_g_vec = refresh_orientation;
     // }
+
+
+// 5FC051
+
+// F3FB43

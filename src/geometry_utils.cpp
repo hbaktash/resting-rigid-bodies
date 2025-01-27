@@ -411,8 +411,6 @@ Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurface
            e = mesh.nEdges();
     SparseMatrix<double> L = graph_laplacian(mesh);
     // geometry
-    // SparseMatrix<double> L = geometry.requireLaplaceMatrix();
-    // Sobolev operator
     SparseMatrix<double> sobolevOp = sobolev_lambda * L + identityMatrix<double>(n);
     PositiveDefiniteSolver<double> sobolevSolver(sobolevOp);
     DenseMatrix<double> sobolev_grads;

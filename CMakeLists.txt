@@ -96,13 +96,22 @@ endif ()
 
 # # # Add executables
 
-# add_executable(convexDice src/main_convex_dice.cpp)
-# target_link_libraries(convexDice
+add_executable(convexDice src/main_convex_dice.cpp)
+target_link_libraries(convexDice
+PRIVATE
+rolling_dragons::rolling_dragons
+taywee::args
+)
+set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
+
+
+# add_executable(CoMopt src/main_G_opt.cpp)
+# target_link_libraries(CoMopt
 # PRIVATE
 # rolling_dragons::rolling_dragons
 # taywee::args
 # )
-# set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
+# set_property(TARGET CoMopt PROPERTY CXX_STANDARD 20)
 
 
 # # Add executables
