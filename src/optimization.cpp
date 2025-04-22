@@ -310,7 +310,7 @@ Eigen::VectorXd update_GRB_QP_objective_and_solve(GRBModel &model,
     } catch (...) {
         std::cout << ANSI_FG_RED << "Error during optimization" << ANSI_RESET << std::endl;
     }
-    return x_0;                         
+    return x_0;
 }
 
 

@@ -71,6 +71,7 @@ find_library(GUROBI_CXX_LIBRARY
              PATHS "$ENV{GUROBI_HOME}/lib" 
               "${GUROBI_BASE}/lib"
              )
+message("GUROBI LIB name: ${GUROBI_LIB_NAME}")
 else()
     file(GLOB GUROBI_CXX_SRC CONFIGURE_DEPENDS ${GUROBI_SRC_DIR}/cpp/*.cpp)
     if(NOT GUROBI_CXX_SRC)

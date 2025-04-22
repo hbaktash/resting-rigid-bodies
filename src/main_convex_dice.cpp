@@ -66,11 +66,11 @@ FaceData<Vector3> face_colors;
 
 int fair_sides_count = 6, // for optimization
     DE_step_count = 40;
-bool do_sobolev_dice_grads = true,
+bool do_sobolev_dice_grads = false,
+     frozen_G = false,
      use_autodiff_for_dice_grad = true,
      visualize_steps = true,
-     adaptive_reg = false,
-     frozen_G = true;
+     adaptive_reg = false;
 float sobolev_lambda = 2.,
       sobolev_lambda_decay = 0.8,
       dice_energy_step = 0.01,
@@ -256,7 +256,18 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
     current_accum_probs[f] = tmp_bnd_builder.face_region_area[tmp_solver.face_last_face[f]]/(4.*PI);
   }
   polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(false);    
-  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current accum probs", current_accum_probs)->setColorMap("reds")->setEnabled(true);    
+  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current accum probs", current_accum_probs)->setColorMap("reds")->setEnabled(false);    
+  face_colors = FaceData<Vector3>(*tmp_solver.hullMesh, Vector3{0., 0., 0.});
+  Vector3 ambient_color{168./255., 230./255., 26./255.};
+  for (Face f: tmp_solver.hullMesh->faces()){
+    if (tmp_solver.face_last_face[f] == f){
+      double p = tmp_bnd_builder.face_region_area[f]/(4.*PI);
+      face_colors[f] = Vector3{p + (1-p)*168./255., (1-p)*230./255., (1-p)*26./255.};
+    }
+    else
+      face_colors[f] = ambient_color;
+  }
+  polyscope::getSurfaceMesh("current hull")->addFaceColorQuantity("current probs green-red", face_colors)->setEnabled(true);
   
   // Visuals/Logs
   if (print_probs){
@@ -558,6 +569,17 @@ void save_params(std::string output_name){
   param_file << "do sobolev grads: " << do_sobolev_dice_grads << "\n";
   param_file << "adaptive reg: " << adaptive_reg << "\n";
   param_file << "frozen G: " << frozen_G << "\n";
+  // step size, count 
+  param_file << " -----  Other Params ----- " << "\n";
+  param_file << "DE step count: " << DE_step_count << "\n";
+  param_file << "update with max prob face: " << update_with_max_prob_face << "\n";
+  param_file << "visualize steps: " << visualize_steps << "\n";
+  param_file << "policy general: " << policy_general << "\n";
+  param_file << "policy shape: " << policy.substr(policy.find(" ") + 1) << "\n";
+  param_file << "input name: " << input_name << "\n";
+  param_file << "input shape: " << input_name << "\n";
+  param_file << "input shape dir: " << "../meshes/convex/" + input_name + ".obj" << "\n";
+  param_file << "input shape dir: " << "../meshes/convex/" + input_name + ".obj" << "\n";
   param_file.close();
 }
 
