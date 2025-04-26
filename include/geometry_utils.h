@@ -31,6 +31,8 @@ using namespace geometrycentral::surface;
 Vector3 barycentric(Vector3 p, Vector3 A, Vector3 B, Vector3 C);
 SurfacePoint get_robust_barycentric_point(SurfacePoint p, double threshold);
 
+bool is_in_positive_cone(Vector3 v1, Vector3 v2, Vector3 v3, Vector3 q);
+
 // tmp tools
 Vector3 vec2vec3(Vector<double> v);
 Vector3 vec3d_to_vec3(Eigen::Vector3d v);

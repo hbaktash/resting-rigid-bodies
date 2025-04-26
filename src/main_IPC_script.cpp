@@ -142,7 +142,7 @@ int snail_trail_dummy_counter = 0;
 ManifoldSurfaceMesh* icos_sphere_mesh;
 VertexPositionGeometry* icos_sphere_geometry;
     
-
+int solid_angle_face_index = 0;
 
 void initialize_vis(bool with_plane = true){
     polyscope::registerSurfaceMesh("my polyhedra", geometry->inputVertexPositions, mesh->getFaceVertexList());
@@ -271,7 +271,7 @@ void init_visuals(){
   psInputMesh->setEnabled(true);
   auto psHullMesh = polyscope::registerSurfaceMesh(
     "init hull mesh",
-    forwardSolver->hullGeometry->inputVertexPositions, forwardSolver->hullMesh->getFaceVertexList(),
+    forwardSolver->hullGeometry->inputVertexPositions*0.8, forwardSolver->hullMesh->getFaceVertexList(),
     polyscopePermutations(*forwardSolver->hullMesh));
   psHullMesh->setEnabled(true);
   psHullMesh->setEdgeWidth(0.7);
@@ -340,7 +340,7 @@ void build_raster_image(){
   printf(" ### total invalid faces: %d/%d\n", total_invalids, ICOS_samples);
   std::vector<Vector3> raster_positions,
                        raster_colors;
-                       
+
   FaceData<double> accum_face_areas(*forwardSolver->hullMesh, 0.);
   printf("empirical probs:\n");
   size_t unstable_faces = 0;
@@ -1102,6 +1102,33 @@ void myCallback() {
     if (ImGui::Button("draw MS complex")){
       draw_stable_patches_on_gauss_map();
     }
+    if (ImGui::InputInt("solid angle face index", &solid_angle_face_index));
+    if (ImGui::Button("solid angle info")){
+      polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
+      polyscope::getPointCloud("Edge equilibria")->setEnabled(false);
+      polyscope::getPointCloud("stable Face Normals")->setEnabled(false);
+      polyscope::getPointCloud("stable Vertices Normals")->setEnabled(false);
+
+      std::cout << "Solid angle comparison:\n";
+      // print solid angle of each stable face seen from the center of mass
+      FaceData<double> solid_angles(*forwardSolver->hullMesh, 0.);
+      Vector3 com = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).first;
+      for (Face f: forwardSolver->hullMesh->faces()){
+        if (forwardSolver->face_is_stable(f)){
+          Vertex v1 = f.halfedge().vertex(), v2 = f.halfedge().next().vertex(), v3 = f.halfedge().next().next().vertex();
+          Vector3 p1 = forwardSolver->hullGeometry->inputVertexPositions[v1],
+                  p2 = forwardSolver->hullGeometry->inputVertexPositions[v2],
+                  p3 = forwardSolver->hullGeometry->inputVertexPositions[v3];
+          // assume outward normal
+          double solid_angle = triangle_patch_area_on_sphere(p1 - com, p2 - com, p3 - com);
+          solid_angles[f] = solid_angle;
+          std::cout<< "Face " << f.getIndex() << "\t: " << solid_angle << "\t -- normalized: " << solid_angle/(4.*PI) << " \t ours:" << boundary_builder->face_region_area[f]/(4.*PI) << " \n";
+        }
+      }
+      polyscope::getSurfaceMesh("init hull mesh")->addFaceScalarQuantity("solid angles", solid_angles, polyscope::DataType::MAGNITUDE)->setColorMap("reds")->setEnabled(true);
+      visualize_face_solid_angle_vs_ms_complex(solid_angle_face_index, boundary_builder,sphere_mesh, sphere_geometry);
+      // 937 6
+    }
     if (ImGui::Checkbox("sampling ICOS", &ICOS_sampling));
     if (ImGui::Button("run IPC simulation")){
       // json template load
@@ -1229,7 +1256,6 @@ int main(int argc, char* argv[])
       run_parallel_for_each_BB_shape(BB_BASE_DIR);
     }
     else if (single_mesh_path){
-      
       // --- Debugging --- //
       polyscope::init();
       vis_utils = VisualUtils();
@@ -1304,6 +1330,9 @@ int main(int argc, char* argv[])
         max_edge = edge_len;
     }
     std::cout << "min edge: " << min_edge << " max edge: " << max_edge << "\n";
+
+    // // show PC for one example
+    // polyscope::registerPointCloud("input PC", geometry->inputVertexPositions)->setPointColor({0.1,0.1,0.1})->setPointRadius(0.01, false);
 
     // print volume of the shape
     double volume = find_center_of_mass(*forwardSolver->inputMesh, *forwardSolver->inputGeometry).second;

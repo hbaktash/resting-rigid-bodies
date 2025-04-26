@@ -78,6 +78,20 @@ SurfacePoint get_robust_barycentric_point(SurfacePoint p, double threshold){
 }
 
 
+bool is_in_positive_cone(Vector3 v1, Vector3 v2, Vector3 v3, Vector3 q){
+    // solve the linear system [v1 v2 v3] * x = q
+    Eigen::Matrix3d A;
+    A << v1[0], v2[0], v3[0],
+         v1[1], v2[1], v3[1],
+         v1[2], v2[2], v3[2];
+    Eigen::Vector3d b;
+    b << q[0], q[1], q[2];
+    Eigen::Vector3d x = A.colPivHouseholderQr().solve(b);
+    if (x[0] >= 0 && x[1] >= 0 && x[2] >= 0)
+        return true;
+    else
+        return false;
+}
 
 // tmp tools ; should be in utils
 Vector3 vec2vec3(Vector<double> v){

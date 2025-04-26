@@ -170,30 +170,13 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
                                           Vector3 center, double radius, size_t seg_count,
                                           bool on_height_surface){
   std::vector<Vector3> boundary_normals(BoundaryNormal::counter);
-  std::set<std::pair<size_t, size_t>> drawn_pairs;
-  // printf("showing boundary patches\n");
-  // printf("  building pairs\n ");
-  for (Edge e: boundary_builder->forward_solver->hullMesh->edges()){
-    for (BoundaryNormal *tmp_bnd_normal: boundary_builder->edge_boundary_normals[e]){
-      if (tmp_bnd_normal != nullptr){
-        Vector3 tmp_normal = tmp_bnd_normal->normal;
-        boundary_normals[tmp_bnd_normal->index] = tmp_normal; // + gm_shift;
-        for (BoundaryNormal *neigh_bnd_normal: tmp_bnd_normal->neighbors){
-          Vector3 neigh_normal = neigh_bnd_normal->normal;
-          boundary_normals[neigh_bnd_normal->index] = neigh_normal;
-          std::pair<size_t, size_t> tmp_pair = {tmp_bnd_normal->index, neigh_bnd_normal->index};
-          if (drawn_pairs.find(tmp_pair) == drawn_pairs.end()){
-            drawn_pairs.insert(tmp_pair);
-            // printf("here!!! %d, %d \n", tmp_pair.first, tmp_pair.second);
-          }
-        }
-      }
-    }
-  }
-  glm::vec3 arc_color = glm::vec3({1.,0,0}); // default color
   std::vector<std::pair<size_t, size_t>> ind_pairs_vector;
-  // Using vector::assign
-  ind_pairs_vector.assign(drawn_pairs.begin(), drawn_pairs.end());
+  
+  auto p = boundary_builder->MS_complex_edges();
+  ind_pairs_vector = p.first;
+  boundary_normals = p.second;
+  
+  glm::vec3 arc_color = glm::vec3({1.,0,0}); // default color
   // printf("  drawing the arc network on GM\n ");
   draw_arc_network_on_sphere(ind_pairs_vector, boundary_normals, 
                             center, radius, seg_count, 
@@ -629,4 +612,165 @@ void VisualUtils::update_visuals(Forward3DSolver *tmp_solver, BoundaryBuilder *b
   draw_G(tmp_solver->get_G());
   plot_height_function(tmp_solver, sphere_mesh, sphere_geometry, false);
   draw_stable_patches_on_gauss_map(false, bnd_builder, false);
+}
+
+
+void draw_spherical_cone(std::vector<std::pair<size_t, size_t>> edges,std::vector<Vector3> poses, 
+                         Vector3 center, size_t seg_count, glm::vec3 color, std::string title){
+  std::vector<Vector3> refined_cone_poses;
+  std::vector<std::vector<size_t>> refined_cone_faces;
+  refined_cone_poses.push_back(Vector3{0,0,0});
+  size_t cone_pose_count = 1;
+  for (std::pair<size_t, size_t> edge_pair: edges){
+    size_t i = edge_pair.first,
+           j = edge_pair.second;
+    Vector3 p1 = poses[i],
+            p2 = poses[j];
+    for (int j = 0; j < seg_count; j++){
+      Vector3 tmp_p1 = p2 * ((double)j/(double)seg_count) + p1 * ((double)(seg_count-j)/(double)seg_count),
+              tmp_p2 = p2 * ((double)(j+1)/(double)seg_count) + p1 * ((double)(seg_count-j-1)/(double)seg_count);
+      refined_cone_poses.push_back(tmp_p1.normalize());
+      refined_cone_poses.push_back(tmp_p2.normalize());
+      refined_cone_faces.push_back({0, cone_pose_count, cone_pose_count+1});
+      cone_pose_count += 2;
+    }
+  }
+  std::vector<Vector3> refined_cone_poses_shifted;
+  for (Vector3 p: refined_cone_poses){
+    refined_cone_poses_shifted.push_back(p + center);
+  }
+  polyscope::registerSurfaceMesh(title, refined_cone_poses_shifted, refined_cone_faces)->setSurfaceColor(color)->setBackFacePolicy(polyscope::BackFacePolicy::Identical);
+}
+
+
+std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>  
+make_cone_conforming_spherical_triangulation(BoundaryBuilder* boundary_builder, 
+      ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry, Face cone_f,
+      Vector3 shift, std::vector<Vector3>& cone_poses, std::vector<std::pair<size_t, size_t>>& cone_edges, glm::vec3 cone_color,
+      std::vector<Vector3>& prism_poses, std::vector<std::pair<size_t, size_t>>& prism_edges, glm::vec3 prism_color){
+  // make a list of intersection points first
+  std::vector<Vector3> s2_poses;
+  for (Vertex v: sphere_mesh->vertices()){
+    Vector3 pos = sphere_geometry->inputVertexPositions[v];
+    s2_poses.push_back(pos.normalize());
+  }
+  for (std::pair<size_t, size_t> edge_arc: cone_edges){
+    Vector3 p_c1 = cone_poses[edge_arc.first],
+            p_c2 = cone_poses[edge_arc.second];
+    for (Edge e: sphere_mesh->edges()){
+      Vector3 p1 = sphere_geometry->inputVertexPositions[e.firstVertex()].normalize(),
+              p2 = sphere_geometry->inputVertexPositions[e.secondVertex()].normalize();
+      // intersect p1-p2 with p_c1-p_c2
+      bool sign_change = false;
+      Vector3 p_int = intersect_arc_ray_with_arc(p1, p2, p_c1, p_c2, sign_change);
+      if (p_int.norm() != 0 && intersect_arc_ray_with_arc(p_c1, p_c2, p1, p2, sign_change).norm() != 0){
+        s2_poses.push_back(p_int);
+      }
+    }
+  }
+  // same for prism
+  for (std::pair<size_t, size_t> edge_arc: prism_edges){
+    Vector3 p_c1 = prism_poses[edge_arc.first],
+            p_c2 = prism_poses[edge_arc.second];
+    for (Edge e: sphere_mesh->edges()){
+      Vector3 p1 = sphere_geometry->inputVertexPositions[e.firstVertex()].normalize(),
+              p2 = sphere_geometry->inputVertexPositions[e.secondVertex()].normalize();
+      // intersect p1-p2 with p_c1-p_c2
+      bool sign_change = false;
+      Vector3 p_int = intersect_arc_ray_with_arc(p1, p2, p_c1, p_c2, sign_change);
+      if (p_int.norm() != 0 && intersect_arc_ray_with_arc(p_c1, p_c2, p1, p2, sign_change).norm() != 0){
+        s2_poses.push_back(p_int);
+      }
+    }
+  }
+  // take convex hull of s2 poses
+  ManifoldSurfaceMesh* new_s2_mesh;
+  VertexPositionGeometry* new_s2_geometry;
+  std::tie(new_s2_mesh, new_s2_geometry) = get_convex_hull_mesh(s2_poses);
+  polyscope::SurfaceMesh* new_s2_ps_mesh = polyscope::registerSurfaceMesh("new_s2_mesh", 
+                                                    new_s2_geometry->inputVertexPositions + shift, 
+                                                    new_s2_mesh->getFaceVertexList());
+  polyscope::getSurfaceMesh("gm_sphere_mesh")->setEnabled(false);
+  new_s2_ps_mesh->setSmoothShade(true);
+  new_s2_ps_mesh->setSurfaceColor({0.74,0.7,0.9});
+  new_s2_ps_mesh->setTransparency(0.5);
+  // // color faces in the conforming triangulation
+  FaceData<Vector3> face_colors(*new_s2_mesh, Vector3({0.74, 0.7, 0.9}));
+  Vector3 face_cone_p1 = prism_poses[1].normalize(),
+          face_cone_p2 = prism_poses[2].normalize(),
+          face_cone_p3 = prism_poses[3].normalize();
+  std::vector<std::vector<size_t>> face_cone_faces, MS_cone_faces;
+  std::vector<std::vector<size_t>> all_faces_list = new_s2_mesh->getFaceVertexList();
+  for (Face f: new_s2_mesh->faces()){
+    // for inner MS cone faces
+    Vector3 p1 = new_s2_geometry->inputVertexPositions[f.halfedge().vertex()].normalize(),
+            p2 = new_s2_geometry->inputVertexPositions[f.halfedge().next().vertex()].normalize(),
+            p3 = new_s2_geometry->inputVertexPositions[f.halfedge().next().next().vertex()].normalize();
+    Vector3 center_normal = ((p1 + p2 + p3)/3.).normalize();
+    Face final_face = boundary_builder->forward_solver->final_touching_face(center_normal);
+    if (final_face == cone_f){
+      face_colors[f] = Vector3({cone_color.x,cone_color.y,cone_color.z});
+      MS_cone_faces.push_back(all_faces_list[f.getIndex()]);
+    }
+    // for inner face solid angle faces
+    // check if center normal lays withing the face solid angle cone
+    if (is_in_positive_cone(face_cone_p1, face_cone_p2, face_cone_p3, center_normal)){
+      face_colors[f] = Vector3({prism_color.x,prism_color.y,prism_color.z});
+      face_cone_faces.push_back(all_faces_list[f.getIndex()]);
+    }
+  }
+  
+  new_s2_ps_mesh->addFaceColorQuantity("cone MS colors", face_colors)->setEnabled(true);
+  // add new patches as surfaces
+  polyscope::registerSurfaceMesh("MS cone patch", 
+                                  new_s2_geometry->inputVertexPositions + shift, 
+                                  MS_cone_faces)->setSurfaceColor(cone_color);
+  polyscope::registerSurfaceMesh("Face solid angle patch", 
+    new_s2_geometry->inputVertexPositions + shift, 
+    face_cone_faces)->setSurfaceColor(prism_color);
+  return {new_s2_mesh, new_s2_geometry};
+}
+
+
+void visualize_face_solid_angle_vs_ms_complex(size_t f_ind, BoundaryBuilder* boundary_builder,
+          ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry){
+  Face f = boundary_builder->forward_solver->hullMesh->face(f_ind);
+  if (boundary_builder->forward_solver->face_last_face[f] != f)
+    throw std::logic_error("provide stable face for plot\n"); 
+  
+  Vector3 shift({0,0,0});
+  // first build a mesh of a prism with the com and this face
+  std::vector<Vector3> prism_verts;
+  Vector3 G = boundary_builder->forward_solver->get_G();
+  prism_verts.push_back(G);
+  for (Vertex v: f.adjacentVertices()){
+    Vector3 pos = boundary_builder->forward_solver->hullGeometry->inputVertexPositions[v];
+    prism_verts.push_back(pos.normalize());
+  }
+  std::vector<std::pair<size_t, size_t>> prism_edge_pairs;
+  prism_edge_pairs.push_back({1, 2}); prism_edge_pairs.push_back({2, 3}); prism_edge_pairs.push_back({3, 1});
+  glm::vec3 prism_color = glm::vec3({1., 14./25.,0.});
+  draw_arc_network_on_sphere(prism_edge_pairs, prism_verts, shift, 1., 12, 
+    "Face Solid angle cone", 1., prism_color, 0.009);
+  draw_spherical_cone(prism_edge_pairs, prism_verts, shift, 12, prism_color,
+                      "refined face solid angle cone");
+
+  // Now build a mesh of a prism with the com and the corresponding boundary patch of this face
+  auto p = boundary_builder->MS_complex_edges_of_face(f);
+  std::vector<Vector3> boundary_normals = p.second;
+  std::vector<std::pair<size_t, size_t>> ind_pairs = p.first;
+  // polygon first
+  glm::vec3 MS_cone_color = glm::vec3({33./255., 100./255.,10./255.});
+  draw_arc_network_on_sphere(ind_pairs, boundary_normals, 
+                  shift, 1., 12, 
+                  "MS Cone boundary", 1., MS_cone_color, 0.009); // larger radius for separatrix arcs
+  // Cone color on GM
+  draw_spherical_cone(ind_pairs, boundary_normals, shift, 12,
+    MS_cone_color, "refined MS cone"); 
+  
+  // color corresponding spherical patches
+  make_cone_conforming_spherical_triangulation(boundary_builder, sphere_mesh, sphere_geometry, f, 
+                                                shift,
+                                                boundary_normals, ind_pairs, MS_cone_color,
+                                                prism_verts, prism_edge_pairs, prism_color);
 }

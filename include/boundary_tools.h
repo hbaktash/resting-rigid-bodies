@@ -122,7 +122,11 @@ class BoundaryBuilder {
 
         double print_pairwise_distances(bool verbose = false);
 
-
+        std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
+                MS_complex_edges();
+        
+        std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
+                MS_complex_edges_of_face(Face f);
         // TODO template
         template <typename Scalar>
         static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,

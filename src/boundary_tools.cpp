@@ -698,6 +698,66 @@ double BoundaryBuilder::print_pairwise_distances(bool verbose){
   return area_weighted_ratio_test;
 }
 
+
+std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
+                BoundaryBuilder::MS_complex_edges(){
+  std::vector<Vector3> boundary_normals(BoundaryNormal::counter);
+  std::set<std::pair<size_t, size_t>> drawn_pairs;
+  // printf("showing boundary patches\n");
+  // printf("  building pairs\n ");
+  for (Edge e: this->forward_solver->hullMesh->edges()){
+    for (BoundaryNormal *tmp_bnd_normal: this->edge_boundary_normals[e]){
+      if (tmp_bnd_normal != nullptr){
+        Vector3 tmp_normal = tmp_bnd_normal->normal;
+        boundary_normals[tmp_bnd_normal->index] = tmp_normal; // + gm_shift;
+        for (BoundaryNormal *neigh_bnd_normal: tmp_bnd_normal->neighbors){
+          Vector3 neigh_normal = neigh_bnd_normal->normal;
+          boundary_normals[neigh_bnd_normal->index] = neigh_normal;
+          std::pair<size_t, size_t> tmp_pair = {tmp_bnd_normal->index, neigh_bnd_normal->index};
+          if (drawn_pairs.find(tmp_pair) == drawn_pairs.end()){
+            drawn_pairs.insert(tmp_pair);
+          }
+        }
+      }
+    }
+  }
+  // set to vector
+  std::vector<std::pair<size_t, size_t>> ind_pairs_vector;
+  ind_pairs_vector.assign(drawn_pairs.begin(), drawn_pairs.end());
+  return {ind_pairs_vector, boundary_normals};
+}
+
+
+std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
+    BoundaryBuilder::MS_complex_edges_of_face(Face f){
+  std::vector<Vector3> boundary_normals(BoundaryNormal::counter);
+  std::set<std::pair<size_t, size_t>> edge_set;
+  // printf("showing boundary patches\n");
+  // printf("  building pairs\n ");
+  for (Edge e: this->forward_solver->hullMesh->edges()){
+    for (BoundaryNormal *tmp_bnd_normal: this->edge_boundary_normals[e]){
+      if (tmp_bnd_normal != nullptr && 
+          (tmp_bnd_normal->f1 == f || tmp_bnd_normal->f2 == f)){
+        Vector3 tmp_normal = tmp_bnd_normal->normal;
+        boundary_normals[tmp_bnd_normal->index] = tmp_normal; // + gm_shift;
+        // gotta be two neighbors since on edge
+        for (BoundaryNormal *neigh_bnd_normal: tmp_bnd_normal->neighbors){ 
+          Vector3 neigh_normal = neigh_bnd_normal->normal;
+          boundary_normals[neigh_bnd_normal->index] = neigh_normal;
+          std::pair<size_t, size_t> tmp_pair = {tmp_bnd_normal->index, neigh_bnd_normal->index};
+          if (edge_set.find(tmp_pair) == edge_set.end()){
+            edge_set.insert(tmp_pair);
+          }
+        }
+      }
+    }
+  }
+  // set to vector
+  std::vector<std::pair<size_t, size_t>> ind_pairs_vector;
+  ind_pairs_vector.assign(edge_set.begin(), edge_set.end());
+  return {ind_pairs_vector, boundary_normals};
+}
+        
 // ========================================================================================== TOOD: move to optimization and generalize
 
 

@@ -129,3 +129,16 @@ std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>>
     build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
                                       Vector3 center, double radius, size_t seg_count,
                                       bool on_height_surface = false);
+
+void draw_spherical_cone(std::vector<std::pair<size_t, size_t>> edges,std::vector<Vector3> poses, 
+    Vector3 center, size_t seg_count, glm::vec3 color, std::string title);
+
+std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*> 
+make_cone_conforming_spherical_triangulation(BoundaryBuilder* boundary_builder,
+    ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry, Face f,
+    Vector3 shift, 
+    std::vector<Vector3>& cone_poses, std::vector<std::pair<size_t, size_t>>& cone_edges, glm::vec3 cone_color,
+    std::vector<Vector3>& prism_poses, std::vector<std::pair<size_t, size_t>>& prism_edges, glm::vec3 prism_color);
+
+void visualize_face_solid_angle_vs_ms_complex(size_t f_ind, BoundaryBuilder* boundary_builder,
+    ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry);
