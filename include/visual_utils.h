@@ -46,7 +46,8 @@ class VisualUtils{
               stablizable_edge_radi = 0.009,
               both_edge_radi = 0.013,
               gm_pt_radi = 0.005,
-              G_radi = 0.05;
+              G_radi = 0.05,
+              arc_curve_radi = 0.002;
 
         glm::vec3 stable_edge_color = glm::vec3({0.2, 0.3, 0.3}),
                   stabilizable_edge_color = glm::vec3({0.05, 0.05, 0.05}),
@@ -116,19 +117,19 @@ void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds
                                 std::vector<Vector3> positions_,
                                 Vector3 center, double radius, size_t seg_count, std::string title, 
                                 double radi_scale = 1., glm::vec3 color = glm::vec3({-1., 0, 0}), 
-                                float arc_curve_radi = 0.003);
+                                float arc_curve_radi = 0.002);
 
 void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> edge_inds_,
                                        std::vector<Vector3> positions_,
                                        Forward3DSolver &forward_solver,
                                        Vector3 center, double radius, size_t seg_count, std::string title, 
                                        glm::vec3 color = glm::vec3({-1., 0, 0}), 
-                                       float arc_curve_radi = 0.003);
+                                       float arc_curve_radi = 0.002);
 
 std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
     build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
                                       Vector3 center, double radius, size_t seg_count,
-                                      bool on_height_surface = false);
+                                      bool on_height_surface = false, double arc_curve_radi = 0.004);
 
 void draw_spherical_cone(std::vector<std::pair<size_t, size_t>> edges,std::vector<Vector3> poses, 
     Vector3 center, size_t seg_count, glm::vec3 color, std::string title);

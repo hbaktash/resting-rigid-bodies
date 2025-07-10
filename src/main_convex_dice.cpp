@@ -83,6 +83,9 @@ int sobolev_p = 2;
 // optimization stuff
 bool update_with_max_prob_face = true;
 
+// log stuff
+bool save_sequence_scr = false,
+     save_sequence_files = false;
 
 // example choice
 std::vector<std::string> all_input_names = {std::string("6 prism"), std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
@@ -207,13 +210,13 @@ void generate_polyhedron_example(std::string poly_str){
 void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, 
                                        std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
                                        Eigen::MatrixXd dfdV, Eigen::MatrixXd diffused_dfdV, 
-                                       bool show, bool print_probs = false){
+                                       bool show, bool print_probs = false, size_t frame_cnt = 0){
   polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>{tmp_solver.get_G()});
   auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
   // curr_hull_psmesh->addVertexVectorQuantity("dfdV", dfdV)->setEnabled(false);
   // if (diffused_dfdV.size() > 0)
   //   curr_hull_psmesh->addVertexVectorQuantity("diffused dfdV", diffused_dfdV)->setEnabled(false);
-
+  
   curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
   if (policy_general == "manual"){ // first word
     FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver, normal_prob_assignment);
@@ -222,7 +225,7 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
   else if (policy_general == "manualCluster"){ // first word
     std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_assignment);
     FaceData<double> goal_cluster_probs(*tmp_solver.hullMesh, 0.),
-                     current_cluster_probs(*tmp_solver.hullMesh, 0.);
+    current_cluster_probs(*tmp_solver.hullMesh, 0.);
     std::vector<Vector3> assignees;
     for (auto cluster: clustered_probs){
       double current_cluster_prob = 0.;
@@ -247,7 +250,7 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
     curr_hull_psmesh->addFaceScalarQuantity("current cluster accum probs", current_cluster_probs)->setColorMap("reds")->setEnabled(true); 
     polyscope::registerPointCloud("Cluster assignees", assignees)->setPointColor({0.5,0.80,0.8});
   }
-
+  
   BoundaryBuilder tmp_bnd_builder(&tmp_solver);
   tmp_bnd_builder.build_boundary_normals();
   vis_utils.update_visuals(&tmp_solver, &tmp_bnd_builder, sphere_mesh, sphere_geometry);
@@ -265,7 +268,7 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
       face_colors[f] = Vector3{p + (1-p)*168./255., (1-p)*230./255., (1-p)*26./255.};
     }
     else
-      face_colors[f] = ambient_color;
+    face_colors[f] = ambient_color;
   }
   polyscope::getSurfaceMesh("current hull")->addFaceColorQuantity("current probs green-red", face_colors)->setEnabled(true);
   
@@ -273,9 +276,31 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
   if (print_probs){
     tmp_bnd_builder.print_area_of_boundary_loops();
   }
+  if (save_sequence_scr){
+    polyscope::getSurfaceMesh("current hull")->setEnabled(false);
+    polyscope::getPointCloud("Center of Mass")->setEnabled(false);
+    polyscope::getSurfaceMesh("input concave mesh")->setEnabled(false);
+    polyscope::getSurfaceMesh("hull mesh")->setEnabled(false);
+    polyscope::getPointCloud("Cluster assignees")->setEnabled(false);
+    polyscope::getPointCloud("Edge equilibria")->setEnabled(false);
+    polyscope::getPointCloud("stable Vertices Normals")->setEnabled(false);
+
+    // for shape itself
+    polyscope::getSurfaceMesh("current hull")->setEnabled(true);
+    polyscope::getSurfaceMesh("current hull")->getQuantity("current probs green-red")->setEnabled(false);
+    polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
+    polyscope::getCurveNetwork("Arc curves region boundaries")->setEnabled(false);
+    polyscope::getPointCloud("stable Face Normals")->setEnabled(false);
+    polyscope::getSurfaceMesh("gm_sphere_mesh")->setEnabled(false);
+    // save the current hull obj file
+    std::string output_name = "hull_" + std::to_string(frame_cnt) + ".obj";
+    writeSurfaceMesh(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, "../meshes/hulls/opt_sequence/" + output_name);
+
+    polyscope::screenshot(true);
+  }
   if (show){
     // polyscope::frameTick();
-    polyscope::screenshot(false);
+    // polyscope::screenshot(false);
     polyscope::show();
   }
 }
@@ -489,7 +514,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
     }
     // DEBUG/visuals
     visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, 
-                                      dfdV, diffused_dfdV, visualize_steps);
+                                      dfdV, diffused_dfdV, visualize_steps, false, iter);
     // printf("line search\n");
     double opt_step_size = 1.;
     if (dice_search_decay != 1.){
@@ -537,7 +562,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   }
 
   // DEBUG/visuals
-  visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, dfdV, diffused_dfdV, false, true);
+  visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, dfdV, diffused_dfdV, false, true, step_count);
 
   optimized_mesh = tmp_solver.hullMesh;
   optimized_geometry = tmp_solver.hullGeometry; 
@@ -617,6 +642,7 @@ void myCallback() {
   ImGui::Checkbox("update clusterN with max prob face", &update_with_max_prob_face);
   ImGui::Checkbox("adaptive reg", &adaptive_reg);
   ImGui::Checkbox("visualize steps", &visualize_steps);
+  ImGui::Checkbox("save scrs", &save_sequence_scr);
   if (ImGui::Button("dice energy opt")){
     dice_energy_opt(policy, bary_reg, coplanar_reg, frozen_G, DE_step_count);
   }
@@ -647,7 +673,6 @@ int main(int argc, char **argv) {
   // args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {"samples"});
   args::ValueFlag<std::string> input_shape_arg(parser, "input_shape_str", "path to input shape", {'m', "mesh_dir"});
   args::ValueFlag<std::string> policy_arg(parser, "policy_general", " general policy string: fair | manual | manualCluster | fairCluster ", {'p', "policy"}, "manualCluster");
-
 
   try {
     parser.ParseCLI(argc, argv);
@@ -681,6 +706,10 @@ int main(int argc, char **argv) {
   
   // build mesh
   vis_utils = VisualUtils();
+  // vis params; fine tune
+  vis_utils.arcs_seg_count = 1000;
+  vis_utils.arc_curve_radi = 0.001;
+
   polyscope::init();
 
   initialize_state(input_name);

@@ -80,14 +80,14 @@ void draw_arc_network_on_sphere(std::vector<std::pair<size_t, size_t>> edge_inds
     Vector3 p1 = positions_[i1],
             p2 = positions_[i2];
     // walk on p1-p2 segment
-    seg_count = 3 + (int)((p1 - p2).norm()*9);
+    int tmp_seg_cnt = 3 + (int)((p1 - p2).norm()*seg_count); // 2x seg count for largest arc
     Vector3 curr_point = p1,
-            forward_vec = (p2-p1)/(double)seg_count;
+            forward_vec = (p2-p1)/(double)tmp_seg_cnt;
     Vector3 next_point = curr_point + forward_vec;
     Vector3 curr_point_on_sphere = normalize(curr_point) * sqrt_radi + center ,
             next_point_on_sphere = normalize(next_point) * sqrt_radi + center;
     positions.push_back(curr_point_on_sphere);
-    for (size_t i = 0; i < seg_count; i++){
+    for (size_t i = 0; i < tmp_seg_cnt; i++){
       // add to positions list
       curr_point_on_sphere = normalize(curr_point) * sqrt_radi + center ,
       next_point_on_sphere = normalize(next_point) * sqrt_radi + center;
@@ -168,7 +168,7 @@ void draw_arc_network_on_lifted_suface(std::vector<std::pair<size_t, size_t>> ed
 std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
 build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, 
                                           Vector3 center, double radius, size_t seg_count,
-                                          bool on_height_surface){
+                                          bool on_height_surface, double arc_curve_radi){
   std::vector<Vector3> boundary_normals(BoundaryNormal::counter);
   std::vector<std::pair<size_t, size_t>> ind_pairs_vector;
   
@@ -180,12 +180,12 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
   // printf("  drawing the arc network on GM\n ");
   draw_arc_network_on_sphere(ind_pairs_vector, boundary_normals, 
                             center, radius, seg_count, 
-                            "region boundaries", 1., arc_color, 0.005); // larger radius for separatrix arcs
+                            "region boundaries", 1., arc_color, arc_curve_radi); // larger radius for separatrix arcs
   if (on_height_surface){
     // printf("  drawing the arc network on height surface\n ");
     draw_arc_network_on_lifted_suface(ind_pairs_vector, boundary_normals, *boundary_builder->forward_solver, 
                                       center, 0., seg_count, 
-                                      "region boundaries ", arc_color);
+                                      "region boundaries ", arc_color, arc_curve_radi);
   }
   return {ind_pairs_vector, boundary_normals};
 }
@@ -236,7 +236,7 @@ void VisualUtils::draw_edge_arcs_on_gauss_map(Forward3DSolver* forwardSolver){
   }
   else {
     draw_arc_network_on_sphere(all_edge_inds, positions, center, gm_radi, arcs_seg_count,
-                              "all edge arcs", 1., stabilizable_edge_color, 0.002);
+                              "all edge arcs", 1., stabilizable_edge_color, arc_curve_radi);
   }
 }
 
@@ -293,7 +293,7 @@ void VisualUtils::draw_stable_face_normals_on_gauss_map(Forward3DSolver* forward
   }
   polyscope::PointCloud* stable_face_normals_pc = polyscope::registerPointCloud("stable Face Normals", stable_face_normals);
   stable_face_normals_pc->addScalarQuantity("stable face probs", stable_face_probs);
-  stable_face_normals_pc->setPointRadius(gm_pt_radi*3., false);
+  stable_face_normals_pc->setPointRadius(gm_pt_radi*6., false);
   stable_face_normals_pc->setPointColor({0.9,0.1,0.1});
   stable_face_normals_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere); 
 
@@ -330,7 +330,7 @@ void VisualUtils::plot_height_function(Forward3DSolver* forwardSolver, ManifoldS
   }
   polyscope::SurfaceVertexScalarQuantity *height_func_vis = 
               gm_sphere_mesh->addVertexScalarQuantity(" height function", heigh_func);
-  // height_func_vis->setEnabled(true);
+  height_func_vis->setEnabled(true);
   if (plot_surface){
     polyscope::SurfaceMesh* height_function_mesh = polyscope::registerSurfaceMesh("height surface_func", 
                                                     lifted_poses, 
@@ -607,7 +607,7 @@ void VisualUtils::draw_stable_patches_on_gauss_map(bool on_height_surface,
 void VisualUtils::update_visuals(Forward3DSolver *tmp_solver, BoundaryBuilder *bnd_builder, 
                                  ManifoldSurfaceMesh *sphere_mesh, VertexPositionGeometry *sphere_geometry){
   // VisualUtils vis_utils(tmp_solver);
-  VisualUtils vis_utils;
+  // VisualUtils vis_utils;
   draw_gauss_map(tmp_solver, sphere_mesh, sphere_geometry);
   draw_G(tmp_solver->get_G());
   plot_height_function(tmp_solver, sphere_mesh, sphere_geometry, false);
