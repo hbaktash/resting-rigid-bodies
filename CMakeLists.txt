@@ -54,17 +54,6 @@ add_library(rolling_dragons::rolling_dragons ALIAS rolling_dragons)
 
 # Add executables
 
-# add_executable(adDebug src/main_ad_debug.cpp)
-# target_link_libraries(adDebug
-# PRIVATE
-# rolling_dragons::rolling_dragons
-# taywee::args
-# stan::stan
-# )
-# set_property(TARGET adDebug PROPERTY CXX_STANDARD 20)
-
-# Add executables
-
 # add_executable(convexFill src/main_convex_fill.cpp)
 # target_link_libraries(convexFill
 # PRIVATE
@@ -96,13 +85,13 @@ endif ()
 
 # # # Add executables
 
-add_executable(convexDice src/main_convex_dice.cpp)
-target_link_libraries(convexDice
-PRIVATE
-rolling_dragons::rolling_dragons
-taywee::args
-)
-set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
+# add_executable(convexDice src/main_convex_dice.cpp)
+# target_link_libraries(convexDice
+# PRIVATE
+# rolling_dragons::rolling_dragons
+# taywee::args
+# )
+# set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
 
 
 # add_executable(CoMopt src/main_G_opt.cpp)
@@ -116,19 +105,19 @@ set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
 
 # # Add executables
 
-# include(json)
-# # include(rigid-ipc)
-# include(bullet3)
-# add_executable(scriptIPC src/main_IPC_script.cpp src/bullet_sim.cpp)
-# target_link_libraries(scriptIPC
-# PRIVATE
-# rolling_dragons::rolling_dragons
-# taywee::args
-# nlohmann::json
-# bullet3::bullet3
-# # ipc::toolkit
-# )
-# set_property(TARGET scriptIPC PROPERTY CXX_STANDARD 20)
+include(json)
+# include(rigid-ipc)
+include(bullet3)
+add_executable(scriptIPC src/main_IPC_script.cpp src/bullet_sim.cpp)
+target_link_libraries(scriptIPC
+PRIVATE
+rolling_dragons::rolling_dragons
+taywee::args
+nlohmann::json
+bullet3::bullet3
+# ipc::toolkit
+)
+set_property(TARGET scriptIPC PROPERTY CXX_STANDARD 20)
 
 # Add executables
 
