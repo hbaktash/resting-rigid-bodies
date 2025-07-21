@@ -10,6 +10,10 @@ CPMAddPackage(
     NAME bullet3
     GITHUB_REPOSITORY bulletphysics/bullet3
     GIT_TAG master
+    OPTIONS
+        "BUILD_BULLET2_DEMOS OFF"
+        "BUILD_UNIT_TESTS OFF"           # <- Disable the gtest conflict
+        "BUILD_SHARED_LIBS OFF"
 )
 
 # Find_Package(Bullet)# CONFIG)
