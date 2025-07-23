@@ -138,7 +138,9 @@ int solid_angle_face_index = 0;
 // for file saving
 std::string mesh_title = "mesh";
 bool save_original = false,
-     save_oriented = false;
+     save_oriented = false,
+     save_orientation_trail = false,
+     snapshot_trail = false;
 
 
 
@@ -190,10 +192,10 @@ void generate_polyhedron_example(std::string mesh_full_path, bool preprocess = t
     geometry->inputVertexPositions[v.getIndex()] = nm_geometry->inputVertexPositions[v.getIndex()];
   }
 
-  // rotation for piggy
+  // initial rotation for piggy
   for (Vertex v: mesh->vertices()){
     Vector3 p = geometry->inputVertexPositions[v];
-    geometry->inputVertexPositions[v] = Vector3({p.x, p.z, -p.y});
+    geometry->inputVertexPositions[v] = Vector3({-p.x, p.z, p.y});
   }
 
   // preproccess and shift for external use
@@ -324,7 +326,7 @@ void myCallback() {
     if (ImGui::SliderFloat3("orientation", orientation_gui, -10.0f, 10.0f)){
         Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
         std::vector<Vector3> orientation_vec = {orientation.normalize() * vis_utils.gm_radi + vis_utils.center};
-        polyscope::registerPointCloud("orientation on gm", orientation_vec)->setPointRadius(0.2, false);
+        polyscope::registerPointCloud("orientation on gm", orientation_vec)->setPointRadius(0.03, false);
     }
     ImGui::Checkbox("save original", &save_original);
     ImGui::Checkbox("save oriented", &save_oriented);
@@ -348,7 +350,7 @@ void myCallback() {
         // show the orientation on the gauss map
         std::vector<Vector3> orientation_vec = {orientation * vis_utils.gm_radi + vis_utils.center};
         // black rgb
-        polyscope::registerPointCloud("orientation on gm", orientation_vec)->setPointRadius(0.1, false)->setPointColor({0,0,0});
+        polyscope::registerPointCloud("orientation on gm", orientation_vec)->setPointRadius(0.03, false)->setPointColor({0,0,0});
         
         
         // save to file
@@ -366,12 +368,16 @@ void myCallback() {
             }
             // convert orientation to string
             std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
-            writeSurfaceMesh(*mesh, geo_for_save, PARENT_SAVE_DIR + "/" + 
-                                                  mesh_title + "/orientations/" + 
-                                                  mesh_title + orientation_str + ".obj");
+            std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str;
+            // create directory if it does not exist
+            if (!fs::exists(path_to_dir)){
+                fs::create_directories(path_to_dir);
+            }
+            writeSurfaceMesh(*mesh, geo_for_save, path_to_dir + "/" + "oriented_shape.obj");
         }
-
     }
+    ImGui::Checkbox("save orientation trail", &save_orientation_trail);
+    ImGui::Checkbox("snapshot trail", &snapshot_trail);
     if (ImGui::Button("bullet snail trail")) {
         // initialize bullet env
         Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
@@ -379,6 +385,21 @@ void myCallback() {
         initialize_env(orientation, false);
         // visualize snail trail 
         Face touching_face = my_env->final_stable_face(draw_snail_trail);
+        // animate the shape drop with Bullet
+        std::vector<geometrycentral::DenseMatrix<double>> trans_mat_trail = my_env->trans_mat_trail;
+        Vector<Vector3> init_positions = forwardSolver->inputGeometry->inputVertexPositions.toVector();
+        // // save positions of the shape at every transformation
+        std::vector<Vector<Vector3>> pos_trail;
+        for (geometrycentral::DenseMatrix<double> tmp_trans: trans_mat_trail) {
+            Vector<Vector3> tmp_positions = apply_trans_to_positions(init_positions, tmp_trans);
+            pos_trail.push_back(tmp_positions);
+            // auto tmp_mesh = polyscope::registerSurfaceMesh("tmp mesh", tmp_positions, forwardSolver->inputMesh->getFaceVertexList());
+            // tmp_mesh->setSurfaceColor({136./255., 229./255., 107./255.});
+            // tmp_mesh->setEnabled(true);    
+            // std::cout << "matrix: \n   " << tmp_trans << std::endl;
+            // break;// only mat 0
+            // polyscope::screenshot(true);
+        }
         
         // draw snail trail on gm
         std::vector<Vector3> snail_trail = my_env->orientation_trail;
@@ -386,19 +407,87 @@ void myCallback() {
             v += vis_utils.center;
         auto trail_pc = polyscope::registerPointCloud("bullet pc trail", snail_trail);
         glm::vec3 init_color = {0.8,0.8,0.2};
-        std::vector<glm::vec3> colors;
-        for (size_t i = 0; i < snail_trail.size(); i++){
-            glm::vec3 tmp_color = init_color;
-            tmp_color = tmp_color * (1.f - (i/(float)snail_trail.size()));
-            colors.push_back(tmp_color);
-        }
-        trail_pc->addColorQuantity("time", colors)->setEnabled(true);
+        // RGB is 209 227 28
+        glm::vec3 bullet_color = {209./255., 227./255., 28./255.};
+        trail_pc->setPointColor(bullet_color);
+        trail_pc->setPointRadius(0.003, false);
         trail_pc->setEnabled(true);
-        
+
+        // height function at every orientation
+        std::vector<double> height_log;
+        for (Vector3 &v: my_env->orientation_trail){
+            double height = forwardSolver->height_function(v);
+            height_log.push_back(height);
+        }
+
         // ambient mesh
         Vector<Vector3> final_rest_positions = my_env->get_new_positions(forwardSolver->inputGeometry->inputVertexPositions.toVector());
         polyscope::registerSurfaceMesh("Bullet resting mesh", final_rest_positions, mesh->getFaceVertexList());
-    
+        
+        if (save_orientation_trail){
+            // save orientation trajectory to file
+            std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
+            std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
+            std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str;
+            // create directory if it does not exist
+            if (!fs::exists(path_to_dir)){
+                fs::create_directories(path_to_dir);
+            }
+            // save
+            // save orientation trail
+            std::ofstream ofs(path_to_dir + "/" + "orientation_trail.txt");
+            for (const auto& pos : my_env->orientation_trail) {
+                ofs << pos.x << " " << pos.y << " " << pos.z << "\n";
+            }
+            ofs.close();
+            // save transformation matrices
+            std::ofstream ofs_mat(path_to_dir + "/" + "transformation_matrices.txt");
+            for (const auto& mat : my_env->trans_mat_trail) {
+                ofs_mat << mat << "\n";
+            }
+            ofs_mat.close();
+            // save height log
+            std::ofstream ofs_height(path_to_dir + "/" + "height_log.txt");
+            for (const auto& height : height_log) {
+                ofs_height << height << "\n";
+            }
+            ofs_height.close();
+            // animate snail trail 
+            if (snapshot_trail){
+                std::string snapshot_path = path_to_dir + "/snapshots";
+                if (!fs::exists(snapshot_path)){
+                    fs::create_directories(snapshot_path);
+                }
+                trail_pc->setEnabled(false);
+                // orientation point only, w/w.o height function
+                polyscope::getSurfaceMesh("gm_sphere_mesh")->getQuantity("height function")->setEnabled(false);
+                std::string raw_orientation_fname = snapshot_path + "/raw_orientation.png";
+                polyscope::screenshot(raw_orientation_fname, true);
+                
+                polyscope::getSurfaceMesh("gm_sphere_mesh")->getQuantity("height function")->setEnabled(true);
+                std::string orientation_with_U_fname = snapshot_path + "/orientation_with_U.png";
+                polyscope::screenshot(orientation_with_U_fname, true);
+                
+                // snail trail with height function active
+                std::string scr_fname0 = snapshot_path + "/snapshot_0.png";
+                polyscope::screenshot(scr_fname0, true);
+                for (size_t i = 0; i < snail_trail.size(); i++){
+                    std::vector<Vector3> tmp_vec = {snail_trail[i]};
+                    auto tmp_trail_pc = polyscope::registerPointCloud("tmp pc trail", tmp_vec);
+                    tmp_trail_pc->setPointColor(init_color);
+                    tmp_trail_pc->setPointRadius(0.03, false);
+                    tmp_trail_pc->setEnabled(true);
+                    std::string scr_fname = snapshot_path + "/snapshot_" + std::to_string(i+1) + ".png";
+                    polyscope::screenshot(scr_fname, true);
+                }
+                trail_pc->setEnabled(true);
+                polyscope::getPointCloud("tmp pc trail")->setPointColor({1,0,0});
+                std::string all_scr_fname = snapshot_path + "/ALL_snapshot.png";
+                polyscope::screenshot(all_scr_fname, true);
+
+            }
+        }
+
     }
 }
 
@@ -464,7 +553,7 @@ int main(int argc, char* argv[])
     polyscope::getPointCloud("Center of Mass")->setEnabled(false);
 
     
-    // polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
+    polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
     polyscope::state::userCallback = myCallback;
     polyscope::show();
     return EXIT_SUCCESS;	
