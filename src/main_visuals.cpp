@@ -139,8 +139,10 @@ int solid_angle_face_index = 0;
 std::string mesh_title = "mesh";
 bool save_original = false,
      save_oriented = false,
-     save_orientation_trail = false,
-     snapshot_trail = false;
+     save_orientation_trail_to_file = false,
+     save_orientation_trail_scrs = false,
+     snapshot_trail = false,
+     save_quasi_trail_to_file = false;
 
 
 
@@ -319,6 +321,224 @@ void initialize_env(Vector3 orientation, bool visuals = true){
     //     initialize_vis(true);
 }
 
+void build_quasi_static_snail_trail(Vector3 initial_orientation, glm::vec3 color, std::string name, double radi = 0.01){
+    std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
+    // S^2 shift
+    draw_trail_on_gm(snail_trail, color, name, radi);
+}
+
+std::vector<Eigen::Matrix4d> 
+generate_transformations_for_orientation_sequence(
+    Vector3 initial_orientation,
+    Forward3DSolver* forwardSolver,
+    Vector3 floor_vec,
+    double goal_angle_step = 0.005
+){
+    // Get the snail trail and make forward log
+    std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
+    // split the snail trail
+    std::vector<Vector3> snail_trail_refined;
+    for (int i = 1; i < snail_trail.size()-1; i++){
+        Vector3 local_axis = cross(snail_trail[i-1], snail_trail[i]).normalize();
+        double local_total_angle = angle(snail_trail[i-1], snail_trail[i]);
+        int steps = (int)ceil(local_total_angle/goal_angle_step) + 1;
+        // in steps = 2;
+        for (int t = 0; t < steps; t++){
+            double angle_0 = local_total_angle * (double)t/double(steps);
+            Vector3 normal_0 = snail_trail[i-1].rotateAround(local_axis, angle_0);
+            snail_trail_refined.push_back(normal_0);
+        }
+    }
+    snail_trail_refined.push_back(snail_trail[snail_trail.size()-1]);
+
+    VertexData<Vector3> init_hull_positions = forwardSolver->hullGeometry->inputVertexPositions;
+    VertexData<Vector3> tmp_hull_positions(*forwardSolver->hullMesh);
+    tmp_hull_positions = init_hull_positions;
+    
+    std::vector<Vector3> saved_snail_trail_refined = snail_trail_refined; // for future output
+    // get transformations
+    std::vector<Eigen::Matrix4d> transformations;
+    // transformations.push_back(Eigen::Matrix4d::Identity()); // initial identity matrix
+    for (int i = 0; i < snail_trail_refined.size(); i++){
+        // get n_i locally
+        // SO3 conversion
+        Vector3 normal_0 = snail_trail_refined[i];
+        Vector3 rot_axis = cross(normal_0, floor_vec).normalize();
+        double rot_angle = angle(normal_0, floor_vec);
+
+        for (int j = 0; j < snail_trail_refined.size(); j++){
+            snail_trail_refined[j] = snail_trail_refined[j].rotateAround(rot_axis, rot_angle);
+        }
+        // shift contact to origin
+        double lowest_height = 1e4;
+        Vector3 contact_p;
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            if (tmp_hull_positions[v].y < lowest_height){
+                lowest_height = tmp_hull_positions[v].y;
+                contact_p = tmp_hull_positions[v];
+            }
+        }
+        Eigen::AngleAxisd aa(rot_angle, Eigen::Vector3d(rot_axis.x, rot_axis.y, rot_axis.z));
+        Eigen::Matrix3d rotation_matrix = aa.toRotationMatrix();
+        // do the rotation around the contact point
+        // shifting contact
+        tmp_hull_positions -= contact_p;
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            // tmp_hull_positions[v] = tmp_hull_positions[v].rotateAround(rot_axis, rot_angle);
+            Eigen::Vector3d tmp_v(tmp_hull_positions[v].x, tmp_hull_positions[v].y, tmp_hull_positions[v].z);
+            tmp_v = rotation_matrix * tmp_v;
+            tmp_hull_positions[v] = Vector3({tmp_v[0], tmp_v[1], tmp_v[2]});
+        }
+        // shift back
+        tmp_hull_positions += contact_p;
+        // axis angle rotation to matrix
+
+        // correct height; not really necessary for most steps; only when the contact point is a triangle, and the wrong vertex is chosen, can be fixed
+        lowest_height = 1e4;
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            if (tmp_hull_positions[v].y < lowest_height)
+                lowest_height = tmp_hull_positions[v].y;
+        }
+        Eigen::Matrix4d transformation_matrix;
+        transformation_matrix.setIdentity();
+        transformation_matrix.block<3,3>(0,0) = rotation_matrix;
+        // the last column is the translation
+        Eigen::Vector3d contact_p_eigen(contact_p.x, contact_p.y, contact_p.z);
+        Eigen::Vector3d translation = -rotation_matrix * contact_p_eigen + contact_p_eigen + Eigen::Vector3d(0, -lowest_height, 0);
+        transformation_matrix.block<3,1>(0,3) = translation;
+        transformations.push_back(transformation_matrix);
+        // update tmp_hull_positions height
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            tmp_hull_positions[v].y += -lowest_height;
+        }
+    }
+    return transformations;
+}
+
+std::vector<Eigen::Matrix4d> quasi_static_snail_trail_to_rotations(Vector3 initial_orientation){
+    // initialize the trail in forwardSolver
+    std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
+    // split the snail trail
+    std::vector<Eigen::Matrix4d> transformation_matrices = generate_transformations_for_orientation_sequence(
+        initial_orientation, forwardSolver, Vector3({0,-1,0}), 0.005);
+    // apply to the mesh and visualize each step
+    std::cout << "visualizing snail trail steps \n";
+    VertexData<Vector3> tmp_positions(*forwardSolver->inputMesh);
+    tmp_positions = forwardSolver->inputGeometry->inputVertexPositions;
+    for (int i = 0; i < transformation_matrices.size(); i++){
+        Eigen::Matrix4d transformation_matrix = transformation_matrices[i];
+        // apply to the input mesh
+        for (Vertex v: forwardSolver->inputMesh->vertices()){
+            Eigen::Vector4d tmp_v({tmp_positions[v].x,
+                                  tmp_positions[v].y,
+                                  tmp_positions[v].z, 
+                                  1.0});
+            tmp_v = transformation_matrix * tmp_v;
+            tmp_positions[v] = Vector3({tmp_v[0], tmp_v[1], tmp_v[2]});
+        }
+        // visualize
+        polyscope::registerSurfaceMesh("quasi static snail step ", 
+                                       tmp_positions, 
+                                       forwardSolver->inputMesh->getFaceVertexList())->setEnabled(true);
+        polyscope::show();
+    }
+    // // S^2 shift
+    // std::vector<Vector3> snail_trail_updated;
+    // double goal_angle_step = 0.005;
+    // for (int i = 1; i < snail_trail.size()-1; i++){
+    //     Vector3 local_axis = cross(snail_trail[i-1], snail_trail[i]).normalize();
+    //     double local_total_angle = angle(snail_trail[i-1], snail_trail[i]);
+    //     int steps = (int)ceil(local_total_angle/goal_angle_step) + 1;
+    //     // in steps = 2;
+    //     for (int t = 0; t < steps; t++){
+    //         double angle_0 = local_total_angle * (double)t/double(steps);
+    //         Vector3 normal_0 = snail_trail[i-1].rotateAround(local_axis, angle_0);
+    //         snail_trail_updated.push_back(normal_0);
+    //     }
+    // }
+    // snail_trail_updated.push_back(snail_trail[snail_trail.size()-1]);
+    // std::vector<Vector3> snail_trail_updated_shifted;
+    // for (Vector3 &v: snail_trail_updated){
+    //     Vector3 shifted_v = v * vis_utils.gm_radi + vis_utils.center;
+    //     snail_trail_updated_shifted.push_back(shifted_v);
+    // }
+    // polyscope::registerPointCloud("quasi static snail trail", snail_trail_updated_shifted)
+    //     ->setPointRadius(0.003, false)
+    //     ->setPointColor({0, 1, 0});
+    
+    // // get rotations 
+    // Vector3 floor_vec({0,-1,0});
+    // VertexData<Vector3> init_positions_interior = forwardSolver->inputGeometry->inputVertexPositions;
+    // VertexData<Vector3> init_positions_hull = forwardSolver->hullGeometry->inputVertexPositions;
+    // VertexData<Vector3> tmp_poses_interior(*forwardSolver->inputMesh);
+    // tmp_poses_interior = init_positions_interior;
+    
+    // Vector3 height_shift_vis({0,-1,0});
+    // // transformation matrices list
+    // std::vector<Eigen::Matrix4d> transformation_matrices;
+    // transformation_matrices.push_back(Eigen::Matrix4d::Identity()); // initial identity matrix
+    // for (int i = 0; i < snail_trail_updated.size(); i++){
+    //     // get n_i locally
+    //     // SO3 conversion
+    //     Vector3 normal_0 = snail_trail_updated[i];
+    //     Vector3 rot_axis = cross(normal_0, floor_vec).normalize();
+    //     double rot_angle = angle(normal_0, floor_vec);
+        
+    //     for (int j = 0; j < snail_trail_updated.size(); j++){
+    //         snail_trail_updated[j] = snail_trail_updated[j].rotateAround(rot_axis, rot_angle);
+    //     }
+    //     // polyscope::registerPointCloud(" subdiv trail", snail_trail_updated);
+    //     // polyscope::show();
+    //     // shift contact to origin
+    //     double lowest_height = 1e4;
+    //     Vector3 contact_p;
+    //     for (Vertex v: forwardSolver->inputMesh->vertices()){
+    //         if (tmp_poses_interior[v].y < lowest_height){
+    //             lowest_height = tmp_poses_interior[v].y;
+    //             contact_p = tmp_poses_interior[v];
+    //         }
+    //     }
+    //     Eigen::AngleAxisd aa(rot_angle, Eigen::Vector3d(rot_axis.x, rot_axis.y, rot_axis.z));
+    //     Eigen::Matrix3d rotation_matrix = aa.toRotationMatrix();
+    //     // do the rotation around the contact point
+    //     // shifting contact
+    //     tmp_poses_interior -= contact_p;
+    //     for (Vertex v: forwardSolver->inputMesh->vertices()){
+    //         // tmp_poses_interior[v] = tmp_poses_interior[v].rotateAround(rot_axis, rot_angle);
+    //         Eigen::Vector3d tmp_v(tmp_poses_interior[v].x, tmp_poses_interior[v].y, tmp_poses_interior[v].z);
+    //         tmp_v = rotation_matrix * tmp_v;
+    //         tmp_poses_interior[v] = Vector3({tmp_v[0], tmp_v[1], tmp_v[2]});
+    //     }
+    //     // shift back
+    //     tmp_poses_interior += contact_p;
+    //     // axis angle rotation to matrix
+
+    //     // correct height
+    //     lowest_height = 1e4;
+    //     for (Vertex v: forwardSolver->inputMesh->vertices()){
+    //         if (tmp_poses_interior[v].y < lowest_height)
+    //             lowest_height = tmp_poses_interior[v].y;
+    //     }
+    //     // DEBUG ; visualize 
+    //     // Vector3 contact_height_shift({0, lowest_height, 0 });
+    //     // polyscope::registerSurfaceMesh("tmp quasi state", tmp_poses_interior + (height_shift_vis - contact_height_shift) , 
+    //     //                                 forwardSolver->inputMesh->getFaceVertexList())->setEnabled(true);
+    //     // // polyscope::screenshot(false);
+    //     // polyscope::show();
+
+    //     // save transformation matrix
+    //     Eigen::Matrix4d transformation_matrix;
+    //     transformation_matrix.setIdentity();
+    //     transformation_matrix.block<3,3>(0,0) = rotation_matrix;
+    //     // the last column is the translation
+    //     Eigen::Vector3d contact_p_eigen(contact_p.x, contact_p.y, contact_p.z);
+    //     Eigen::Vector3d translation = -rotation_matrix * contact_p_eigen + contact_p_eigen + Eigen::Vector3d(0, -lowest_height, 0);
+    //     transformation_matrix.block<3,1>(0,3) = translation;
+    //     transformation_matrices.push_back(transformation_matrix);
+    // }
+    return transformation_matrices;
+}
+
 
 // polyscope callback
 void myCallback() {
@@ -376,7 +596,8 @@ void myCallback() {
             writeSurfaceMesh(*mesh, geo_for_save, path_to_dir + "/" + "oriented_shape.obj");
         }
     }
-    ImGui::Checkbox("save orientation trail", &save_orientation_trail);
+    ImGui::Checkbox("save orientation trail", &save_orientation_trail_to_file);
+    ImGui::Checkbox("save orientation trail SCRS", &save_orientation_trail_scrs);
     ImGui::Checkbox("snapshot trail", &snapshot_trail);
     if (ImGui::Button("bullet snail trail")) {
         // initialize bullet env
@@ -412,6 +633,9 @@ void myCallback() {
         trail_pc->setPointColor(bullet_color);
         trail_pc->setPointRadius(0.003, false);
         trail_pc->setEnabled(true);
+        // show the last position of the snail trail with red
+        std::vector<Vector3> last_snail_trail = {snail_trail.back()};
+        polyscope::registerPointCloud("final bullet trail", last_snail_trail)->setPointColor({1,0,0})->setPointRadius(0.03, false);
 
         // height function at every orientation
         std::vector<double> height_log;
@@ -424,7 +648,7 @@ void myCallback() {
         Vector<Vector3> final_rest_positions = my_env->get_new_positions(forwardSolver->inputGeometry->inputVertexPositions.toVector());
         polyscope::registerSurfaceMesh("Bullet resting mesh", final_rest_positions, mesh->getFaceVertexList());
         
-        if (save_orientation_trail){
+        if (save_orientation_trail_to_file){
             // save orientation trajectory to file
             std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
             std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
@@ -452,8 +676,13 @@ void myCallback() {
                 ofs_height << height << "\n";
             }
             ofs_height.close();
-            // animate snail trail 
-            if (snapshot_trail){
+            // animate snail trail + final results
+            
+            if (save_orientation_trail_scrs){
+                // hide  bullet resting mesh and oriented mesh
+                polyscope::getSurfaceMesh("Bullet resting mesh")->setEnabled(false);
+                polyscope::getSurfaceMesh("oriented mesh")->setEnabled(false);
+
                 std::string snapshot_path = path_to_dir + "/snapshots";
                 if (!fs::exists(snapshot_path)){
                     fs::create_directories(snapshot_path);
@@ -463,31 +692,73 @@ void myCallback() {
                 polyscope::getSurfaceMesh("gm_sphere_mesh")->getQuantity("height function")->setEnabled(false);
                 std::string raw_orientation_fname = snapshot_path + "/raw_orientation.png";
                 polyscope::screenshot(raw_orientation_fname, true);
-                
+                // orientation with height function
                 polyscope::getSurfaceMesh("gm_sphere_mesh")->getQuantity("height function")->setEnabled(true);
                 std::string orientation_with_U_fname = snapshot_path + "/orientation_with_U.png";
                 polyscope::screenshot(orientation_with_U_fname, true);
                 
-                // snail trail with height function active
-                std::string scr_fname0 = snapshot_path + "/snapshot_0.png";
-                polyscope::screenshot(scr_fname0, true);
-                for (size_t i = 0; i < snail_trail.size(); i++){
-                    std::vector<Vector3> tmp_vec = {snail_trail[i]};
-                    auto tmp_trail_pc = polyscope::registerPointCloud("tmp pc trail", tmp_vec);
-                    tmp_trail_pc->setPointColor(init_color);
-                    tmp_trail_pc->setPointRadius(0.03, false);
-                    tmp_trail_pc->setEnabled(true);
-                    std::string scr_fname = snapshot_path + "/snapshot_" + std::to_string(i+1) + ".png";
-                    polyscope::screenshot(scr_fname, true);
+                // height active from here on
+                if (snapshot_trail){
+                    // snail trail with height function active
+                    std::string scr_fname0 = snapshot_path + "/snapshot_0.png";
+                    polyscope::screenshot(scr_fname0, true);
+                    for (size_t i = 0; i < snail_trail.size(); i++){
+                        std::vector<Vector3> tmp_vec = {snail_trail[i]};
+                        auto tmp_trail_pc = polyscope::registerPointCloud("tmp pc trail", tmp_vec);
+                        tmp_trail_pc->setPointColor(init_color);
+                        tmp_trail_pc->setPointRadius(0.03, false);
+                        tmp_trail_pc->setEnabled(true);
+                        std::string scr_fname = snapshot_path + "/snapshot_" + std::to_string(i+1) + ".png";
+                        polyscope::screenshot(scr_fname, true);
+                        if (i % 50 == 0 && i > 0){
+                            std::cout << "  -- at snapshot " << i << "/"<< snail_trail.size() << "\n";
+                        }
+                    }
                 }
                 trail_pc->setEnabled(true);
-                polyscope::getPointCloud("tmp pc trail")->setPointColor({1,0,0});
-                std::string all_scr_fname = snapshot_path + "/ALL_snapshot.png";
+                polyscope::getPointCloud("tmp pc trail")->setPointColor({1,0,0});// change final destination to red
+                std::string all_scr_fname = snapshot_path + "/scr_snail_trail_and_final_rest.png";
                 polyscope::screenshot(all_scr_fname, true);
+
+                // snail trail with quasi-static trail
+                build_quasi_static_snail_trail(orientation, {39./255., 189./255., 0}, "quasi-static trail", 3.);
+                std::string scr_with_quasi_fname = snapshot_path + "/scr_quasi_and_snail_trail.png";
+                polyscope::screenshot(scr_with_quasi_fname, true);
+
+                // without snail trail only quai
+                polyscope::getPointCloud("bullet pc trail")->setEnabled(false);
+                std::string scr_quasi_fname = snapshot_path + "/scr_quasi_only.png";
+                polyscope::screenshot(scr_quasi_fname, true);
 
             }
         }
 
+    }
+    ImGui::Checkbox("save quasi static trail to file", &save_quasi_trail_to_file);
+    if (ImGui::Button("Build quasistatic snail trail")){
+        // get rotations corresponding to the snail trail
+        Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
+        orientation = orientation.normalize();
+        
+        build_quasi_static_snail_trail(orientation, {39./255., 189./255., 0}, "quasi-static trail", 3.);
+        std::vector<Eigen::Matrix4d> transformation_matrices = quasi_static_snail_trail_to_rotations(orientation);
+        if (save_quasi_trail_to_file){
+            // save to file like bullet snail trail matrices
+            std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
+            std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
+            std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str + "/quasi_static_trail";
+            // create directory if it does not exist
+            if (!fs::exists(path_to_dir)){
+                fs::create_directories(path_to_dir);
+            }
+            // save transformation matrices
+            std::ofstream ofs_mat(path_to_dir + "/" + "transformation_matrices.txt");
+            for (const auto& mat : transformation_matrices) {
+                ofs_mat << mat << "\n";
+            }
+            ofs_mat.close();
+            // save orientation trail
+        }
     }
 }
 

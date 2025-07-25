@@ -329,7 +329,7 @@ void VisualUtils::plot_height_function(Forward3DSolver* forwardSolver, ManifoldS
     lifted_poses[v] = sqrt(height) * pos.normalize() + center; // 1. + height
   }
   polyscope::SurfaceVertexScalarQuantity *height_func_vis = 
-              gm_sphere_mesh->addVertexScalarQuantity(" height function", heigh_func);
+              gm_sphere_mesh->addVertexScalarQuantity("height function", heigh_func);
   height_func_vis->setEnabled(true);
   if (plot_surface){
     polyscope::SurfaceMesh* height_function_mesh = polyscope::registerSurfaceMesh("height surface_func", 
