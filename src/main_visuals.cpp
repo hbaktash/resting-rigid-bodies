@@ -145,8 +145,10 @@ bool save_original = false,
      save_quasi_trail_to_file = false,
      snapshot_quasi_trail = false;
 
+int stable_face_index = 0; // index of the stable face to visualize
+bool save_stable_orientation_pose = false;
 
-
+std::string multi_orientations_path;
 // Functions 
 
 
@@ -295,7 +297,6 @@ void update_solver_and_boundaries(){
   // printf("forward precomputes \n");
   forwardSolver->initialize_pre_computes();
   printf("building boundary normals \n");
-  // boundary_builder->build_boundary_normals();
   boundary_builder->build_boundary_normals();
 }
 
@@ -483,6 +484,22 @@ quasi_static_snail_trail_to_global_transformations(Vector3 initial_orientation, 
 }
 
 
+VertexData<Vector3> orient_mesh_with_down_vec(Vector3 orientation, Vector3 down_vec,
+                               ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry){
+    Vector3 axis = cross(orientation, down_vec);
+    if (axis.norm() < 1e-6) // parallel
+        axis = Vector3({1,0,0});
+    axis = axis.normalize();
+    double angle = acos(dot(orientation, down_vec));
+    VertexData<Vector3> new_positions(*mesh);
+    for (Vertex v: mesh->vertices()){
+        Vector3 p = geometry->inputVertexPositions[v];
+        new_positions[v] = p.rotateAround(axis, angle);
+    }
+    return new_positions;
+}
+
+
 // polyscope callback
 void myCallback() {
     // sliders for orientation
@@ -499,16 +516,8 @@ void myCallback() {
         orientation = orientation.normalize();
         // Make a rotated mesh from the rotation that rotates {0,-1,0} to orientation
         Vector3 down_vec({0,-1,0});
-        Vector3 axis = cross(orientation, down_vec);
-        if (axis.norm() < 1e-6) // parallel
-        axis = Vector3({1,0,0});
-        axis = axis.normalize();
-        double angle = acos(dot(orientation, down_vec));
-        VertexData<Vector3> new_positions(*mesh);
-        for (Vertex v: mesh->vertices()){
-            Vector3 p = geometry->inputVertexPositions[v];
-            new_positions[v] = p.rotateAround(axis, angle);
-        }
+        VertexData<Vector3> new_positions = orient_mesh_with_down_vec(orientation, down_vec, mesh, geometry);
+
         polyscope::registerSurfaceMesh("oriented mesh", new_positions, mesh->getFaceVertexList());
         // show the orientation on the gauss map
         std::vector<Vector3> orientation_vec = {orientation * vis_utils.gm_radi + vis_utils.center};
@@ -575,7 +584,7 @@ void myCallback() {
         glm::vec3 bullet_color = {209./255., 227./255., 28./255.};
         trail_pc->setPointColor(bullet_color);
         trail_pc->setPointRadius(0.003, false);
-        trail_pc->setEnabled(true);
+        // trail_pc->setEnabled(true);
         // show the last position of the snail trail with red
         std::vector<Vector3> last_snail_trail = {snail_trail.back()};
         polyscope::registerPointCloud("final bullet trail", last_snail_trail)->setPointColor({1,0,0})->setPointRadius(0.03, false);
@@ -630,7 +639,7 @@ void myCallback() {
                 if (!fs::exists(snapshot_path)){
                     fs::create_directories(snapshot_path);
                 }
-                trail_pc->setEnabled(false);
+                // trail_pc->setEnabled(false);
                 // orientation point only, w/w.o height function
                 polyscope::getSurfaceMesh("gm_sphere_mesh")->getQuantity("height function")->setEnabled(false);
                 std::string raw_orientation_fname = snapshot_path + "/raw_orientation.png";
@@ -651,7 +660,10 @@ void myCallback() {
                         tmp_trail_pc->setPointColor(init_color);
                         tmp_trail_pc->setPointRadius(0.03, false);
                         tmp_trail_pc->setEnabled(true);
-                        std::string scr_fname = snapshot_path + "/snapshot_" + std::to_string(i+1) + ".png";
+                        // 4-digit padding for the filename
+                        std::ostringstream ss;
+                        ss << std::setw(4) << std::setfill('0') << i;
+                        std::string scr_fname = snapshot_path + "/snapshot_" + ss.str() + ".png";
                         polyscope::screenshot(scr_fname, true);
                         if (i % 50 == 0 && i > 0){
                             std::cout << "  -- at snapshot " << i << "/"<< snail_trail.size() << "\n";
@@ -686,11 +698,12 @@ void myCallback() {
         
         build_quasi_static_snail_trail(orientation, {39./255., 189./255., 0}, "quasi-static trail", 3.);
         auto [transformation_matrices, saved_snail_trail_refined] = quasi_static_snail_trail_to_global_transformations(orientation, false);
+        
+        // save to file like bullet snail trail matrices
+        std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
+        std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
+        std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str + "/quasi_static_trail";
         if (save_quasi_trail_to_file){
-            // save to file like bullet snail trail matrices
-            std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
-            std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
-            std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str + "/quasi_static_trail";
             // create directory if it does not exist
             if (!fs::exists(path_to_dir)){
                 fs::create_directories(path_to_dir);
@@ -701,31 +714,131 @@ void myCallback() {
                 ofs_mat << mat << "\n";
             }
             ofs_mat.close();
-            if (snapshot_quasi_trail){
-                std::string quasi_sncr_path = path_to_dir + "/snapshots";
-                if (!fs::exists(quasi_sncr_path)){
-                    fs::create_directories(quasi_sncr_path);
+        }
+        if (snapshot_quasi_trail){
+            std::string quasi_sncr_path = path_to_dir + "/snapshots";
+            if (!fs::exists(quasi_sncr_path)){
+                fs::create_directories(quasi_sncr_path);
+            }
+            // no bullet trail, only quasi static snail trail
+            polyscope::getPointCloud("bullet pc trail")->setEnabled(false);
+            for (size_t i = 0; i < saved_snail_trail_refined.size(); i++){
+                Vector3 tmp_ori = saved_snail_trail_refined[i];
+                tmp_ori = tmp_ori * vis_utils.gm_radi + vis_utils.center;
+                std::vector<Vector3> tmp_ori_vec = {tmp_ori};
+                auto tmp_trail_pc = polyscope::registerPointCloud("quasi static pc trail", tmp_ori_vec);
+                tmp_trail_pc->setPointColor({0.,0.03,0.0});
+                tmp_trail_pc->setPointRadius(0.03, false);
+                tmp_trail_pc->setEnabled(true);
+                // 4-digit padding for the filename
+                std::ostringstream ss;
+                ss << std::setw(4) << std::setfill('0') << i;
+                std::string scr_fname = quasi_sncr_path + "/snapshot_" + ss.str() + ".png";
+                polyscope::screenshot(scr_fname, true);
+                if (i % 50 == 0 && i > 0){
+                    std::cout << "  -- at snapshot " << i << "/"<< saved_snail_trail_refined.size() << "\n";
                 }
-                for (size_t i = 0; i < saved_snail_trail_refined.size(); i++){
-                    Vector3 tmp_ori = saved_snail_trail_refined[i];
-                    tmp_ori = tmp_ori * vis_utils.gm_radi + vis_utils.center;
-                    std::vector<Vector3> tmp_ori_vec = {tmp_ori};
-                    auto tmp_trail_pc = polyscope::registerPointCloud("quasi static pc trail", tmp_ori_vec);
-                    tmp_trail_pc->setPointColor({0.,0.03,0.0});
-                    tmp_trail_pc->setPointRadius(0.03, false);
-                    tmp_trail_pc->setEnabled(true);
-                    // 4-digit padding for the filename
-                    std::ostringstream ss;
-                    ss << std::setw(4) << std::setfill('0') << i;
-                    std::string scr_fname = quasi_sncr_path + "/snapshot_" + ss.str() + ".png";
-                    polyscope::screenshot(scr_fname, true);
-                    if (i % 50 == 0 && i > 0){
-                        std::cout << "  -- at snapshot " << i << "/"<< saved_snail_trail_refined.size() << "\n";
-                    }
-                    // polyscope::show();
-                }
+                // polyscope::show();
             }
         }
+    }
+    if (ImGui::Checkbox("save stable orientation pose", &save_stable_orientation_pose));
+    if (ImGui::Button("show stable face orientation")) {
+        // visualize the stable face orientation
+        if (stable_face_index < 0 || stable_face_index >= forwardSolver->hullMesh->nFaces()){
+            std::cout << "Stable face index out of bounds, using default 0\n";
+            stable_face_index = 0;
+        }
+        size_t stable_cnt = 0, hull_face_ind = 0;
+        Vector3 stable_face_normal;
+        for (Face f: forwardSolver->hullMesh->faces()){
+            if (forwardSolver->face_is_stable(f)){
+                if (stable_cnt == stable_face_index){
+                    stable_face_normal = forwardSolver->hullGeometry->faceNormal(f);
+                    hull_face_ind = f.getIndex();
+                    break;
+                }
+                stable_cnt++;
+            }
+        }
+        // orientation gui change
+        orientation_gui[0] = stable_face_normal.x;
+        orientation_gui[1] = stable_face_normal.y;
+        orientation_gui[2] = stable_face_normal.z;
+
+
+        Vector3 down_vec = Vector3({0,-1,0});
+        // orient hull and input with the stable face normal
+        VertexData<Vector3> new_interior_poses = orient_mesh_with_down_vec(stable_face_normal, down_vec, mesh, geometry);
+        // now for the hull
+        VertexData<Vector3> new_hull_poses = orient_mesh_with_down_vec(stable_face_normal, down_vec, forwardSolver->hullMesh, forwardSolver->hullGeometry);
+        
+        polyscope::registerSurfaceMesh("stable oriented input mesh", new_interior_poses, mesh->getFaceVertexList());
+        polyscope::registerSurfaceMesh("stable oriented hull mesh", new_hull_poses, forwardSolver->hullMesh->getFaceVertexList());
+
+        if (save_stable_orientation_pose){
+            // save the stable face orientation to file
+            std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/stable_poses";
+            std::string face_index_and_prob = std::to_string(stable_face_index) + "_" + std::to_string(boundary_builder->face_region_area[hull_face_ind]/(4. * M_PI));
+            std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/" + face_index_and_prob;
+            // create directory if it does not exist
+            if (!fs::exists(path_to_dir)){
+                fs::create_directories(path_to_dir);
+            }
+            // save the oriented mesh
+            VertexPositionGeometry geo_for_save(*mesh);
+            for (Vertex v: mesh->vertices()){
+                geo_for_save.inputVertexPositions[v] = new_interior_poses[v];
+            }
+            writeSurfaceMesh(*mesh, geo_for_save, path_to_dir + "/" + "oriented_shape.obj");
+            // hull
+            VertexPositionGeometry hull_geo_for_save(*forwardSolver->hullMesh);
+            for (Vertex v: forwardSolver->hullMesh->vertices()){
+                hull_geo_for_save.inputVertexPositions[v] = new_hull_poses[v];
+            }
+            writeSurfaceMesh(*forwardSolver->hullMesh, hull_geo_for_save, path_to_dir + "/" + "oriented_hull.obj");
+        }
+    }
+    if (ImGui::Button("Build multiple orientations quasistatic trail")){
+        std::vector<Vector3> orientations;
+        if (multi_orientations_path.empty()){
+            std::cout << "No path to multiple orientations provided, using default orientation from GUI\n";
+            Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
+            orientation = orientation.normalize();
+            orientations.push_back(orientation);
+        }
+        else{
+            // read orientations from file
+            std::ifstream infile(multi_orientations_path);
+            if (!infile.is_open()){
+                std::cerr << "Error opening file: " << multi_orientations_path << std::endl;
+                return;
+            }
+            std::string line;
+            while (std::getline(infile, line)) {
+                std::istringstream iss(line);
+                Vector3 orientation;
+                iss >> orientation.x >> orientation.y >> orientation.z;
+                orientations.push_back(orientation.normalize());
+            }
+        }
+        // for each orientation, build the quasi-static snail trail
+        for (int i = 0; i < orientations.size(); i++){
+            const Vector3& orientation = orientations[i];
+            // visualize the orientation on the gauss map
+            std::vector<Vector3> orientation_vec = {orientation * vis_utils.gm_radi + vis_utils.center};
+            polyscope::registerPointCloud("orientation on gm " + std::to_string(i), orientation_vec)
+                ->setPointRadius(0.03, false)->setPointColor({0,0,0});
+            std::cout << "Building quasi-static snail trail for orientation: " << orientation << std::endl;
+            // build quasi-static snail trail
+            build_quasi_static_snail_trail(orientation, {39./255., 189./255., 0}, "quasi-static trail " + std::to_string(i), 3.);
+        }
+        // highlight resting face; assume its the same for all orientations
+        Face final_stable_face = forwardSolver->final_touching_face(orientations[0]);
+        Vector3 stable_face_normal = forwardSolver->hullGeometry->faceNormal(final_stable_face);
+        // draw the stable orientation with red
+        std::vector<Vector3> stable_face_normal_vec = {stable_face_normal * vis_utils.gm_radi + vis_utils.center};
+        polyscope::registerPointCloud("stable face normal on gm", stable_face_normal_vec)->setPointRadius(0.03, false)->setPointColor({1,0,0});
     }
 }
 
@@ -743,6 +856,9 @@ int main(int argc, char* argv[])
     args::ValueFlag<std::string> mesh_path_arg(parser, "mesh_path", "path to esh", {'m', "mesh_dir"});
     args::ValueFlag<std::string> center_of_mass_path_arg(parser, "center_of_mass", "center of mass of the shape", {"com"});
     args::ValueFlag<std::string> orientation_path_arg(parser, "orientation", "path to orientation files", {"orientation"});
+    args::ValueFlag<std::string> stable_face_index_arg(parser, "stable_face_index", "index of the stable face to visualize", {"stable_face_index"});
+    args::ValueFlag<std::string> multiple_init_orientations_arg(parser, "multiple_init_orientations", "path to multiple initial orientations", {"multi_init_oris"});
+
 
     try {
         parser.ParseCLI(argc, argv);
@@ -773,9 +889,13 @@ int main(int argc, char* argv[])
         orientation_gui[1] = orientation_inp.y;
         orientation_gui[2] = orientation_inp.z;
     }
-    
-    
 
+    if (stable_face_index_arg)
+        stable_face_index = std::stoi(args::get(stable_face_index_arg));
+
+    if (multiple_init_orientations_arg)
+        multi_orientations_path = args::get(multiple_init_orientations_arg);
+    
     // extract mesh title
     mesh_title = mesh_path.substr(mesh_path.find_last_of("/\\") + 1);
     mesh_title = mesh_title.substr(0, mesh_title.find_last_of("."));
@@ -802,7 +922,7 @@ int main(int argc, char* argv[])
     polyscope::getPointCloud("stable Vertices Normals")->setEnabled(false);
     polyscope::getPointCloud("Center of Mass")->setEnabled(false);
 
-    polyscope::options::ssaaFactor = 2; // supersampling
+    polyscope::options::ssaaFactor = 3; // supersampling
     polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
     polyscope::state::userCallback = myCallback;
     polyscope::show();
