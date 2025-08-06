@@ -284,20 +284,22 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
     polyscope::getPointCloud("Cluster assignees")->setEnabled(false);
     polyscope::getPointCloud("Edge equilibria")->setEnabled(false);
     polyscope::getPointCloud("stable Vertices Normals")->setEnabled(false);
-
-    // for shape itself
-    polyscope::getSurfaceMesh("current hull")->setEnabled(true);
-    polyscope::getSurfaceMesh("current hull")->getQuantity("current probs green-red")->setEnabled(false);
     polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
-    polyscope::getCurveNetwork("Arc curves region boundaries")->setEnabled(false);
-    polyscope::getPointCloud("stable Face Normals")->setEnabled(false);
-    polyscope::getSurfaceMesh("gm_sphere_mesh")->setEnabled(false);
-    // save the current hull obj file
-    std::string output_name = "hull_" + std::to_string(frame_cnt) + ".obj";
-    writeSurfaceMesh(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, "../meshes/hulls/opt_sequence/" + output_name);
 
     polyscope::screenshot(true);
   }
+  if (save_sequence_files){
+      // for shape itself
+      polyscope::getSurfaceMesh("current hull")->setEnabled(true);
+      polyscope::getSurfaceMesh("current hull")->getQuantity("current probs green-red")->setEnabled(false);
+      polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
+      polyscope::getCurveNetwork("Arc curves region boundaries")->setEnabled(false);
+      polyscope::getPointCloud("stable Face Normals")->setEnabled(false);
+      polyscope::getSurfaceMesh("gm_sphere_mesh")->setEnabled(false);
+      // save the current hull obj file
+      std::string output_name = "hull_" + std::to_string(frame_cnt) + ".obj";
+      writeSurfaceMesh(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, "../meshes/hulls/opt_sequence/" + output_name);
+    }
   if (show){
     // polyscope::frameTick();
     // polyscope::screenshot(false);
@@ -643,6 +645,7 @@ void myCallback() {
   ImGui::Checkbox("adaptive reg", &adaptive_reg);
   ImGui::Checkbox("visualize steps", &visualize_steps);
   ImGui::Checkbox("save scrs", &save_sequence_scr);
+  ImGui::Checkbox("save files", &save_sequence_files);
   if (ImGui::Button("dice energy opt")){
     dice_energy_opt(policy, bary_reg, coplanar_reg, frozen_G, DE_step_count);
   }
