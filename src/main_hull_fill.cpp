@@ -77,6 +77,7 @@ bool animate_deform = false,
      dynamic_remesh = false,
      use_static_dists = true;
 
+bool save_steps_to_file = false;
 double concave_input_remesh_scale = 1.;
 
 float bending_lambda_exps[2]  = {0. , 0.},
@@ -266,7 +267,7 @@ void myCallback() {
     if(use_reg) 
         ImGui::SliderFloat("reg lambda; log10", &reg_lambda_exp, -5., 5.);
     
-
+    if (ImGui::Checkbox("save steps to file", &save_steps_to_file));
     if (ImGui::Button("deform to hull")){
         animate_deform = true;
     }
@@ -406,7 +407,7 @@ int main(int argc, char **argv) {
                         new DeformationSolver(concave_mesh, concave_geometry, hull_mesh, hull_geometry, goal_G);  
             initialize_deformation_params(deformationSolver);
             size_t current_fill_iter = 0;
-            Eigen::MatrixXd new_points = deformationSolver->solve_for_bending(1);
+            Eigen::MatrixXd new_points = deformationSolver->solve_for_bending(1, save_steps_to_file);
             
             optimized_concave_mesh = deformationSolver->mesh;
             optimized_concave_geometry = deformationSolver->deformed_geometry;
@@ -418,7 +419,7 @@ int main(int argc, char **argv) {
             
             polyscope::registerSurfaceMesh("deformed final hull", final_solver->hullGeometry->inputVertexPositions, 
                                            final_solver->hullMesh->getFaceVertexList())->setTransparency(0.4);
-
+            
             
             // post process
             // get the probabilities of new deformed shape
@@ -453,7 +454,7 @@ int main(int argc, char **argv) {
             DeformationSolver* deformationSolver = 
                         new DeformationSolver(concave_mesh, concave_geometry, deformed_geometry, hull_mesh, hull_geometry, goal_G);   
             initialize_deformation_params(deformationSolver);
-            Eigen::MatrixXd new_points = deformationSolver->solve_for_G(1);
+            Eigen::MatrixXd new_points = deformationSolver->solve_for_G(1, false, nullptr, nullptr, save_steps_to_file);
 
             optimized_concave_mesh = deformationSolver->mesh;
             optimized_concave_geometry = deformationSolver->deformed_geometry;

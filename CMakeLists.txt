@@ -82,16 +82,16 @@ else ()
   message(STATUS "Gurobi not found!")
 endif ()
 
-# add_executable(hullFill src/main_hull_fill.cpp src/deformation.cpp src/optimization.cpp src/CP_tools.cpp)
-# target_include_directories(hullFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
-# target_link_libraries(hullFill
-# PRIVATE
-# rolling_dragons::rolling_dragons
-# taywee::args
-# ${GUROBI_LIBRARY}
-# ${GUROBI_CXX_LIBRARY}
-# )
-# set_property(TARGET hullFill PROPERTY CXX_STANDARD 20)
+add_executable(hullFill src/main_hull_fill.cpp src/deformation.cpp src/optimization.cpp src/CP_tools.cpp)
+target_include_directories(hullFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
+target_link_libraries(hullFill
+PRIVATE
+rolling_dragons::rolling_dragons
+taywee::args
+${GUROBI_LIBRARY}
+${GUROBI_CXX_LIBRARY}
+)
+set_property(TARGET hullFill PROPERTY CXX_STANDARD 20)
 
 
 # # # Add executables

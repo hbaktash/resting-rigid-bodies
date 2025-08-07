@@ -25,7 +25,7 @@
 #include "deformation.h"
 
 #include "geometrycentral/numerical/linear_solvers.h"
-
+#include "geometrycentral/surface/meshio.h"
 
 
 /// Visuals
@@ -687,7 +687,7 @@ void DeformationSolver::print_energies_after_transform(Eigen::Matrix3d A){
 }
 
 
-DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
+DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step, bool save_steps){
     size_t num_var = 3 * mesh->nVertices();
     std::cout << "num_var: " << num_var << std::endl;
     old_geometry->refreshQuantities();
@@ -783,6 +783,18 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
             polyscope::screenshot();
             polyscope::frameTick();
             // polyscope::show();
+        }
+        if (save_steps){
+            std::string output_name = "iter_" + std::to_string(i);
+            std::string parent_path = "../meshes/hulls/nonconvex_deformation/deformation_saves/opt_seq/";
+            std::string output_path = parent_path + std::string(output_name) + ".obj";
+            // open file if doesnt exist
+            if (!std::filesystem::exists(parent_path)){
+                std::filesystem::create_directories(parent_path);
+            }
+            // write mesh
+            std::cout << ANSI_FG_GREEN << " saving deformed mesh to " << output_path << ANSI_RESET << std::endl;
+            writeSurfaceMesh(*mesh, *tmp_geometry, output_path);
         }
 
         // dynamic remesh 
@@ -929,6 +941,8 @@ DenseMatrix<double> DeformationSolver::solve_for_bending(int visual_per_step){
     tmp_PSmesh->setEnabled(true);
     // polyscope::screenshot();
     polyscope::frameTick();
+    // save deformed shape
+    
 
     DenseMatrix<double> new_points_mat = unflat_tinyAD(x); 
     deformed_geometry = new VertexPositionGeometry(*mesh, new_points_mat); // TODO: update earlier? per temp geo?
@@ -992,7 +1006,8 @@ Eigen::MatrixXd DeformationSolver::per_vertex_G_derivative(VertexPositionGeometr
 
 
 DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step, 
-                                                   bool energy_plot, int* current_iter, float** energies_log){
+                                                   bool energy_plot, int* current_iter, float** energies_log,
+                                                   bool save_steps){
     std::cout << "solving for G: \n -- mesh size "<< mesh->nVertices() << "\n";
     
     // some parameters
@@ -1056,6 +1071,18 @@ DenseMatrix<double> DeformationSolver::solve_for_G(int visual_per_step,
                 // polyscope::screenshot();
                 polyscope::frameTick();
             }
+        }
+        if (save_steps){
+            std::string output_name = "iter_" + std::to_string(i);
+            std::string parent_path = "../meshes/hulls/nonconvex_deformation/deformation_saves/G_opt_seq/";
+            std::string output_path = parent_path + std::string(output_name) + ".obj";
+            // open file if doesnt exist
+            if (!std::filesystem::exists(parent_path)){
+                std::filesystem::create_directories(parent_path);
+            }
+            // write mesh
+            std::cout << ANSI_FG_GREEN << " saving deformed mesh to " << output_path << ANSI_RESET << std::endl;
+            writeSurfaceMesh(*mesh, *tmp_geometry, output_path);
         }
 
         // get G diff energy and derivative
