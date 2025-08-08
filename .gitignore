@@ -6,6 +6,9 @@ deps/boost_1_82_0/*
 deps/libigl/* 
 deps/PyMesh/*
 
+# data folders
+simulation_comparison_results/
+
 # Editor and OS things
 .DS_Store
 .vscode
