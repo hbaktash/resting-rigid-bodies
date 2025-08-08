@@ -64,6 +64,7 @@ using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
 
+
 // simulation stuff
 // Bullet simulation stuff
 PhysicsEnv* my_env;
@@ -122,16 +123,7 @@ BoundaryBuilder *boundary_builder;
 VisualUtils vis_utils;
 
 
-//GM stuff
-ManifoldSurfaceMesh* sphere_mesh;
-VertexPositionGeometry* sphere_geometry;
-bool gm_is_drawn = false;
-bool draw_snail_trail = true,
-     animate = true;
-// bool save_pos_to_file = false;
-// Vector3 old_g_vec, new_g_vec;
 int snail_trail_dummy_counter = 0;
-
 int solid_angle_face_index = 0;
 
 
@@ -152,92 +144,51 @@ std::string multi_orientations_path;
 // Functions 
 
 
-void initialize_vis(bool with_plane = true){
-    polyscope::registerSurfaceMesh("my polyhedra", geometry->inputVertexPositions, mesh->getFaceVertexList());
-    // ground plane on Polyscope has a weird height setting (scaled factor..)
-    if (with_plane){
-      auto psPlane = polyscope::addSceneSlicePlane("ground plane");
-      psPlane->setDrawPlane(true);  // render the semi-transparent gridded plane
-      psPlane->setDrawWidget(false);
-      psPlane->setPose(glm::vec3{0., ground_box_y + 1, 0.}, glm::vec3{0., 1., 0.});
-    }
+void polyscope_defaults(){
+	// hide everything
+    polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
+    polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
+    polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
+    polyscope::getCurveNetwork("Arc curves region boundaries")->setEnabled(false);
+    polyscope::getPointCloud("Edge equilibria")->setEnabled(false);
+    polyscope::getPointCloud("stable Face Normals")->setEnabled(false);
+    polyscope::getPointCloud("stable Vertices Normals")->setEnabled(false);
+    polyscope::getPointCloud("Center of Mass")->setEnabled(false);
+
+    polyscope::options::ssaaFactor = 3; // supersampling
+    polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
 }
 
 
-Vector3 orientation_from_string(std::string filename){
-    // the last part of the path is the orientation
-        std::string orientation_str = filename.substr(filename.find_last_of("/\\") + 1);
-        // there is no extension
-        double x, y, z;
-        // now split by '_'; just do substring 3 times
-        size_t pos1 = orientation_str.find('_');
-        size_t pos2 = orientation_str.find('_', pos1 + 1);
-        x = std::stod(orientation_str.substr(0, pos1));
-        y = std::stod(orientation_str.substr(pos1 + 1, pos2 - pos1 - 1));
-        z = std::stod(orientation_str.substr(pos2 + 1));
-        std::cout << "orientation from file: " << x << " " << y << " " << z << "\n";
-        return Vector3({x, y, z});
-  }
+void load_mesh(std::string path, bool preprocess = true){
+	std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
+	std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
+	std::tie(nm_mesh_ptr, nm_geometry_ptr) = readSurfaceMesh(path);
+	SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
+	VertexPositionGeometry *nm_geometry = nm_geometry_ptr.release();
+	
+	nm_mesh->greedilyOrientFaces();
+	nm_mesh->compress();
+	mesh_ptr = nm_mesh->toManifoldMesh();
+	mesh = mesh_ptr.release();
+	geometry = new VertexPositionGeometry(*mesh);
+	// transfer from nm geometry
+	for (Vertex v : mesh->vertices()) {
+		geometry->inputVertexPositions[v.getIndex()] = nm_geometry->inputVertexPositions[v.getIndex()];
+	}
 
-
-void generate_polyhedron_example(std::string mesh_full_path, bool preprocess = true){
-  
-  std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
-  std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
-  std::tie(nm_mesh_ptr, nm_geometry_ptr) = readSurfaceMesh(mesh_full_path);
-  SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
-  VertexPositionGeometry *nm_geometry = nm_geometry_ptr.release();
-  nm_mesh->greedilyOrientFaces();
-  // for (Vertex v: nm_mesh->vertices()){
-  //   if (!v.isManifold()){
-  //     std::cout << "non-manifold vertex "<< v.getIndex() << "\n";
-  //   }
-  // }
-  // for (Edge e: nm_mesh->edges()){
-  //   if (!e.isManifold()){
-  //     std::cout << "non-manifold edge "<< e.getIndex()<< ": " << e.firstVertex().getIndex() << " " << e.secondVertex().getIndex() << "\n";
-  //     std::cout << "sibling: " << e.halfedge().sibling().getIndex() << ": "
-  //               << e.halfedge().sibling().tailVertex().getIndex() << " " 
-  //               << e.halfedge().sibling().tipVertex().getIndex() << "\n";
-  //     std::cout << "sibling.sibling: " << e.halfedge().sibling().sibling().getIndex() << ": "
-  //               << e.halfedge().sibling().sibling().tailVertex().getIndex() << " " 
-  //               << e.halfedge().sibling().sibling().tipVertex().getIndex() << "\n";
-  //   }
-  // }
-  nm_mesh->compress();
-
-  mesh_ptr = nm_mesh->toManifoldMesh();
-  mesh = mesh_ptr.release();
-  geometry = new VertexPositionGeometry(*mesh);
-  // transfer from nm geometry
-  for (Vertex v : mesh->vertices()) {
-    geometry->inputVertexPositions[v.getIndex()] = nm_geometry->inputVertexPositions[v.getIndex()];
-  }
-
-  // initial rotation for piggy
-  for (Vertex v: mesh->vertices()){
-    Vector3 p = geometry->inputVertexPositions[v];
-    geometry->inputVertexPositions[v] = Vector3({-p.x, p.z, p.y});
-  }
-
-  // preproccess and shift for external use
-  if (preprocess){
-    preprocess_mesh(mesh, geometry, true, false);
-    G = find_center_of_mass(*mesh, *geometry).first;
-    pre_shift_G = G;
-    // std::cout << "center of mass before shift: " << G << "\n";
-    for (Vertex v: mesh->vertices()){
-      geometry->inputVertexPositions[v] -= G;
-    }
-    G = find_center_of_mass(*mesh, *geometry).first;
-  }
-  G = find_center_of_mass(*mesh, *geometry).first;
-  // std::cout << "center of mass after shift: " << G << "\n";
-  // double max_dist = 0;
-  // for (Vertex v: mesh->vertices()){
-  //   max_dist = std::max(max_dist, geometry->inputVertexPositions[v].norm());
-  // }
-  // std::cout << "max dist from center: " << max_dist << "\n";
+	// preproccess and shift for external use
+	if (preprocess){
+		preprocess_mesh(mesh, geometry, true, false);
+		G = find_center_of_mass(*mesh, *geometry).first;
+		pre_shift_G = G;
+		// std::cout << "center of mass before shift: " << G << "\n";
+		for (Vertex v: mesh->vertices()){
+		geometry->inputVertexPositions[v] -= G;
+		}
+		G = find_center_of_mass(*mesh, *geometry).first;
+	}
+	G = find_center_of_mass(*mesh, *geometry).first;
 }
 
 
@@ -248,86 +199,8 @@ void update_solver(){
   boundary_builder->build_boundary_normals();
 }
 
-void color_faces(Forward3DSolver *fwd_solver){
-  // printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
-  face_colors = FaceData<Vector3>(*fwd_solver->hullMesh, default_face_color);
-  std::vector<Face> stable_faces;
-  for (Face f: fwd_solver->hullMesh->faces()){
-    if (fwd_solver->face_is_stable(f))
-      stable_faces.push_back(f);
-  }
-  face_colors = generate_random_colors(fwd_solver->hullMesh, stable_faces);
-  
-  for (Face f: fwd_solver->hullMesh->faces()){
-    if (!fwd_solver->face_is_stable(f))
-      face_colors[f] = default_face_color;
-  }
-}
 
-
-void visualize_gauss_map(Forward3DSolver* forwardSolver){
-    std::vector<Vector3> normals_icosahedral = generate_normals_icosahedral(40);
-    // get the convex hull of the normals
-    std::tie(sphere_mesh, sphere_geometry) = get_convex_hull_mesh(normals_icosahedral);
-    //update vis utils
-    vis_utils.draw_gauss_map(forwardSolver, sphere_mesh, sphere_geometry);
-}
-
-
-void init_visuals(){
-  auto psInputMesh = polyscope::registerSurfaceMesh(
-    "init input mesh",
-    geometry->inputVertexPositions, mesh->getFaceVertexList());
-  psInputMesh->setTransparency(1.0);
-  psInputMesh->setEnabled(true);
-  auto psHullMesh = polyscope::registerSurfaceMesh(
-    "init hull mesh",
-    forwardSolver->hullGeometry->inputVertexPositions, forwardSolver->hullMesh->getFaceVertexList(),
-    polyscopePermutations(*forwardSolver->hullMesh));
-  psHullMesh->setEnabled(true);
-  psHullMesh->setEdgeWidth(0.7);
-  psHullMesh->setTransparency(0.9);
-  vis_utils.draw_G(forwardSolver->get_G());
-  visualize_gauss_map(forwardSolver);
-}
-
-void update_solver_and_boundaries(){
-  auto t1 = clock();
-  forwardSolver->set_G(G);
-  // printf("forward precomputes \n");
-  forwardSolver->initialize_pre_computes();
-  printf("building boundary normals \n");
-  boundary_builder->build_boundary_normals();
-}
-
-
-void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
-  forwardSolver->initialize_pre_computes();
-  // std::vector<Vector3> boundary_normals;
-  auto net_pair = build_and_draw_stable_patches_on_gauss_map(boundary_builder,
-                                                              vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
-                                                              on_height_surface);
-}
-
-void draw_trail_on_gm(std::vector<Vector3> trail, glm::vec3 color, std::string name, double radi, bool color_gradient = false){
-  std::vector<std::pair<size_t, size_t>> edge_inds;
-  if (!color_gradient){
-    for (size_t i = 0; i < trail.size()-1; i++)
-      edge_inds.push_back({i, i+1});
-    draw_arc_network_on_sphere(edge_inds, trail, vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, name, radi, color);//{0.7,0.1,0.8}
-  }
-  else{
-    std::vector<glm::vec3> colors;
-    for (size_t i = 0; i < trail.size(); i++){
-      glm::vec3 tmp_color = color;
-      tmp_color.x = tmp_color.x * ((i/(float)trail.size()));
-      draw_arc_on_sphere(trail[i], trail[i+1], vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, i, radi, tmp_color);
-    }
-  }
-}
-
-
-void initialize_env(Vector3 orientation, bool visuals = true){
+void initialize_bullet_env(Vector3 orientation, bool visuals = true){
     // physics env
     my_env = new PhysicsEnv();
     my_env->init_physics();
@@ -335,16 +208,8 @@ void initialize_env(Vector3 orientation, bool visuals = true){
     my_env->add_ground(ground_box_y, ground_box_shape);
     my_env->add_object(G, orientation);
     my_env->default_step_size = bullet_step_size;
-    // // polyscope
-    // if (visuals)
-    //     initialize_vis(true);
 }
 
-void build_quasi_static_snail_trail(Vector3 initial_orientation, glm::vec3 color, std::string name, double radi = 0.01){
-    std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
-    // S^2 shift
-    draw_trail_on_gm(snail_trail, color, name, radi);
-}
 
 std::pair<std::vector<Eigen::Matrix4d>, std::vector<Vector3>> 
 generate_transformations_for_orientation_sequence(
@@ -554,9 +419,9 @@ void myCallback() {
         // initialize bullet env
         Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
         orientation = orientation.normalize();
-        initialize_env(orientation, false);
+        initialize_bullet_env(orientation, false);
         // visualize snail trail 
-        Face touching_face = my_env->final_stable_face(draw_snail_trail);
+        Face touching_face = my_env->final_stable_face(true);
         // animate the shape drop with Bullet
         std::vector<geometrycentral::DenseMatrix<double>> trans_mat_trail = my_env->trans_mat_trail;
         Vector<Vector3> init_positions = forwardSolver->inputGeometry->inputVertexPositions.toVector();
@@ -630,7 +495,10 @@ void myCallback() {
         Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
         orientation = orientation.normalize();
         
-        build_quasi_static_snail_trail(orientation, {39./255., 189./255., 0}, "quasi-static trail", 3.);
+		// initialize bullet env
+		std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(orientation);
+		draw_trail_on_gm(snail_trail, {39./255., 189./255., 0}, "quasi-static trail", 3.);
+
         auto [transformation_matrices, saved_snail_trail_refined] = quasi_static_snail_trail_to_global_transformations(orientation, false);
         
         // save to file like bullet snail trail matrices
@@ -665,8 +533,10 @@ int main(int argc, char* argv[])
     args::HelpFlag help(parser,     "help", "Display this help menu", {'h', "help"});
     args::ValueFlag<std::string> mesh_path_arg(parser, "mesh_path", "path to esh", {'m', "mesh_dir"});
     args::ValueFlag<std::string> center_of_mass_path_arg(parser, "center_of_mass", "center of mass of the shape", {"com"});
-    args::ValueFlag<std::string> orientation_path_arg(parser, "orientation", "path to orientation files", {"orientation"});
-
+	// just get the orientation from 3 input values
+	args::ValueFlag<double> o_x_arg(parser, "ox", "orientation x value", {"ox"});
+	args::ValueFlag<double> o_y_arg(parser, "oy", "orientation y value", {"oy"});
+	args::ValueFlag<double> o_z_arg(parser, "oz", "orientation z value", {"oz"});
 
     try {
         parser.ParseCLI(argc, argv);
@@ -690,13 +560,11 @@ int main(int argc, char* argv[])
         mesh_path = args::get(mesh_path_arg);
     if (center_of_mass_path_arg)
         com_path = args::get(center_of_mass_path_arg);
-    if (orientation_path_arg){
-        orientation_path = args::get(orientation_path_arg);
-        Vector3 orientation_inp = orientation_from_string(orientation_path);
-        orientation_gui[0] = orientation_inp.x;
-        orientation_gui[1] = orientation_inp.y;
-        orientation_gui[2] = orientation_inp.z;
-    }
+	if (o_x_arg && o_y_arg && o_z_arg){
+		orientation_gui[0] = args::get(o_x_arg);
+		orientation_gui[1] = args::get(o_y_arg);
+		orientation_gui[2] = args::get(o_z_arg);
+	}
 
     // extract mesh title
     mesh_title = mesh_path.substr(mesh_path.find_last_of("/\\") + 1);
@@ -704,28 +572,17 @@ int main(int argc, char* argv[])
     // --- Debugging --- //
     polyscope::init();
     vis_utils = VisualUtils();
-    generate_polyhedron_example(mesh_path);
+    load_mesh(mesh_path);
     // initial 
     update_solver();
 
-    init_visuals();
+    init_visuals(mesh, geometry, forwardSolver);
 
-    draw_stable_patches_on_gauss_map();
+    draw_stable_patches_on_gauss_map(boundary_builder, false);
 
         
 
-    // hide everything
-    polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
-    polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
-    polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
-    polyscope::getCurveNetwork("Arc curves region boundaries")->setEnabled(false);
-    polyscope::getPointCloud("Edge equilibria")->setEnabled(false);
-    polyscope::getPointCloud("stable Face Normals")->setEnabled(false);
-    polyscope::getPointCloud("stable Vertices Normals")->setEnabled(false);
-    polyscope::getPointCloud("Center of Mass")->setEnabled(false);
-
-    polyscope::options::ssaaFactor = 3; // supersampling
-    polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
+    polyscope_defaults();
     polyscope::state::userCallback = myCallback;
     polyscope::show();
     return EXIT_SUCCESS;  
