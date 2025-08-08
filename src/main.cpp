@@ -16,367 +16,717 @@
 * from Adobe.
 *************************************************************************
 */
+// #define BT_USE_DOUBLE_PRECISION
+
+#include "unsupported/Eigen/EulerAngles"
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/meshio.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
 
+
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
-#include "polyscope/curve_network.h"
+// #include "polyscope/curve_network.h"
 #include "polyscope/point_cloud.h"
 
-#include "args/args.hxx"
+#include "nlohmann/json.hpp"
+// #include "polyscope/nlohmann/json.hpp"
+// #include "bullet3/examples/BasicExample.h"
+#include "args.hxx"
 #include "imgui.h"
 
-#include "forward.h"
+#include "coloring.h"
+#include "forward3D.h"
+#include "mesh_factory.h"
+#include "geometry_utils.h"
+// #include "bullet_sim.h"
+#include "visual_utils.h"
 
-// #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-// #include <CGAL/Polyhedron_3.h>
-// #include <CGAL/Surface_mesh.h>
-// #include <CGAL/convex_hull_3.h>
-// #include <vector>
-// #include <fstream>
+// bullet stuff
+#include "LinearMath/btVector3.h"
+#include "btBulletDynamicsCommon.h"
+#include "bullet_sim.h"
+
+// #include "ipc/ipc.hpp"
+
+// system stuff
+#include "chrono"
+#include <filesystem>
+#include <fstream> 
+
+namespace fs = std::filesystem;
+
+namespace chrono = std::chrono;
+using clock_type = chrono::high_resolution_clock;
+using seconds_fp = chrono::duration<double, chrono::seconds::period>;
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
-// == Geometry-central data
+
+// simulation stuff
+// Bullet simulation stuff
+PhysicsEnv* my_env;
+// PhysicsEnv* my_env;
+double bullet_step_size = 0.01; // 0.016;
+
+int step_count = 1;
+Vector3 G;
+Vector3 pre_shift_G;
+
+float orientation_gui[3] = {0., -1., 0.};
+
+// stuff for Gauss map
+float face_normal_vertex_gm_radi = 0.03,
+      gm_distance = 2.,
+      gm_radi = 1.;
+int arcs_seg_count = 13;
+Vector3 shift = {0., gm_distance , 0.},
+        colored_shift = {gm_distance, gm_distance , 0.};
+float arc_curve_radi = 0.01;
+double friction_coeff = 0.1;
+
+double ground_box_y = -2.1;
+Vector3 ground_box_shape({10,1,10});
+
+// Vector3 default_face_color({0.99,0.99,0.99});
+Vector3 default_face_color({240./256.,178/256.,44./256.});
+
+//
+float scale_for_save = 1.;
+
+// example choice
+std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("tet0"),std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("worst_case"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("baby_car"), std::string("rubberDuckie")};
+std::string all_polygons_current_item = "bunny";
+
+// GC stuff
 std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
 std::unique_ptr<VertexPositionGeometry> geometry_ptr;
 ManifoldSurfaceMesh* mesh;
 VertexPositionGeometry* geometry;
-Vector3 G, // center of Mass
-        initial_g_vec;
 
-ForwardSolver forwardSolver;
+bool verbose = false,
+     bullet_sim = false,
+     ipc_sim = false,
+     just_ours = false;
 
-// Polyscope visualization handle, to quickly add data to the surface
-polyscope::SurfaceMesh *psInputMesh, *dummy_psMesh1, *dummy_psMesh2, *dummy_psMesh3, 
-                       *dummy_forward_vis;
+// raster image stuff
+FaceData<Vector3> face_colors;
+int ICOS_samples = 10, 
+    max_steps_IPC = 2000;
+bool ICOS_sampling = true;
 
-polyscope::PointCloud *psG, *curr_state_pt; // point cloud with single G
-
-
-float pt_cloud_radi_scale = 0.1,
-      curve_radi_scale = 0.1,
-      G_scale = 1.,
-      G_angle = 0.,
-      g_vec_angle = 0.;
-int sample_count = 1e3;
-
-// example choice
-std::vector<std::string> all_polygon_items = {std::string("cube"), std::string("skewed 4-gon"), std::string("rndbs 6-gon 1"), std::string("rndbs 9-gon 1")};
-std::string all_polygons_current_item = "cube";
-static const char* all_polygons_current_item_c_str = "cube";
+// quasi static simulation stuff
+Forward3DSolver* forwardSolver;
+BoundaryBuilder *boundary_builder;
+VisualUtils vis_utils;
 
 
-void visualize_boundary_curves(){
-  std::vector<std::vector<size_t>> dummy_face{{1,1,1}};
-  auto positions = forwardSolver.hullGeometry->inputVertexPositions.toVector();
-  std::vector<std::array<size_t, 2>> edgeInds;
-  for (Edge e: forwardSolver.hullMesh->edges()){
-    if (e.isBoundary()){
-      edgeInds.push_back({e.firstVertex().getIndex(), e.secondVertex().getIndex()});
+//GM stuff
+ManifoldSurfaceMesh* sphere_mesh;
+VertexPositionGeometry* sphere_geometry;
+bool gm_is_drawn = false;
+bool draw_snail_trail = true,
+     animate = true;
+// bool save_pos_to_file = false;
+// Vector3 old_g_vec, new_g_vec;
+int snail_trail_dummy_counter = 0;
+
+int solid_angle_face_index = 0;
+
+
+// for file saving
+std::string mesh_title = "mesh";
+bool save_original = false,
+     save_oriented = false,
+     save_orientation_trail_to_file = false,
+     save_orientation_trail_scrs = false,
+     snapshot_trail = false,
+     save_quasi_trail_to_file = false,
+     snapshot_quasi_trail = false;
+
+int stable_face_index = 0; // index of the stable face to visualize
+bool save_stable_orientation_pose = false;
+
+std::string multi_orientations_path;
+// Functions 
+
+
+void initialize_vis(bool with_plane = true){
+    polyscope::registerSurfaceMesh("my polyhedra", geometry->inputVertexPositions, mesh->getFaceVertexList());
+    // ground plane on Polyscope has a weird height setting (scaled factor..)
+    if (with_plane){
+      auto psPlane = polyscope::addSceneSlicePlane("ground plane");
+      psPlane->setDrawPlane(true);  // render the semi-transparent gridded plane
+      psPlane->setDrawWidget(false);
+      psPlane->setPose(glm::vec3{0., ground_box_y + 1, 0.}, glm::vec3{0., 1., 0.});
     }
-  }
-  auto convex_bnd_net = polyscope::registerCurveNetwork("convex boundary", positions, edgeInds);
 }
 
 
-void visualize_vertex_probabilities(){
+Vector3 orientation_from_string(std::string filename){
+    // the last part of the path is the orientation
+        std::string orientation_str = filename.substr(filename.find_last_of("/\\") + 1);
+        // there is no extension
+        double x, y, z;
+        // now split by '_'; just do substring 3 times
+        size_t pos1 = orientation_str.find('_');
+        size_t pos2 = orientation_str.find('_', pos1 + 1);
+        x = std::stod(orientation_str.substr(0, pos1));
+        y = std::stod(orientation_str.substr(pos1 + 1, pos2 - pos1 - 1));
+        z = std::stod(orientation_str.substr(pos2 + 1));
+        std::cout << "orientation from file: " << x << " " << y << " " << z << "\n";
+        return Vector3({x, y, z});
+  }
+
+
+void generate_polyhedron_example(std::string mesh_full_path, bool preprocess = true){
   
-  for (Vertex v: forwardSolver.hullMesh->vertices()){
-    std::vector<Vector3> positions = {forwardSolver.hullGeometry->inputVertexPositions[v]};
-    polyscope::PointCloud* psCloud = polyscope::registerPointCloud("v" + std::to_string(v.getIndex()), positions);
-    // set some options
-    psCloud->setPointColor({forwardSolver.vertex_probabilities[v], 1., 1.});
-    psCloud->setPointRadius(forwardSolver.vertex_probabilities[v] * pt_cloud_radi_scale);
-    psCloud->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
+  std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
+  std::tie(nm_mesh_ptr, nm_geometry_ptr) = readSurfaceMesh(mesh_full_path);
+  SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
+  VertexPositionGeometry *nm_geometry = nm_geometry_ptr.release();
+  nm_mesh->greedilyOrientFaces();
+  // for (Vertex v: nm_mesh->vertices()){
+  //   if (!v.isManifold()){
+  //     std::cout << "non-manifold vertex "<< v.getIndex() << "\n";
+  //   }
+  // }
+  // for (Edge e: nm_mesh->edges()){
+  //   if (!e.isManifold()){
+  //     std::cout << "non-manifold edge "<< e.getIndex()<< ": " << e.firstVertex().getIndex() << " " << e.secondVertex().getIndex() << "\n";
+  //     std::cout << "sibling: " << e.halfedge().sibling().getIndex() << ": "
+  //               << e.halfedge().sibling().tailVertex().getIndex() << " " 
+  //               << e.halfedge().sibling().tipVertex().getIndex() << "\n";
+  //     std::cout << "sibling.sibling: " << e.halfedge().sibling().sibling().getIndex() << ": "
+  //               << e.halfedge().sibling().sibling().tailVertex().getIndex() << " " 
+  //               << e.halfedge().sibling().sibling().tipVertex().getIndex() << "\n";
+  //   }
+  // }
+  nm_mesh->compress();
+
+  mesh_ptr = nm_mesh->toManifoldMesh();
+  mesh = mesh_ptr.release();
+  geometry = new VertexPositionGeometry(*mesh);
+  // transfer from nm geometry
+  for (Vertex v : mesh->vertices()) {
+    geometry->inputVertexPositions[v.getIndex()] = nm_geometry->inputVertexPositions[v.getIndex()];
   }
 
-}
-
-void visualize_edge_probabilities(){
-  forwardSolver.build_next_edge_tracer();
-  forwardSolver.compute_initial_edge_probabilities();
-  forwardSolver.compute_final_edge_probabilities();
-
-  // initial probs
-  // auto positions = forwardSolver.hullGeometry->inputVertexPositions.toVector();
-  // std::vector<std::array<size_t, 2>> edgeInds;
-  for (Edge e: forwardSolver.hullMesh->edges()){
-    if (e.isBoundary()){
-      std::vector<std::array<size_t, 2>> edgeInds;
-      std::vector<Vector3> positions;
-      edgeInds.push_back({0, 1});
-      Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[e.firstVertex()],
-              p2 = forwardSolver.hullGeometry->inputVertexPositions[e.secondVertex()];
-      positions.push_back(p1); positions.push_back(p2);
-      // initial prob visualize
-      auto psSegmentNet = polyscope::registerCurveNetwork("initial prob e" + std::to_string(e.getIndex()), positions, edgeInds);
-      psSegmentNet->setRadius(forwardSolver.initial_edge_probabilities[e]*curve_radi_scale);
-      psSegmentNet->setColor({1., forwardSolver.initial_edge_probabilities[e], 1.});
-      psSegmentNet->setEnabled(true);
-      // final prob visualize
-      auto psSegment2Net =  polyscope::registerCurveNetwork("final prob e" + std::to_string(e.getIndex()), positions, edgeInds);
-      psSegment2Net->setRadius(forwardSolver.final_edge_probabilities[e]*curve_radi_scale);
-      psSegment2Net->setColor({1., 1., forwardSolver.final_edge_probabilities[e]});
-      psSegment2Net->setEnabled(true);
-    }
+  // initial rotation for piggy
+  for (Vertex v: mesh->vertices()){
+    Vector3 p = geometry->inputVertexPositions[v];
+    geometry->inputVertexPositions[v] = Vector3({-p.x, p.z, p.y});
   }
-  
-}
 
-// visualize center of mass
-void draw_G() {
-  std::vector<Vector3> G_position = {forwardSolver.G};
-  if (polyscope::hasPointCloud("Center of Mass")){
-    psG->updatePointPositions(G_position);
+  // preproccess and shift for external use
+  if (preprocess){
+    preprocess_mesh(mesh, geometry, true, false);
+    G = find_center_of_mass(*mesh, *geometry).first;
+    pre_shift_G = G;
+    // std::cout << "center of mass before shift: " << G << "\n";
+    for (Vertex v: mesh->vertices()){
+      geometry->inputVertexPositions[v] -= G;
+    }
+    G = find_center_of_mass(*mesh, *geometry).first;
   }
-  else 
-    psG = polyscope::registerPointCloud("Center of Mass", G_position);
-  // set some options
-  psG->setPointColor({1., 1., 1.});
-  psG->setPointRadius(pt_cloud_radi_scale/2.);
-  psG->setPointRenderMode(polyscope::PointRenderMode::Sphere);
+  G = find_center_of_mass(*mesh, *geometry).first;
+  // std::cout << "center of mass after shift: " << G << "\n";
+  // double max_dist = 0;
+  // for (Vertex v: mesh->vertices()){
+  //   max_dist = std::max(max_dist, geometry->inputVertexPositions[v].norm());
+  // }
+  // std::cout << "max dist from center: " << max_dist << "\n";
 }
 
-// generate simple examples
-void generate_polygon_example(std::string poly_str){
-    std::vector<std::vector<size_t>> greedy_triangulation;
-    std::vector<Vector3> positions;
-    int n;
-    if (std::strcmp(poly_str.c_str(), "cube") == 0){
-      n = 4;
-      greedy_triangulation = {{0, 1, 2},
-                              {0, 2, 3}};
-      positions = {{-1, -1, 0}, {1, -1, 0}, {1, 1, 0}, {-1, 1, 0}};
-    }
-    else if (std::strcmp(poly_str.c_str(), "skewed 4-gon") == 0){
-      n = 4;
-      greedy_triangulation = {{0, 1, 2},
-                              {0, 2, 3}};
-      positions = {{-1*3., -1*3., 0}, {1*1.5, -1*1.5, 0}, {1*2, 1*2, 0}, {-1, 1, 0}};
-    }
-    else if (std::strcmp(poly_str.c_str(), "rndbs 6-gon 1") == 0){
-      n = 6;
-      greedy_triangulation = {{0, 1, 2},
-                              {0, 2, 3},
-                              {0, 3, 4},
-                              {0, 4, 5}};
-      for (int i = 0; i < n; i++) {
-        double tmp_angle = (double)i*2*PI/6.;
-        positions.push_back({cos(tmp_angle), sin(tmp_angle), 0.});
-      }
-      positions[0] *= 1.5;
-      positions[1] *= 5;
-      positions[2] *= 10;
-      positions[3] *= 5;
-      positions[4] *= 1.5;
-      positions[5] *= 1;
-    }
-    else if (std::strcmp(poly_str.c_str(), "rndbs 9-gon 1") == 0){
-      n = 9;
-      for (size_t i = 0; i < n-2; i++){
-        greedy_triangulation.push_back({0, i+1, i+2});
-      }
-      for (int i = 0; i < n; i++) {
-        double tmp_angle = (double)i*2*PI/(double)n;
-        positions.push_back({cos(tmp_angle), sin(tmp_angle), 0.});
-      }
-      positions[0] *= 1;
-      positions[1] *= 1.5;
-      positions[2] *= 4;
-      positions[3] *= 8;
-      positions[4] *= 12;
-      positions[5] *= 8;
-      positions[6] *= 3;
-      positions[7] *= 1.5;
-      positions[8] *= 1;
-    }
-    else {
-      throw std::runtime_error("no valid string provided\n");
-    }
-    // std::unique_ptr<ManifoldSurfaceMesh> poly_triangulated;
-    // poly_triangulated.reset(new ManifoldSurfaceMesh(greedy_triangulation));
-    mesh = new ManifoldSurfaceMesh(greedy_triangulation);
-    geometry = new VertexPositionGeometry(*mesh);
-    for (Vertex v : mesh->vertices()) {
-        // Use the low-level indexers here since we're constructing
-        printf("v %d\n", v.getIndex());
-        geometry->inputVertexPositions[v] = positions[v.getIndex()];
-    }
-}
 
 void update_solver(){
-  forwardSolver = ForwardSolver(mesh, geometry, G);
-  //assuming convex input here
-  forwardSolver.hullMesh = new ManifoldSurfaceMesh(mesh->getFaceVertexList()); //mesh->copy().release();
-  forwardSolver.hullGeometry = new VertexPositionGeometry(*forwardSolver.hullMesh); // geometry->copy().release();
-  for (Vertex v: forwardSolver.hullMesh->vertices()){
-    forwardSolver.hullGeometry->inputVertexPositions[v] = geometry->inputVertexPositions[v.getIndex()];
-  }
-  forwardSolver.compute_vertex_probabilities();
-
-
-  // Register the mesh with polyscope
-  psInputMesh = polyscope::registerSurfaceMesh(
-      "input mesh",
-      geometry->inputVertexPositions, mesh->getFaceVertexList(),
-      polyscopePermutations(*mesh));
-  draw_G();
+  forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
+  forwardSolver->initialize_pre_computes();
+  boundary_builder = new BoundaryBuilder(forwardSolver);
+  boundary_builder->build_boundary_normals();
 }
 
-void visualize_g_vec(){
-  std::vector<Vector3> the_g_vec = {forwardSolver.current_g_vec};
-  polyscope::PointCloudVectorQuantity *psG_vec = psG->addVectorQuantity("g_vec", the_g_vec);
-  psG_vec->setEnabled(true);
-  psG_vec->setVectorRadius(curve_radi_scale * 1.);
-  psG_vec->setVectorLengthScale(0.2);
-}
-
-void visualize_contact_point(){
-  // single point cloud for the single contact point
-  if (forwardSolver.curr_state.first == forwardSolver.curr_state.second){
-    std::vector<Vector3> curr_state_pos = {forwardSolver.hullGeometry->inputVertexPositions[forwardSolver.curr_state.first]}; // first and second should be the same since we just initialized.
-    curr_state_pt = polyscope::registerPointCloud("current state", curr_state_pos);
-    curr_state_pt->setEnabled(true);
-    curr_state_pt->setPointRadius(pt_cloud_radi_scale/2.);
+void color_faces(Forward3DSolver *fwd_solver){
+  // printf("hull faces: %d\n", forwardSolver->hullMesh->nFaces());
+  face_colors = FaceData<Vector3>(*fwd_solver->hullMesh, default_face_color);
+  std::vector<Face> stable_faces;
+  for (Face f: fwd_solver->hullMesh->faces()){
+    if (fwd_solver->face_is_stable(f))
+      stable_faces.push_back(f);
   }
-  else {
-      Vertex v1 = forwardSolver.curr_state.first, 
-             v2 = forwardSolver.curr_state.second;
-      std::vector<std::array<size_t, 2>> edgeInds;
-      std::vector<Vector3> positions;
-      edgeInds.push_back({0, 1});
-      Vector3 p1 = forwardSolver.hullGeometry->inputVertexPositions[v1],
-              p2 = forwardSolver.hullGeometry->inputVertexPositions[v2];
-      positions.push_back(p1); positions.push_back(p2);
-      auto curr_state_segment_net = polyscope::registerCurveNetwork("current contact edge", positions, edgeInds);
-      curr_state_segment_net->setRadius(curve_radi_scale/1.5);
-      curr_state_segment_net->setColor({0., 0., 1.});
-      curr_state_segment_net->setEnabled(true);
+  face_colors = generate_random_colors(fwd_solver->hullMesh, stable_faces);
+  
+  for (Face f: fwd_solver->hullMesh->faces()){
+    if (!fwd_solver->face_is_stable(f))
+      face_colors[f] = default_face_color;
   }
 }
 
-void initialize_state_vis(){
-  visualize_g_vec();
-  visualize_contact_point();
-  draw_G();
-  // for later single segment curve addition
-  std::vector<std::vector<size_t>> dummy_face{{0,0,0}};
-  std::vector<Vector3> dummy_pos = {Vector3({0.,0.,0.})};
-  dummy_forward_vis = polyscope::registerSurfaceMesh("state check mesh", dummy_pos, dummy_face); // nothing matters in this line
-  // will add curves to this later
+
+void visualize_gauss_map(Forward3DSolver* forwardSolver){
+    std::vector<Vector3> normals_icosahedral = generate_normals_icosahedral(40);
+    // get the convex hull of the normals
+    std::tie(sphere_mesh, sphere_geometry) = get_convex_hull_mesh(normals_icosahedral);
+    //update vis utils
+    vis_utils.draw_gauss_map(forwardSolver, sphere_mesh, sphere_geometry);
 }
 
-// A user-defined callback, for creating control panels (etc)
-// Use ImGUI commands to build whatever you want here, see
-// https://github.com/ocornut/imgui/blob/master/imgui.h
-void myCallback() {
-  if (ImGui::BeginCombo("##combo1", all_polygons_current_item.c_str())){ // The second parameter is the label previewed before opening the combo.
-        for (std::string tmp_str: all_polygon_items){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
-            bool is_selected = (all_polygons_current_item == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
-            if (ImGui::Selectable(tmp_str.c_str(), is_selected)){ // selected smth
-                all_polygons_current_item = tmp_str;
-                generate_polygon_example(all_polygons_current_item);
-                update_solver();
-            }
-            if (is_selected)
-                ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
+
+void init_visuals(){
+  auto psInputMesh = polyscope::registerSurfaceMesh(
+    "init input mesh",
+    geometry->inputVertexPositions, mesh->getFaceVertexList());
+  psInputMesh->setTransparency(1.0);
+  psInputMesh->setEnabled(true);
+  auto psHullMesh = polyscope::registerSurfaceMesh(
+    "init hull mesh",
+    forwardSolver->hullGeometry->inputVertexPositions, forwardSolver->hullMesh->getFaceVertexList(),
+    polyscopePermutations(*forwardSolver->hullMesh));
+  psHullMesh->setEnabled(true);
+  psHullMesh->setEdgeWidth(0.7);
+  psHullMesh->setTransparency(0.9);
+  vis_utils.draw_G(forwardSolver->get_G());
+  visualize_gauss_map(forwardSolver);
+}
+
+void update_solver_and_boundaries(){
+  auto t1 = clock();
+  forwardSolver->set_G(G);
+  // printf("forward precomputes \n");
+  forwardSolver->initialize_pre_computes();
+  printf("building boundary normals \n");
+  boundary_builder->build_boundary_normals();
+}
+
+
+void draw_stable_patches_on_gauss_map(bool on_height_surface = false){
+  forwardSolver->initialize_pre_computes();
+  // std::vector<Vector3> boundary_normals;
+  auto net_pair = build_and_draw_stable_patches_on_gauss_map(boundary_builder,
+                                                              vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, 
+                                                              on_height_surface);
+}
+
+void draw_trail_on_gm(std::vector<Vector3> trail, glm::vec3 color, std::string name, double radi, bool color_gradient = false){
+  std::vector<std::pair<size_t, size_t>> edge_inds;
+  if (!color_gradient){
+    for (size_t i = 0; i < trail.size()-1; i++)
+      edge_inds.push_back({i, i+1});
+    draw_arc_network_on_sphere(edge_inds, trail, vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, name, radi, color);//{0.7,0.1,0.8}
+  }
+  else{
+    std::vector<glm::vec3> colors;
+    for (size_t i = 0; i < trail.size(); i++){
+      glm::vec3 tmp_color = color;
+      tmp_color.x = tmp_color.x * ((i/(float)trail.size()));
+      draw_arc_on_sphere(trail[i], trail[i+1], vis_utils.center, vis_utils.gm_radi, vis_utils.arcs_seg_count, i, radi, tmp_color);
+    }
+  }
+}
+
+
+void initialize_env(Vector3 orientation, bool visuals = true){
+    // physics env
+    my_env = new PhysicsEnv();
+    my_env->init_physics();
+    my_env->init_geometry(forwardSolver->hullMesh, forwardSolver->hullGeometry);
+    my_env->add_ground(ground_box_y, ground_box_shape);
+    my_env->add_object(G, orientation);
+    my_env->default_step_size = bullet_step_size;
+    // // polyscope
+    // if (visuals)
+    //     initialize_vis(true);
+}
+
+void build_quasi_static_snail_trail(Vector3 initial_orientation, glm::vec3 color, std::string name, double radi = 0.01){
+    std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
+    // S^2 shift
+    draw_trail_on_gm(snail_trail, color, name, radi);
+}
+
+std::pair<std::vector<Eigen::Matrix4d>, std::vector<Vector3>> 
+generate_transformations_for_orientation_sequence(
+    Vector3 initial_orientation,
+    Forward3DSolver* forwardSolver,
+    Vector3 floor_vec,
+    double goal_angle_step = 0.005
+){
+    // Get the snail trail and make forward log
+    std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
+    // split the snail trail
+    std::vector<Vector3> snail_trail_refined;
+    for (int i = 1; i < snail_trail.size()-1; i++){
+        Vector3 local_axis = cross(snail_trail[i-1], snail_trail[i]).normalize();
+        double local_total_angle = angle(snail_trail[i-1], snail_trail[i]);
+        int steps = (int)ceil(local_total_angle/goal_angle_step) + 1;
+        // in steps = 2;
+        for (int t = 0; t < steps; t++){
+            double angle_0 = local_total_angle * (double)t/double(steps);
+            Vector3 normal_0 = snail_trail[i-1].rotateAround(local_axis, angle_0);
+            snail_trail_refined.push_back(normal_0);
         }
-        ImGui::EndCombo();
+    }
+    snail_trail_refined.push_back(snail_trail[snail_trail.size()-1]);
+
+    VertexData<Vector3> init_hull_positions = forwardSolver->hullGeometry->inputVertexPositions;
+    VertexData<Vector3> tmp_hull_positions(*forwardSolver->hullMesh);
+    tmp_hull_positions = init_hull_positions;
+    
+    std::vector<Vector3> saved_snail_trail_refined = snail_trail_refined; // for future output
+    // get transformations
+    std::vector<Eigen::Matrix4d> transformations;
+    // transformations.push_back(Eigen::Matrix4d::Identity()); // initial identity matrix
+    for (int i = 0; i < snail_trail_refined.size(); i++){
+        // get n_i locally
+        // SO3 conversion
+        Vector3 normal_0 = snail_trail_refined[i];
+        Vector3 rot_axis = cross(normal_0, floor_vec).normalize();
+        double rot_angle = angle(normal_0, floor_vec);
+
+        for (int j = 0; j < snail_trail_refined.size(); j++){
+            snail_trail_refined[j] = snail_trail_refined[j].rotateAround(rot_axis, rot_angle);
+        }
+        // shift contact to origin
+        double lowest_height = 1e4;
+        Vector3 contact_p;
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            if (tmp_hull_positions[v].y < lowest_height){
+                lowest_height = tmp_hull_positions[v].y;
+                contact_p = tmp_hull_positions[v];
+            }
+        }
+        Eigen::AngleAxisd aa(rot_angle, Eigen::Vector3d(rot_axis.x, rot_axis.y, rot_axis.z));
+        Eigen::Matrix3d rotation_matrix = aa.toRotationMatrix();
+        // do the rotation around the contact point
+        // shifting contact
+        tmp_hull_positions -= contact_p;
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            // tmp_hull_positions[v] = tmp_hull_positions[v].rotateAround(rot_axis, rot_angle);
+            Eigen::Vector3d tmp_v(tmp_hull_positions[v].x, tmp_hull_positions[v].y, tmp_hull_positions[v].z);
+            tmp_v = rotation_matrix * tmp_v;
+            tmp_hull_positions[v] = Vector3({tmp_v[0], tmp_v[1], tmp_v[2]});
+        }
+        // shift back
+        tmp_hull_positions += contact_p;
+        // axis angle rotation to matrix
+
+        // correct height; not really necessary for most steps; only when the contact point is a triangle, and the wrong vertex is chosen, can be fixed
+        lowest_height = 1e4;
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            if (tmp_hull_positions[v].y < lowest_height)
+                lowest_height = tmp_hull_positions[v].y;
+        }
+        Eigen::Matrix4d transformation_matrix;
+        transformation_matrix.setIdentity();
+        transformation_matrix.block<3,3>(0,0) = rotation_matrix;
+        // the last column is the translation
+        Eigen::Vector3d contact_p_eigen(contact_p.x, contact_p.y, contact_p.z);
+        Eigen::Vector3d translation = -rotation_matrix * contact_p_eigen + contact_p_eigen + Eigen::Vector3d(0, -lowest_height, 0);
+        transformation_matrix.block<3,1>(0,3) = translation;
+        transformations.push_back(transformation_matrix);
+        // update tmp_hull_positions height
+        for (Vertex v: forwardSolver->hullMesh->vertices()){
+            tmp_hull_positions[v].y += -lowest_height;
+        }
+    }
+    return {transformations, saved_snail_trail_refined};
+}
+
+std::pair<std::vector<Eigen::Matrix4d> , std::vector<Vector3>>
+quasi_static_snail_trail_to_global_transformations(Vector3 initial_orientation, bool visualize = false){
+    // initialize the trail in forwardSolver
+    std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
+    // split the snail trail
+    auto [local_transformation_matrices, saved_snail_trail_refined] = generate_transformations_for_orientation_sequence(
+        initial_orientation, forwardSolver, Vector3({0,-1,0}), 0.005);
+    // local to global
+    std::vector<Eigen::Matrix4d> transformation_matrices;
+    Eigen::Matrix4d global_transformation = Eigen::Matrix4d::Identity();
+    for (int i = 0; i < local_transformation_matrices.size(); i++){
+        Eigen::Matrix4d local_transformation = local_transformation_matrices[i];
+        global_transformation = local_transformation * global_transformation;
+        transformation_matrices.push_back(global_transformation);
+    }
+    // apply to the mesh and visualize each step
+    if (visualize){
+        std::cout << "visualizing snail trail steps \n";
+        VertexData<Vector3> tmp_positions(*forwardSolver->inputMesh);
+        // tmp_positions = forwardSolver->inputGeometry->inputVertexPositions;
+        Vector3 tmp_orientation = initial_orientation.normalize();
+        for (int i = 0; i < transformation_matrices.size(); i++){
+            Eigen::Matrix4d transformation_matrix = transformation_matrices[i];
+            // apply to the input mesh
+            for (Vertex v: forwardSolver->inputMesh->vertices()){
+                Vector3 p = forwardSolver->inputGeometry->inputVertexPositions[v];
+                // apply the transformation matrix
+                Eigen::Vector4d tmp_v({p.x,
+                                       p.y,
+                                       p.z, 
+                                       1.0});
+                tmp_v = transformation_matrix * tmp_v;
+                tmp_positions[v] = Vector3({tmp_v[0], tmp_v[1], tmp_v[2]});
+            }
+            // visualize
+            polyscope::registerSurfaceMesh("quasi static snail step ", 
+                tmp_positions, 
+                forwardSolver->inputMesh->getFaceVertexList())->setEnabled(true);
+            // only the snail trail
+            tmp_orientation = saved_snail_trail_refined[i];
+            std::vector<Vector3> tmp_orientation_vec = {tmp_orientation * vis_utils.gm_radi + vis_utils.center};
+            polyscope::registerPointCloud("quasi orientation on gm", 
+                                            tmp_orientation_vec)->setPointRadius(0.03, false)->setPointColor({0,0,0});
+            polyscope::show();
+        }
+    }
+    return {transformation_matrices, saved_snail_trail_refined};
+}
+
+
+VertexData<Vector3> orient_mesh_with_down_vec(Vector3 orientation, Vector3 down_vec,
+                               ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry){
+    Vector3 axis = cross(orientation, down_vec);
+    if (axis.norm() < 1e-6) // parallel
+        axis = Vector3({1,0,0});
+    axis = axis.normalize();
+    double angle = acos(dot(orientation, down_vec));
+    VertexData<Vector3> new_positions(*mesh);
+    for (Vertex v: mesh->vertices()){
+        Vector3 p = geometry->inputVertexPositions[v];
+        new_positions[v] = p.rotateAround(axis, angle);
+    }
+    return new_positions;
+}
+
+
+// polyscope callback
+void myCallback() {
+    // sliders for orientation
+    if (ImGui::SliderFloat3("orientation", orientation_gui, -10.0f, 10.0f)){
+        Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
+        std::vector<Vector3> orientation_vec = {orientation.normalize() * vis_utils.gm_radi + vis_utils.center};
+        polyscope::registerPointCloud("orientation on gm", orientation_vec)->setPointRadius(0.03, false);
+    }
+    ImGui::Checkbox("save original", &save_original);
+    ImGui::Checkbox("save oriented", &save_oriented);
+    if (ImGui::Button("visualize orientation ")) {
+        // use-case 1; show orientation as a point on S^2 and orient the object accordingly, later save the oriented obj to file
+        Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
+        orientation = orientation.normalize();
+        // Make a rotated mesh from the rotation that rotates {0,-1,0} to orientation
+        Vector3 down_vec({0,-1,0});
+        VertexData<Vector3> new_positions = orient_mesh_with_down_vec(orientation, down_vec, mesh, geometry);
+
+        polyscope::registerSurfaceMesh("oriented mesh", new_positions, mesh->getFaceVertexList());
+        // show the orientation on the gauss map
+        std::vector<Vector3> orientation_vec = {orientation * vis_utils.gm_radi + vis_utils.center};
+        // black rgb
+        polyscope::registerPointCloud("orientation on gm", orientation_vec)->setPointRadius(0.03, false)->setPointColor({0,0,0});
+        
+        
+        // save to file
+        // save the rotated mesh, orientation and center of mass after rotation to files
+        std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
+        if (save_original){
+            // save the original mesh first
+            writeSurfaceMesh(*mesh, *geometry, PARENT_SAVE_DIR + "/" + mesh_title + "/" + mesh_title + "_original.obj");
+        }
+        if (save_oriented){
+            // save oriented
+            VertexPositionGeometry geo_for_save(*mesh);
+            for (Vertex v: mesh->vertices()){
+                geo_for_save.inputVertexPositions[v] = new_positions[v];
+            }
+            // convert orientation to string
+            std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
+            std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str;
+            // create directory if it does not exist
+            if (!fs::exists(path_to_dir)){
+                fs::create_directories(path_to_dir);
+            }
+            writeSurfaceMesh(*mesh, geo_for_save, path_to_dir + "/" + "oriented_shape.obj");
+        }
+    }
+    ImGui::Checkbox("save orientation trail", &save_orientation_trail_to_file);
+    ImGui::Checkbox("snapshot trail", &snapshot_trail);
+    if (ImGui::Button("bullet snail trail")) {
+        // initialize bullet env
+        Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
+        orientation = orientation.normalize();
+        initialize_env(orientation, false);
+        // visualize snail trail 
+        Face touching_face = my_env->final_stable_face(draw_snail_trail);
+        // animate the shape drop with Bullet
+        std::vector<geometrycentral::DenseMatrix<double>> trans_mat_trail = my_env->trans_mat_trail;
+        Vector<Vector3> init_positions = forwardSolver->inputGeometry->inputVertexPositions.toVector();
+        // // save positions of the shape at every transformation
+        std::vector<Vector<Vector3>> pos_trail;
+        for (geometrycentral::DenseMatrix<double> tmp_trans: trans_mat_trail) {
+            Vector<Vector3> tmp_positions = apply_trans_to_positions(init_positions, tmp_trans);
+            pos_trail.push_back(tmp_positions);
+        }
+        
+        // draw snail trail on gm
+        std::vector<Vector3> snail_trail = my_env->orientation_trail;
+        for (Vector3 &v: snail_trail)
+            v += vis_utils.center;
+        auto trail_pc = polyscope::registerPointCloud("bullet pc trail", snail_trail);
+        glm::vec3 init_color = {0.8,0.8,0.2};
+        // RGB is 209 227 28
+        glm::vec3 bullet_color = {209./255., 227./255., 28./255.};
+        trail_pc->setPointColor(bullet_color);
+        trail_pc->setPointRadius(0.003, false);
+        // trail_pc->setEnabled(true);
+        // show the last position of the snail trail with red
+        std::vector<Vector3> last_snail_trail = {snail_trail.back()};
+        polyscope::registerPointCloud("final bullet trail", last_snail_trail)->setPointColor({1,0,0})->setPointRadius(0.03, false);
+
+        // height function at every orientation
+        std::vector<double> height_log;
+        for (Vector3 &v: my_env->orientation_trail){
+            double height = forwardSolver->height_function(v);
+            height_log.push_back(height);
+        }
+
+        // ambient mesh
+        Vector<Vector3> final_rest_positions = my_env->get_new_positions(forwardSolver->inputGeometry->inputVertexPositions.toVector());
+        polyscope::registerSurfaceMesh("Bullet resting mesh", final_rest_positions, mesh->getFaceVertexList());
+        
+        if (save_orientation_trail_to_file){
+            // save orientation trajectory to file
+            std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
+            std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
+            std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str;
+            // create directory if it does not exist
+            if (!fs::exists(path_to_dir)){
+                fs::create_directories(path_to_dir);
+            }
+            // save
+            // save orientation trail
+            std::ofstream ofs(path_to_dir + "/" + "orientation_trail.txt");
+            for (const auto& pos : my_env->orientation_trail) {
+                ofs << pos.x << " " << pos.y << " " << pos.z << "\n";
+            }
+            ofs.close();
+            // save transformation matrices
+            std::ofstream ofs_mat(path_to_dir + "/" + "transformation_matrices.txt");
+            for (const auto& mat : my_env->trans_mat_trail) {
+                ofs_mat << mat << "\n";
+            }
+            ofs_mat.close();
+            // save height log
+            std::ofstream ofs_height(path_to_dir + "/" + "height_log.txt");
+            for (const auto& height : height_log) {
+                ofs_height << height << "\n";
+            }
+            ofs_height.close();
+        }
+
+    }
+    ImGui::Checkbox("save quasi static trail to file", &save_quasi_trail_to_file);
+    if (ImGui::Button("Build quasistatic snail trail")){
+        // get rotations corresponding to the snail trail
+        Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
+        orientation = orientation.normalize();
+        
+        build_quasi_static_snail_trail(orientation, {39./255., 189./255., 0}, "quasi-static trail", 3.);
+        auto [transformation_matrices, saved_snail_trail_refined] = quasi_static_snail_trail_to_global_transformations(orientation, false);
+        
+        // save to file like bullet snail trail matrices
+        std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
+        std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
+        std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str + "/quasi_static_trail";
+        if (save_quasi_trail_to_file){
+            // create directory if it does not exist
+            if (!fs::exists(path_to_dir)){
+                fs::create_directories(path_to_dir);
+            }
+            // save transformation matrices
+            std::ofstream ofs_mat(path_to_dir + "/" + "transformation_matrices.txt");
+            for (const auto& mat : transformation_matrices) {
+                ofs_mat << mat << "\n";
+            }
+            ofs_mat.close();
+        }
+    }
+}
+
+
+int main(int argc, char* argv[])
+{
+    #ifdef BT_USE_DOUBLE_PRECISION
+        printf("BT_USE_DOUBLE_PRECISION\n");
+    #else
+        printf("Single precision\n");
+    #endif
+
+    args::ArgumentParser parser(    "This is a test program.", "This goes after the options.");
+    args::HelpFlag help(parser,     "help", "Display this help menu", {'h', "help"});
+    args::ValueFlag<std::string> mesh_path_arg(parser, "mesh_path", "path to esh", {'m', "mesh_dir"});
+    args::ValueFlag<std::string> center_of_mass_path_arg(parser, "center_of_mass", "center of mass of the shape", {"com"});
+    args::ValueFlag<std::string> orientation_path_arg(parser, "orientation", "path to orientation files", {"orientation"});
+
+
+    try {
+        parser.ParseCLI(argc, argv);
+    }
+    catch (args::Help) {
+        std::cout << parser;
+        return 0;
+    }
+    catch (args::ParseError e) {
+        std::cerr << e.what() << std::endl;
+        std::cerr << parser;
+        return 1;
+    }
+    catch (args::ValidationError e) {
+        std::cerr << e.what() << std::endl;
+        std::cerr << parser;
+        return 1;
+    }
+    std::string mesh_path, com_path, orientation_path;
+    if (mesh_path_arg)
+        mesh_path = args::get(mesh_path_arg);
+    if (center_of_mass_path_arg)
+        com_path = args::get(center_of_mass_path_arg);
+    if (orientation_path_arg){
+        orientation_path = args::get(orientation_path_arg);
+        Vector3 orientation_inp = orientation_from_string(orientation_path);
+        orientation_gui[0] = orientation_inp.x;
+        orientation_gui[1] = orientation_inp.y;
+        orientation_gui[2] = orientation_inp.z;
     }
 
-  if (ImGui::Button("build boundary curves")) {
-    visualize_boundary_curves();
+    // extract mesh title
+    mesh_title = mesh_path.substr(mesh_path.find_last_of("/\\") + 1);
+    mesh_title = mesh_title.substr(0, mesh_title.find_last_of("."));
+    // --- Debugging --- //
+    polyscope::init();
+    vis_utils = VisualUtils();
+    generate_polyhedron_example(mesh_path);
+    // initial 
+    update_solver();
+
+    init_visuals();
+
+    draw_stable_patches_on_gauss_map();
+
+        
+
+    // hide everything
+    polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
+    polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
+    polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
+    polyscope::getCurveNetwork("Arc curves region boundaries")->setEnabled(false);
+    polyscope::getPointCloud("Edge equilibria")->setEnabled(false);
+    polyscope::getPointCloud("stable Face Normals")->setEnabled(false);
+    polyscope::getPointCloud("stable Vertices Normals")->setEnabled(false);
+    polyscope::getPointCloud("Center of Mass")->setEnabled(false);
+
+    polyscope::options::ssaaFactor = 3; // supersampling
+    polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
+    polyscope::state::userCallback = myCallback;
+    polyscope::show();
+    return EXIT_SUCCESS;  
   }
-  if (ImGui::Button("visualize vertex probabilities")) {
-    visualize_vertex_probabilities();
-  }
-  if (ImGui::SliderFloat("vertex radi scale", &pt_cloud_radi_scale, 0., 1.)) {
-    draw_G();
-  }
-  if (ImGui::SliderFloat("edge radi scale", &curve_radi_scale, 0., 1.)) visualize_edge_probabilities();
-
-  if (ImGui::Button("visualize edge probabilities")) {
-    visualize_edge_probabilities();
-  }
-
-  if (ImGui::SliderFloat("G radi scale", &G_scale, -3., 3.)||
-      ImGui::SliderFloat("G angle", &G_angle, 0., 2*PI)) {
-    G = {cos(G_angle)*G_scale, sin(G_angle) * G_scale, 0};
-    forwardSolver.G = G;
-    draw_G();
-    visualize_edge_probabilities();
-  }
-
-  if (ImGui::InputInt("compute empirical edge probabilities", &sample_count, 100)) {
-    forwardSolver.build_next_edge_tracer();
-    forwardSolver.empirically_build_probabilities(sample_count);
-  }
-  if (ImGui::SliderFloat("g-vec angle", &g_vec_angle, 0., 2*PI)) {
-    initial_g_vec = {cos(g_vec_angle), sin(g_vec_angle), 0};
-    forwardSolver.find_contact(initial_g_vec);
-    forwardSolver.build_next_edge_tracer();
-    initialize_state_vis();
-  }
-  if (ImGui::Button("reset state")) {
-    forwardSolver.find_contact(initial_g_vec);
-    forwardSolver.build_next_edge_tracer();
-    initialize_state_vis();
-  }
-  if (ImGui::Button("next state")) {
-    forwardSolver.next_state();
-    visualize_g_vec();
-    visualize_contact_point();
-  }
-}
-
-
-int main(int argc, char **argv) {
-
-  // Configure the argument parser
-  // args::ArgumentParser parser("geometry-central & Polyscope example project");
-  // args::Positional<std::string> inputFilename(parser, "mesh", "A mesh file.");
-
-  // // Parse args
-  // try {
-  //   parser.ParseCLI(argc, argv);
-  // } catch (args::Help &h) {
-  //   std::cout << parser;
-  //   return 0;
-  // } catch (args::ParseError &e) {
-  //   std::cerr << e.what() << std::endl;
-  //   std::cerr << parser;
-  //   return 1;
-  // }
-
-  // // Make sure a mesh name was given
-  // if (!inputFilename) {
-  //   std::cerr << "Please specify a mesh file as argument" << std::endl;
-  //   return EXIT_FAILURE;
-  // }
-
-  // build mesh
-  generate_polygon_example(all_polygons_current_item);
-  G = {0.,0,0};
-  update_solver();
-  // build the solver
-  
-  // Load mesh
-  // std::tie(mesh, geometry) = readManifoldSurfaceMesh(args::get(inputFilename));
-
-  // Initialize polyscope
-  polyscope::init();
-  
-  // Set the callback function
-  polyscope::state::userCallback = myCallback;
-  polyscope::view::style = polyscope::view::NavigateStyle::Planar;
-  // Set vertex tangent spaces
-  
-  // Give control to the polyscope gui
-  polyscope::show();
-
-  return EXIT_SUCCESS;
-}

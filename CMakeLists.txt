@@ -2,12 +2,14 @@ cmake_minimum_required(VERSION 3.16.0)
 
 project(rolling_dragons)
 
-set(CMAKE_CXX_STANDARD 20) 
+set(CMAKE_CXX_STANDARD 20)
 
-# Add cmake recipe directory
+# (Optional) toggle heavy deps later if desired
+option(ROLLING_DRAGONS_USE_BULLET "Enable Bullet physics features" ON)
+
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
-# Dependencies
+# Dependencies (as before)
 include(Eigen3)
 include(geometry-central)
 include(polyscope)
@@ -18,10 +20,13 @@ include(stan)
 include(osqp-cpp)
 # include(autodiff)
 # include(ipc-toolkit)
+include(json)
+if(ROLLING_DRAGONS_USE_BULLET)
+  include(bullet3)
+endif()
 
-
-# Library source files
-set(SRC_FILES
+# Core library sources (exclude any old main_* files)
+set(RD_CORE_SOURCES
     src/utils.cpp
     src/arc_algebra.cpp
     src/forward3D.cpp
@@ -32,118 +37,41 @@ set(SRC_FILES
     src/implot.cpp
     src/implot_items.cpp
     src/boundary_tools.cpp
-    src/inv_design.cpp
+    src/inv_design.cpp        # remove later if not needed
     src/convex_hull.cpp
     src/remesh_tools.cpp
+    src/bullet_sim.cpp        # keep only if bullet-dependent code is still referenced from main.cpp
 )
 
-# Add rolling-dragons library, which will be shared by all executables.
-add_library(rolling_dragons ${SRC_FILES})
+if(NOT ROLLING_DRAGONS_USE_BULLET)
+  list(REMOVE_ITEM RD_CORE_SOURCES src/bullet_sim.cpp)
+endif()
+
+add_library(rolling_dragons ${RD_CORE_SOURCES})
+add_library(rolling_dragons::rolling_dragons ALIAS rolling_dragons)
 target_include_directories(rolling_dragons PUBLIC include)
 target_link_libraries(rolling_dragons
-PUBLIC
-geometry-central::geometry-central
-polyscope::polyscope
-# autodiff::autodiff
-qhull::qhull
-tinyad::tinyad
-osqp-cpp::osqp-cpp
-stan::stan
+  PUBLIC
+    geometry-central::geometry-central
+    polyscope::polyscope
+    qhull::qhull
+    tinyad::tinyad
+    osqp-cpp::osqp-cpp
+    stan::stan
+    nlohmann::json
 )
-add_library(rolling_dragons::rolling_dragons ALIAS rolling_dragons)
 
-# Add executables
-find_package(GUROBI)
-if (GUROBI_FOUND)
-  message(STATUS "Gurobi found at ${GUROBI_INCLUDE_DIRS}")
-else ()
-  message(STATUS "Gurobi not found!")
-endif ()
+if(ROLLING_DRAGONS_USE_BULLET)
+  target_link_libraries(rolling_dragons PUBLIC bullet3::bullet3)
+  target_compile_definitions(rolling_dragons PUBLIC ROLLING_DRAGONS_USE_BULLET)
+endif()
 
-# Executable for talk visuals
-
-include(json)
-# include(rigid-ipc)
-include(bullet3)
-add_executable(visualsSIG src/main_visuals.cpp src/bullet_sim.cpp)
-target_link_libraries(visualsSIG
-PRIVATE
-rolling_dragons::rolling_dragons
-taywee::args
-nlohmann::json
-bullet3::bullet3
-# ipc::toolkit
+# Single unified executable (assumes all previous functionality merged into src/main.cpp)
+add_executable(main_app src/main.cpp)
+target_link_libraries(main_app
+  PRIVATE
+    rolling_dragons::rolling_dragons
+    taywee::args
 )
-set_property(TARGET visualsSIG PROPERTY CXX_STANDARD 20)
 
-
-# Add executables
-
-# add_executable(bulletSim src/main_bullet.cpp src/bullet_sim.cpp)
-# include(bullet3)
-# target_link_libraries(bulletSim
-# PRIVATE
-# rolling_dragons::rolling_dragons
-# taywee::args
-# bullet3::bullet3
-# )
-# set_property(TARGET bulletSim PROPERTY CXX_STANDARD 17)
-
-
-include(json)
-# include(rigid-ipc)
-include(bullet3)
-add_executable(scriptIPC src/main_IPC_script.cpp src/bullet_sim.cpp)
-target_link_libraries(scriptIPC
-PRIVATE
-rolling_dragons::rolling_dragons
-taywee::args
-nlohmann::json
-bullet3::bullet3
-# ipc::toolkit
-)
-set_property(TARGET scriptIPC PROPERTY CXX_STANDARD 20)
-
-
-
-add_executable(hullFill src/main_hull_fill.cpp src/deformation.cpp src/optimization.cpp src/CP_tools.cpp)
-target_include_directories(hullFill PUBLIC "${GUROBI_INCLUDE_DIRS}")
-target_link_libraries(hullFill
-PRIVATE
-rolling_dragons::rolling_dragons
-taywee::args
-${GUROBI_LIBRARY}
-${GUROBI_CXX_LIBRARY}
-)
-set_property(TARGET hullFill PROPERTY CXX_STANDARD 20)
-
-
-# # # Add executables
-
-# add_executable(convexDice src/main_convex_dice.cpp)
-# target_link_libraries(convexDice
-# PRIVATE
-# rolling_dragons::rolling_dragons
-# taywee::args
-# )
-# set_property(TARGET convexDice PROPERTY CXX_STANDARD 20)
-
-
-# add_executable(CoMopt src/main_G_opt.cpp)
-# target_link_libraries(CoMopt
-# PRIVATE
-# rolling_dragons::rolling_dragons
-# taywee::args
-# )
-# set_property(TARGET CoMopt PROPERTY CXX_STANDARD 20)
-
-# Add executables
-
-# add_executable(convexFill src/main_convex_fill.cpp)
-# target_link_libraries(convexFill
-# PRIVATE
-# rolling_dragons::rolling_dragons
-# taywee::args
-# stan::stan
-# )
-# set_property(TARGET convexFill PROPERTY CXX_STANDARD 20)
+set_property(TARGET main_app PROPERTY CXX_STANDARD 20)
