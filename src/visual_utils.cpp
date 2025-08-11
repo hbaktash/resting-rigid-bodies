@@ -681,7 +681,7 @@ void visualize_face_solid_angle_vs_ms_complex(size_t f_ind, BoundaryBuilder* bou
 
 
 void init_visuals(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
-				  Forward3DSolver* forwardSolver){
+				  Forward3DSolver* forwardSolver, BoundaryBuilder* boundary_builder){
 	auto psInputMesh = polyscope::registerSurfaceMesh(
 		"init input mesh",
 		geometry->inputVertexPositions, mesh->getFaceVertexList())->setTransparency(1.0);
@@ -690,6 +690,8 @@ void init_visuals(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
 		forwardSolver->hullMesh->getFaceVertexList())->setEdgeWidth(0.7)->setTransparency(0.9);
 	draw_G(forwardSolver->get_G());
 	visualize_gauss_map(forwardSolver);
+  draw_stable_patches_on_gauss_map(boundary_builder, false);
+
 }
 
 
@@ -716,4 +718,36 @@ void draw_trail_on_gm(std::vector<Vector3> trail, glm::vec3 color, std::string n
       draw_arc_on_sphere(trail[i], trail[i+1], VisualUtils::center, VisualUtils::gm_radi, VisualUtils::arcs_seg_count, i, radi, tmp_color);
     }
   }
+}
+
+
+void visualize_quasi_static_drop_sequence(
+                    std::vector<Eigen::Matrix4d> transformation_matrices,
+					std::vector<Vector3> saved_snail_trail_refined,
+					Forward3DSolver* forwardSolver
+					){
+	std::cout << "visualizing snail trail steps \n";
+	VertexData<Vector3> tmp_positions(*forwardSolver->inputMesh);
+	// tmp_positions = forwardSolver->inputGeometry->inputVertexPositions;
+	for (int i = 0; i < transformation_matrices.size(); i++){
+		Eigen::Matrix4d transformation_matrix = transformation_matrices[i];
+		// apply to the input mesh
+		for (Vertex v: forwardSolver->inputMesh->vertices()){
+			Vector3 p = forwardSolver->inputGeometry->inputVertexPositions[v];
+			// apply the transformation matrix
+			Eigen::Vector4d tmp_v({p.x, p.y, p.z, 1.0});
+			tmp_v = transformation_matrix * tmp_v;
+			tmp_positions[v] = Vector3({tmp_v[0], tmp_v[1], tmp_v[2]});
+		}
+		// visualize
+		polyscope::registerSurfaceMesh("quasi static snail step ", 
+			tmp_positions, 
+			forwardSolver->inputMesh->getFaceVertexList())->setEnabled(true);
+		// only the snail trail
+		Vector3 tmp_orientation = saved_snail_trail_refined[i];
+		std::vector<Vector3> tmp_orientation_vec = {tmp_orientation * VisualUtils::gm_radi + VisualUtils::center};
+		polyscope::registerPointCloud("quasi orientation on gm", 
+										tmp_orientation_vec)->setPointRadius(0.03, false)->setPointColor({0,0,0});
+		polyscope::show();
+	}  
 }

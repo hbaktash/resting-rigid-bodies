@@ -63,42 +63,16 @@ using seconds_fp = chrono::duration<double, chrono::seconds::period>;
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
 
-
-
 // simulation stuff
 // Bullet simulation stuff
 PhysicsEnv* my_env;
-// PhysicsEnv* my_env;
-double bullet_step_size = 0.01; // 0.016;
 
-int step_count = 1;
 Vector3 G;
-Vector3 pre_shift_G;
 
 float orientation_gui[3] = {0., -1., 0.};
 
-// stuff for Gauss map
-float face_normal_vertex_gm_radi = 0.03,
-      gm_distance = 2.,
-      gm_radi = 1.;
-int arcs_seg_count = 13;
-Vector3 shift = {0., gm_distance , 0.},
-        colored_shift = {gm_distance, gm_distance , 0.};
-float arc_curve_radi = 0.01;
-double friction_coeff = 0.1;
 
-double ground_box_y = -2.1;
-Vector3 ground_box_shape({10,1,10});
-
-// Vector3 default_face_color({0.99,0.99,0.99});
-Vector3 default_face_color({240./256.,178/256.,44./256.});
-
-//
-float scale_for_save = 1.;
-
-// example choice
-std::vector<std::string> all_polyhedra_items = {std::string("tet"), std::string("tet2"), std::string("tet0"),std::string("cube"), std::string("tilted cube"), std::string("sliced tet"), std::string("worst_case"), std::string("fox"), std::string("small_bunny"), std::string("bunnylp"), std::string("kitten"), std::string("double-torus"), std::string("knuckle_bone_real"),std::string("soccerball"), std::string("bunny"), std::string("gomboc"), std::string("dragon1"), std::string("dragon3"), std::string("mark_gomboc"), std::string("KnuckleboneDice"), std::string("Duende"), std::string("papa_noel"), std::string("reno"), std::string("baby_car"), std::string("rubberDuckie")};
-std::string all_polygons_current_item = "bunny";
+// example choice (removed unused all_polyhedra_items/all_polygons_current_item)
 
 // GC stuff
 std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
@@ -129,8 +103,7 @@ int solid_angle_face_index = 0;
 
 // for file saving
 std::string mesh_title = "mesh";
-bool save_original = false,
-     save_oriented = false,
+bool save_oriented = false,
      save_orientation_trail_to_file = false,
      save_orientation_trail_scrs = false,
      snapshot_trail = false,
@@ -181,10 +154,9 @@ void load_mesh(std::string path, bool preprocess = true){
 	if (preprocess){
 		preprocess_mesh(mesh, geometry, true, false);
 		G = find_center_of_mass(*mesh, *geometry).first;
-		pre_shift_G = G;
 		// std::cout << "center of mass before shift: " << G << "\n";
 		for (Vertex v: mesh->vertices()){
-		geometry->inputVertexPositions[v] -= G;
+		    geometry->inputVertexPositions[v] -= G;
 		}
 		G = find_center_of_mass(*mesh, *geometry).first;
 	}
@@ -201,6 +173,10 @@ void update_solver(){
 
 
 void initialize_bullet_env(Vector3 orientation, bool visuals = true){
+    // params 
+    double bullet_step_size = 0.01; // 0.016 is the default for 60 FPS;
+    double ground_box_y = -2.1;
+    Vector3 ground_box_shape({10,1,10});
     // physics env
     my_env = new PhysicsEnv();
     my_env->init_physics();
@@ -210,14 +186,9 @@ void initialize_bullet_env(Vector3 orientation, bool visuals = true){
     my_env->default_step_size = bullet_step_size;
 }
 
-
 std::pair<std::vector<Eigen::Matrix4d>, std::vector<Vector3>> 
-generate_transformations_for_orientation_sequence(
-    Vector3 initial_orientation,
-    Forward3DSolver* forwardSolver,
-    Vector3 floor_vec,
-    double goal_angle_step = 0.005
-){
+generate_transformations_for_orientation_sequence(Vector3 initial_orientation,
+    Forward3DSolver* forwardSolver, Vector3 floor_vec, double goal_angle_step = 0.005){
     // Get the snail trail and make forward log
     std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
     // split the snail trail
@@ -299,14 +270,15 @@ generate_transformations_for_orientation_sequence(
     return {transformations, saved_snail_trail_refined};
 }
 
+
 std::pair<std::vector<Eigen::Matrix4d> , std::vector<Vector3>>
-quasi_static_snail_trail_to_global_transformations(Vector3 initial_orientation, bool visualize = false){
+quasi_static_snail_trail_to_global_transformations(Forward3DSolver* forwardSolver, Vector3 initial_orientation, double refinement_step_size, bool visualize = false){
     // initialize the trail in forwardSolver
     std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
     // split the snail trail
     auto [local_transformation_matrices, saved_snail_trail_refined] = generate_transformations_for_orientation_sequence(
-        initial_orientation, forwardSolver, Vector3({0,-1,0}), 0.005);
-    // local to global
+        initial_orientation, forwardSolver, Vector3({0,-1,0}), refinement_step_size);
+    // local to global; L_n = R_n * R_(n-1) * ... * R_0
     std::vector<Eigen::Matrix4d> transformation_matrices;
     Eigen::Matrix4d global_transformation = Eigen::Matrix4d::Identity();
     for (int i = 0; i < local_transformation_matrices.size(); i++){
@@ -316,34 +288,7 @@ quasi_static_snail_trail_to_global_transformations(Vector3 initial_orientation, 
     }
     // apply to the mesh and visualize each step
     if (visualize){
-        std::cout << "visualizing snail trail steps \n";
-        VertexData<Vector3> tmp_positions(*forwardSolver->inputMesh);
-        // tmp_positions = forwardSolver->inputGeometry->inputVertexPositions;
-        Vector3 tmp_orientation = initial_orientation.normalize();
-        for (int i = 0; i < transformation_matrices.size(); i++){
-            Eigen::Matrix4d transformation_matrix = transformation_matrices[i];
-            // apply to the input mesh
-            for (Vertex v: forwardSolver->inputMesh->vertices()){
-                Vector3 p = forwardSolver->inputGeometry->inputVertexPositions[v];
-                // apply the transformation matrix
-                Eigen::Vector4d tmp_v({p.x,
-                                       p.y,
-                                       p.z, 
-                                       1.0});
-                tmp_v = transformation_matrix * tmp_v;
-                tmp_positions[v] = Vector3({tmp_v[0], tmp_v[1], tmp_v[2]});
-            }
-            // visualize
-            polyscope::registerSurfaceMesh("quasi static snail step ", 
-                tmp_positions, 
-                forwardSolver->inputMesh->getFaceVertexList())->setEnabled(true);
-            // only the snail trail
-            tmp_orientation = saved_snail_trail_refined[i];
-            std::vector<Vector3> tmp_orientation_vec = {tmp_orientation * vis_utils.gm_radi + vis_utils.center};
-            polyscope::registerPointCloud("quasi orientation on gm", 
-                                            tmp_orientation_vec)->setPointRadius(0.03, false)->setPointColor({0,0,0});
-            polyscope::show();
-        }
+        visualize_quasi_static_drop_sequence(transformation_matrices, saved_snail_trail_refined, forwardSolver);
     }
     return {transformation_matrices, saved_snail_trail_refined};
 }
@@ -368,14 +313,8 @@ VertexData<Vector3> orient_mesh_with_down_vec(Vector3 orientation, Vector3 down_
 // polyscope callback
 void myCallback() {
     // sliders for orientation
-    if (ImGui::SliderFloat3("orientation", orientation_gui, -10.0f, 10.0f)){
-        Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
-        std::vector<Vector3> orientation_vec = {orientation.normalize() * vis_utils.gm_radi + vis_utils.center};
-        polyscope::registerPointCloud("orientation on gm", orientation_vec)->setPointRadius(0.03, false);
-    }
-    ImGui::Checkbox("save original", &save_original);
-    ImGui::Checkbox("save oriented", &save_oriented);
-    if (ImGui::Button("visualize orientation ")) {
+    ImGui::SliderFloat3("orientation", orientation_gui, -10.0f, 10.0f);
+    if (ImGui::Button("show orientation and QS trail")) {
         // use-case 1; show orientation as a point on S^2 and orient the object accordingly, later save the oriented obj to file
         Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
         orientation = orientation.normalize();
@@ -388,33 +327,23 @@ void myCallback() {
         std::vector<Vector3> orientation_vec = {orientation * vis_utils.gm_radi + vis_utils.center};
         // black rgb
         polyscope::registerPointCloud("orientation on gm", orientation_vec)->setPointRadius(0.03, false)->setPointColor({0,0,0});
+    }
+    if (ImGui::Button("Build quasistatic snail trail")){
+        // get rotations corresponding to the snail trail
+        Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
+        orientation = orientation.normalize();
         
+        // initialize bullet env
+        std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(orientation);
+        draw_trail_on_gm(snail_trail, {39./255., 189./255., 0}, "quasi-static trail", 3.);
+        double refinement_step_size = 0.005;
+        auto [transformation_matrices, saved_snail_trail_refined] = 
+                quasi_static_snail_trail_to_global_transformations(
+                    forwardSolver, orientation, refinement_step_size, false
+                );
         
-        // save to file
-        // save the rotated mesh, orientation and center of mass after rotation to files
-        std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
-        if (save_original){
-            // save the original mesh first
-            writeSurfaceMesh(*mesh, *geometry, PARENT_SAVE_DIR + "/" + mesh_title + "/" + mesh_title + "_original.obj");
-        }
-        if (save_oriented){
-            // save oriented
-            VertexPositionGeometry geo_for_save(*mesh);
-            for (Vertex v: mesh->vertices()){
-                geo_for_save.inputVertexPositions[v] = new_positions[v];
-            }
-            // convert orientation to string
-            std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
-            std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str;
-            // create directory if it does not exist
-            if (!fs::exists(path_to_dir)){
-                fs::create_directories(path_to_dir);
-            }
-            writeSurfaceMesh(*mesh, geo_for_save, path_to_dir + "/" + "oriented_shape.obj");
-        }
     }
     ImGui::Checkbox("save orientation trail", &save_orientation_trail_to_file);
-    ImGui::Checkbox("snapshot trail", &snapshot_trail);
     if (ImGui::Button("bullet snail trail")) {
         // initialize bullet env
         Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
@@ -457,66 +386,6 @@ void myCallback() {
         // ambient mesh
         Vector<Vector3> final_rest_positions = my_env->get_new_positions(forwardSolver->inputGeometry->inputVertexPositions.toVector());
         polyscope::registerSurfaceMesh("Bullet resting mesh", final_rest_positions, mesh->getFaceVertexList());
-        
-        if (save_orientation_trail_to_file){
-            // save orientation trajectory to file
-            std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
-            std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
-            std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str;
-            // create directory if it does not exist
-            if (!fs::exists(path_to_dir)){
-                fs::create_directories(path_to_dir);
-            }
-            // save
-            // save orientation trail
-            std::ofstream ofs(path_to_dir + "/" + "orientation_trail.txt");
-            for (const auto& pos : my_env->orientation_trail) {
-                ofs << pos.x << " " << pos.y << " " << pos.z << "\n";
-            }
-            ofs.close();
-            // save transformation matrices
-            std::ofstream ofs_mat(path_to_dir + "/" + "transformation_matrices.txt");
-            for (const auto& mat : my_env->trans_mat_trail) {
-                ofs_mat << mat << "\n";
-            }
-            ofs_mat.close();
-            // save height log
-            std::ofstream ofs_height(path_to_dir + "/" + "height_log.txt");
-            for (const auto& height : height_log) {
-                ofs_height << height << "\n";
-            }
-            ofs_height.close();
-        }
-
-    }
-    ImGui::Checkbox("save quasi static trail to file", &save_quasi_trail_to_file);
-    if (ImGui::Button("Build quasistatic snail trail")){
-        // get rotations corresponding to the snail trail
-        Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
-        orientation = orientation.normalize();
-        
-		// initialize bullet env
-		std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(orientation);
-		draw_trail_on_gm(snail_trail, {39./255., 189./255., 0}, "quasi-static trail", 3.);
-
-        auto [transformation_matrices, saved_snail_trail_refined] = quasi_static_snail_trail_to_global_transformations(orientation, false);
-        
-        // save to file like bullet snail trail matrices
-        std::string PARENT_SAVE_DIR = "/Users/hbakt/Library/CloudStorage/Box-Box/Rolling-Dragon presentations/Talk/Media/orientation_on_S2_slide";
-        std::string orientation_str = std::to_string(orientation.x) + "_" + std::to_string(orientation.y) + "_" + std::to_string(orientation.z);
-        std::string path_to_dir = PARENT_SAVE_DIR + "/" + mesh_title + "/orientations/" + orientation_str + "/quasi_static_trail";
-        if (save_quasi_trail_to_file){
-            // create directory if it does not exist
-            if (!fs::exists(path_to_dir)){
-                fs::create_directories(path_to_dir);
-            }
-            // save transformation matrices
-            std::ofstream ofs_mat(path_to_dir + "/" + "transformation_matrices.txt");
-            for (const auto& mat : transformation_matrices) {
-                ofs_mat << mat << "\n";
-            }
-            ofs_mat.close();
-        }
     }
 }
 
@@ -538,6 +407,11 @@ int main(int argc, char* argv[])
 	args::ValueFlag<double> o_y_arg(parser, "oy", "orientation y value", {"oy"});
 	args::ValueFlag<double> o_z_arg(parser, "oz", "orientation z value", {"oz"});
 
+    args::Flag drop_flag(parser, "drop", "Perform a quasi-static drop from the given orientation", {"drop"});
+    args::Flag probs_flag(parser, "probs", "Compute stable face probabilities and output to file", {"probs"});
+    args::ValueFlag<std::string> out_file_arg(parser, "output", "Output file for transformation matrices", {"out"});
+    args::Flag viz_flag(parser, "viz", "Visualize orientation and quasi-static trajectory in drop mode", {"viz"});
+
     try {
         parser.ParseCLI(argc, argv);
     }
@@ -555,16 +429,18 @@ int main(int argc, char* argv[])
         std::cerr << parser;
         return 1;
     }
-    std::string mesh_path, com_path, orientation_path;
+    std::string mesh_path, com_path, out_file;
     if (mesh_path_arg)
         mesh_path = args::get(mesh_path_arg);
     if (center_of_mass_path_arg)
         com_path = args::get(center_of_mass_path_arg);
-	if (o_x_arg && o_y_arg && o_z_arg){
-		orientation_gui[0] = args::get(o_x_arg);
-		orientation_gui[1] = args::get(o_y_arg);
-		orientation_gui[2] = args::get(o_z_arg);
-	}
+    if (out_file_arg)
+        out_file = args::get(out_file_arg);
+    if (o_x_arg && o_y_arg && o_z_arg){
+        orientation_gui[0] = args::get(o_x_arg);
+        orientation_gui[1] = args::get(o_y_arg);
+        orientation_gui[2] = args::get(o_z_arg);
+    }
 
     // extract mesh title
     mesh_title = mesh_path.substr(mesh_path.find_last_of("/\\") + 1);
@@ -573,15 +449,75 @@ int main(int argc, char* argv[])
     polyscope::init();
     vis_utils = VisualUtils();
     load_mesh(mesh_path);
-    // initial 
+    // Initialize
     update_solver();
+    
+    // --- Drop mode ---
+    if (drop_flag) {
+        if (!(o_x_arg && o_y_arg && o_z_arg)) {
+            std::cerr << "Error: --ox --oy --oz required for drop mode.\n";
+            return 1;
+        }
+        Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
+        orientation = orientation.normalize();
+        auto [transformation_matrices, trail] = quasi_static_snail_trail_to_global_transformations(forwardSolver, orientation, false);
 
-    init_visuals(mesh, geometry, forwardSolver);
+        if (out_file.empty()) {
+            std::cerr << "Error: --out <output_file> required for drop mode.\n";
+            return 1;
+        }
+        // Ensure parent directory exists
+        fs::path out_path(out_file);
+        if (out_path.has_parent_path()) {
+            fs::create_directories(out_path.parent_path());
+        }
+        std::ofstream ofs(out_file);
+        if (!ofs) {
+            std::cerr << "Error: Could not open output file: " << out_file << "\n";
+            return 1;
+        }
+        for (const auto& mat : transformation_matrices) {
+            ofs << mat << "\n";
+        }
+        ofs.close();
+        std::cout << "Drop transformation matrices written to " << out_file << "\n";
+        // return 0;
+    }
 
-    draw_stable_patches_on_gauss_map(boundary_builder, false);
+    // --- Probability mode ---
+    if (probs_flag) {
+        if (out_file.empty()) {
+            std::cerr << "Error: --out <output_file> required for probability mode.\n";
+            return 1;
+        }
+        // Ensure parent directory exists
+        fs::path out_path(out_file);
+        if (out_path.has_parent_path()) {
+            fs::create_directories(out_path.parent_path());
+        }
+        std::ofstream ofs(out_file);
+        if (!ofs) {
+            std::cerr << "Error: Could not open output file: " << out_file << "\n";
+            return 1;
+        }
+        ofs << "# face_index normal_x normal_y normal_z probability\n";
+        for (Face f : forwardSolver->hullMesh->faces()) {
+            if (boundary_builder->face_region_area[f] > 0) {
+                Vector3 n = forwardSolver->hullGeometry->faceNormal(f);
+                double prob = boundary_builder->face_region_area[f] / (4.0 * M_PI);
+                ofs << "Hull face ind: " << f.getIndex() << "  -- normal: "
+                    << n.x << " " << n.y << " " << n.z << " \n\t probability: "
+                    << prob << "\n";
+            }
+        }
+        ofs.close();
+        std::cout << "Stable face probabilities written to " << out_file << "\n";
+        // return 0;
+    }
 
-        
 
+
+    init_visuals(mesh, geometry, forwardSolver, boundary_builder);
     polyscope_defaults();
     polyscope::state::userCallback = myCallback;
     polyscope::show();

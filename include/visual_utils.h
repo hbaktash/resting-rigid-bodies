@@ -137,10 +137,15 @@ void visualize_face_solid_angle_vs_ms_complex(size_t f_ind, BoundaryBuilder* bou
 
 
 void init_visuals(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
-				  Forward3DSolver* forwardSolver);
+				  Forward3DSolver* forwardSolver, BoundaryBuilder* boundary_builder);
 
 
 void draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,
 									  bool on_height_surface = false);
 
 void draw_trail_on_gm(std::vector<Vector3> trail, glm::vec3 color, std::string name, double radi, bool color_gradient = false);
+
+void visualize_quasi_static_drop_sequence(std::vector<Eigen::Matrix4d> transformation_matrices,
+										 std::vector<Vector3> saved_snail_trail_refined,
+										 Forward3DSolver* forwardSolver
+										 );
