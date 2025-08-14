@@ -1,1 +1,0 @@
-50 mm polyhedral dice by varmfskii on Thingiverse: https://www.thingiverse.com/thing:6005144
