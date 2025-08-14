@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 20)
 # Feature toggles
 option(RESTING_RIGID_BODIES_USE_BULLET "Enable Bullet physics features" OFF)
 option(RESTING_RIGID_BODIES_USE_POLYSCOPE "Enable Polyscope visualization" ON)
-option(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN "Build inverse design libs/apps" OFF)
+option(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN "Build inverse design libs/apps" ON)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 

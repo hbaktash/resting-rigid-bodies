@@ -5,7 +5,7 @@ std::pair<std::vector<Eigen::Matrix4d>, std::vector<Vector3>>
 generate_transformations_for_orientation_sequence(Vector3 initial_orientation,
     Forward3DSolver* forwardSolver, Vector3 floor_vec, double goal_angle_step){
     // Get the snail trail and make forward log
-    std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
+    std::vector<Vector3> snail_trail = forwardSolver->quasi_static_drop(initial_orientation);
     // split the snail trail
     std::vector<Vector3> snail_trail_refined;
     for (int i = 1; i < snail_trail.size()-1; i++){
@@ -96,7 +96,7 @@ QS_trail_to_global_transformations(
     Vector3 down_vec, double min_angle_step
 ){
     // initialize the trail in forwardSolver
-    std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(initial_orientation);
+    std::vector<Vector3> snail_trail = forwardSolver->quasi_static_drop(initial_orientation);
     // split the snail trail
     auto [local_transformation_matrices, saved_snail_trail_refined] = 
         generate_transformations_for_orientation_sequence(

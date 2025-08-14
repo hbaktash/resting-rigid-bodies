@@ -135,8 +135,7 @@ build_and_draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder, Ve
 // --- Converted member functions -> free functions ----------------------------
 
 void draw_edge_arcs_on_gauss_map(Forward3DSolver* forwardSolver) {
-  std::vector<std::pair<size_t, size_t>> non_singular_edge_inds, stable_only_edge_inds,
-      both_edge_inds, all_edge_inds;
+  std::vector<std::pair<size_t, size_t>> all_edge_inds;
   size_t nFaces = forwardSolver->hullMesh->nFaces();
   std::vector<Vector3> positions(nFaces);
   for (Edge e : forwardSolver->hullMesh->edges()) {
@@ -145,37 +144,12 @@ void draw_edge_arcs_on_gauss_map(Forward3DSolver* forwardSolver) {
             n2 = forwardSolver->hullGeometry->faceNormal(f2);
     positions[f1.getIndex()] = n1;
     positions[f2.getIndex()] = n2;
-    if (VisualUtils::color_arcs) {
-      if (forwardSolver->edge_is_stable(e) && forwardSolver->edge_is_stablizable(e)) {
-        both_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
-      } else if (forwardSolver->edge_is_stable(e)) {
-        stable_only_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
-      } else if (VisualUtils::draw_unstable_edge_arcs) {
-        if (forwardSolver->edge_is_stablizable(e)) {
-          non_singular_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
-        }
-        all_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
-      }
-    } else {
-      all_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
-    }
+    all_edge_inds.push_back({f1.getIndex(), f2.getIndex()});
   }
-  if (VisualUtils::color_arcs) {
-    draw_arc_network_on_sphere(both_edge_inds, positions, VisualUtils::center, VisualUtils::gm_radi,
-                               VisualUtils::arcs_seg_count, "saddle edge arcs", 1.,
-                               VisualUtils::both_edge_color);
-    draw_arc_network_on_sphere(stable_only_edge_inds, positions, VisualUtils::center,
-                               VisualUtils::gm_radi, VisualUtils::arcs_seg_count,
-                               "singular edge arcs", 1., VisualUtils::stable_edge_color);
-    draw_arc_network_on_sphere(all_edge_inds, positions, VisualUtils::center, VisualUtils::gm_radi,
-                               VisualUtils::arcs_seg_count, "non-singular edge arcs", 1.,
-                               VisualUtils::stabilizable_edge_color);
-  } else {
-    draw_arc_network_on_sphere(all_edge_inds, positions, VisualUtils::center, VisualUtils::gm_radi,
-                               VisualUtils::arcs_seg_count, "all edge arcs", 1.,
-                               VisualUtils::stabilizable_edge_color,
-                               VisualUtils::arc_curve_radi);
-  }
+  draw_arc_network_on_sphere(all_edge_inds, positions, VisualUtils::center, VisualUtils::gm_radi,
+                              VisualUtils::arcs_seg_count, "all edge arcs", 1.,
+                              VisualUtils::stabilizable_edge_color,
+                              VisualUtils::arc_curve_radi);
 }
 
 void draw_stable_vertices_on_gauss_map(Forward3DSolver* forwardSolver) {
@@ -284,8 +258,7 @@ void draw_gauss_map(Forward3DSolver* forwardSolver, ManifoldSurfaceMesh* sphere_
 }
 
 void show_edge_equilibria_on_gauss_map(Forward3DSolver* forwardSolver) {
-  std::vector<Vector3> edge_equilibria_points, stabilizable_edge_equilibria_points,
-      stable_edge_equilibria_points;
+  std::vector<Vector3> edge_equilibria_points;
   Vector3 G = forwardSolver->get_G();
   for (Edge e : forwardSolver->hullMesh->edges()) {
     auto collect = [&](std::vector<Vector3>& dst) {
@@ -298,10 +271,6 @@ void show_edge_equilibria_on_gauss_map(Forward3DSolver* forwardSolver) {
     };
     if (forwardSolver->edge_is_stablizable(e) && forwardSolver->edge_is_stable(e)) {
       collect(edge_equilibria_points);
-    } else if (forwardSolver->edge_is_stablizable(e)) {
-      collect(stabilizable_edge_equilibria_points);
-    } else if (forwardSolver->edge_is_stable(e)) {
-      collect(stable_edge_equilibria_points);
     }
   }
   auto* edge_equilibria_pc =
@@ -309,25 +278,6 @@ void show_edge_equilibria_on_gauss_map(Forward3DSolver* forwardSolver) {
   edge_equilibria_pc->setPointRadius(VisualUtils::gm_pt_radi * 3., false);
   edge_equilibria_pc->setPointColor({0.2, 0.2, 0.9});
   edge_equilibria_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
-
-  if (VisualUtils::draw_stable_g_vec_for_unstable_edge_arcs) {
-    auto* stabilizable_edge_pc = polyscope::registerPointCloud(
-        "Stabilizable Edge equilibria", stabilizable_edge_equilibria_points);
-    stabilizable_edge_pc->setPointRadius(VisualUtils::gm_pt_radi * 3., false);
-    stabilizable_edge_pc->setPointColor(VisualUtils::stabilizable_edge_color);
-    stabilizable_edge_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
-
-    auto* stable_edge_pc = polyscope::registerPointCloud("stable Edge equilibria",
-                                                         stable_edge_equilibria_points);
-    stable_edge_pc->setPointRadius(VisualUtils::gm_pt_radi * 3., false);
-    stable_edge_pc->setPointColor(VisualUtils::stable_edge_color);
-    stable_edge_pc->setPointRenderMode(polyscope::PointRenderMode::Sphere);
-  } else {
-    if (polyscope::hasPointCloud("stable Edge equilibria"))
-      polyscope::removePointCloud("stable Edge equilibria");
-    if (polyscope::hasPointCloud("Stabilizable Edge equilibria"))
-      polyscope::removePointCloud("Stabilizable Edge equilibria");
-  }
 }
 
 void draw_guess_pc(Forward3DSolver* forwardSolver,

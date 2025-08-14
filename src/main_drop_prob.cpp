@@ -109,7 +109,7 @@ void myCallback() {
     polyscope::registerSurfaceMesh("oriented mesh", new_positions, mesh->getFaceVertexList());
     std::vector<Vector3> orientation_vec = {orientation * vis_utils.gm_radi + vis_utils.center};
     polyscope::registerPointCloud("orientation on gm", orientation_vec)->setPointRadius(0.03, false)->setPointColor({0,0,0});
-    std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(orientation);
+    std::vector<Vector3> snail_trail = forwardSolver->quasi_static_drop(orientation);
     draw_trail_on_gm(snail_trail, {39./255., 189./255., 0}, "quasi-static trail", 3.);
   }
   if (ImGui::Button("save orientation trajectory to file")) {
@@ -313,7 +313,7 @@ int main(int argc, char* argv[])
               ->setPointRadius(0.03, false)->setPointColor({0,0,0});
 
             // Quasi-static trail on GM
-            std::vector<Vector3> snail_trail = forwardSolver->snail_trail_log(orientation);
+            std::vector<Vector3> snail_trail = forwardSolver->quasi_static_drop(orientation);
             draw_trail_on_gm(snail_trail, {39./255., 189./255., 0}, "quasi-static trail", 3.);
             polyscope::show();
         #else

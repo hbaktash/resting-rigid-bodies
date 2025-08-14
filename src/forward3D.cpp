@@ -102,17 +102,6 @@ Vector3 Forward3DSolver::get_G(){
     return G; 
 }
 
-void Forward3DSolver::trivial_initialize_index_trackers(){
-    // hull_indices = .resize(hullMesh->nVertices());
-    // interior_indices = Vector<size_t>::Zero(0);
-    org_hull_indices = VertexData<size_t>(*hullMesh);
-    on_hull_index = VertexData<size_t>(*inputMesh, INVALID_IND);    
-    for (Vertex hull_v: hullMesh->vertices())
-        org_hull_indices[hull_v] = hull_v.getIndex();
-    for (Vertex org_v: inputMesh->vertices())
-        on_hull_index[org_v] = org_v.getIndex();
-}
-
 // height from G to ground after contact
 double Forward3DSolver::height_function(Vector3 ground_normal){
     Vertex contact_point = hullMesh->vertex(0);
@@ -159,14 +148,6 @@ void Forward3DSolver::find_contact(Vector3 initial_ori){
 }
 
 
-// just the Gaussian curvature
-void Forward3DSolver::compute_vertex_probabilities(){
-    vertex_probabilities = VertexData<double>(*hullMesh, 0.);
-    for (Vertex v: hullMesh->vertices()){
-        vertex_probabilities[v] = hullGeometry->vertexGaussianCurvature(v)/(4*PI);
-    }
-}
-
 // stabilizable := the normal from G can touch the ground
 // stable := the normal from G falls withing the element
 bool Forward3DSolver::vertex_is_stablizable(Vertex v){
@@ -203,9 +184,7 @@ bool Forward3DSolver::edge_is_stablizable(Edge e){
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 A = hullGeometry->inputVertexPositions[v1], B = hullGeometry->inputVertexPositions[v2];
     Vector3 ortho_g =  point_to_segment_normal(G, A, B); //GB - AB*dot(AB, GB)/dot(AB,AB);
-    
-    // debugger
-    tmp_test_vec = ortho_g;
+
     // checking if other vertices are more aligned with orhto_G
     double ortho_g_norm = dot(ortho_g, ortho_g);
     for (Vertex other_v: hullMesh->vertices()){
@@ -223,8 +202,7 @@ bool Forward3DSolver::edge_is_stablizable(Edge e){
 bool Forward3DSolver::face_is_stable(Face f){
     if (f.getIndex() == INVALID_IND)
         return false;
-    // need to check all the wideness of dihedral angles made on each edge
-    // iterate over all edges of the face and check the dihedral angle
+    // iterate over all edges of the face and check the plane angle made with G
     Halfedge curr_he = f.halfedge(),
              first_he = f.halfedge();
     while (true){
@@ -286,12 +264,6 @@ void Forward3DSolver::vertex_to_next(Vertex v){
 void Forward3DSolver::edge_to_next(Edge e){
     Vertex v1 = e.firstVertex(), v2 = e.secondVertex();
     Vector3 p1 = hullGeometry->inputVertexPositions[v1], p2 = hullGeometry->inputVertexPositions[v2];
-    // if (e.getIndex() == 177){
-    //     printf("doing edge to next\n");
-    //     std::cout << " p1: " << p1 << "\n p2:" << p2 << "\n";
-    //     std::cout << "   G: "<<G << "\n";
-    //     std::cout << "   G + currG: "<<G + curr_g_vec << "\n";
-    // }
     if (dot(G - p1, p2-p1) < 0.){ // if the Gp1p2 angle is wide
         vertex_to_next(v1); // rolls to the v1 vertex
     }
@@ -323,16 +295,8 @@ void Forward3DSolver::edge_to_next(Edge e){
                pb_angle_pre_acos = dot(pb_proj - p1, G_proj_proj - p1)/(norm(pb_proj - p1)*norm(G_proj_proj - p1));
         double pa_angle = acos(pa_angle_pre_acos),
                pb_angle = acos(pb_angle_pre_acos);
-        // if (e.getIndex() == 177){
-        //     std::cout << "   DEBUG dot values: " << dot(pa_proj - p1, G_proj_proj - p1) << " " << dot(pb_proj - p1, G_proj_proj - p1) << "\n";
-        //     std::cout << "   norms a         : " << norm(pa_proj - p1) << " " << norm(G_proj_proj - p1) << "\n";
-        //     std::cout << "   norms b         : " << norm(pb_proj - p1) << " " << norm(G_proj_proj - p1) << "\n";
-        //     std::cout << "   DEBUG pre acos v: " << pa_angle_pre_acos << " " << pb_angle_pre_acos << "\n";
-        //     std::cout << "   acos debug: " << pa_angle << " " << pb_angle << "\n";
-        // }
         Face next_face;
         // printf("found angles\n");
-        // if (pa_angle <= pb_angle){ // face containing va is next
         if (pa_angle_pre_acos >= pb_angle_pre_acos){
             curr_f = he.face();
             curr_v = Vertex();
@@ -348,10 +312,10 @@ void Forward3DSolver::edge_to_next(Edge e){
     }
 }
 
-// assuming face is not stable
+
 void Forward3DSolver::face_to_next(Face f){
     if (face_is_stable(f)){
-        // printf("   -/-/-/-  at a stable face %d: %d, %d, %d  -\\-\\-\\- \n",f.getIndex(), f.halfedge().tailVertex().getIndex(), f.halfedge().tipVertex().getIndex(), f.halfedge().next().tipVertex().getIndex());
+        // std::cout << "   -/-/-/-  at a stable face " << f.getIndex() << ": " << f.halfedge().tailVertex().getIndex() << ", " << f.halfedge().tipVertex().getIndex() << ", " << f.halfedge().next().tipVertex().getIndex() << "  -\\-\\-\\- \n";
         stable_state = true;
         return;
     }
@@ -364,7 +328,6 @@ void Forward3DSolver::face_to_next(Face f){
     Halfedge curr_he = f.halfedge(),
              first_he = f.halfedge();
     while (true) {
-        // printf("at he %d\n", curr_he.getIndex());
         // will only check rolling to v0v1 at this iteration; v2 is only used for checking rolling onto v1
         Vertex v1 = curr_he.tipVertex(),
                v0 = curr_he.tailVertex(),
@@ -387,36 +350,21 @@ void Forward3DSolver::face_to_next(Face f){
         bool e0_is_singular = edge_is_stable(curr_he.edge()),
              e1_is_singular = edge_is_stable(curr_he.next().edge());
         
-        // // Old version
-        // Vector3 on_plane_edge_normal = cross(unit_g_vec, p0 - p1);
-        // // use p2 as a point on the interior side
-        // double p2_dot = dot(p2-p0, on_plane_edge_normal),
-        //        G_proj_dot = dot(G_proj - p0, on_plane_edge_normal);
-        // double angle_Gv0v1 = acos(dot(G_proj - p0, p1 - p0)/(norm(G_proj - p0)*norm(p1 - p0))),
-        //        angle_Gv1v0 = acos(dot(G_proj - p1, p0 - p1)/(norm(G_proj - p1)*norm(p0 - p1))),
-        //        angle_Gv1v2 = acos(dot(G_proj - p1, p2 - p1)/(norm(G_proj - p1)*norm(p2 - p1)));
-        // if (p2_dot * G_proj_dot <= 0 && angle_Gv0v1 <= PI/2. && angle_Gv1v0 <= PI/2.){ // G' is on the exterior side; and angles are acute
         if (rolling_through_e0 && e0_is_singular) {
             Face next_face = curr_he.twin().face();
             curr_f = next_face;
             curr_v = Vertex();
             curr_e = Edge();
             curr_g_vec = hullGeometry->faceNormal(next_face);
-            // printf("got to face!!\n");
             break;
         }
-        // if (angle_Gv1v0 >= PI/2. && angle_Gv1v2 >= PI/2.){
         if ((rolling_through_e0 || rolling_through_e1) && !e0_is_singular && !e1_is_singular) {
-            // printf("got to vertex!!\n");
+            // std::cout << "got to vertex!!\n";
             vertex_to_next(v1);
             break;
         }   
         // go to next he
         curr_he = curr_he.next();
-        // std::cout << "at face "  <<  f.getIndex() << " " << v0.getIndex() << " " << v1.getIndex() << " " << v2.getIndex() << "\n";
-        // std::cout <<    "poses: " << p0 << "\n \t\t" << p1 << "\n \t\t" << p2 << "\n";
-        // std::cout <<    "G loc: " << G << "\n";
-        // std::cout << "quantities: " << rolling_through_e0 << " "<< rolling_through_e1 << " " << e0_is_singular << " " << e1_is_singular << "\n";
         if (curr_he == first_he){
             throw std::logic_error("Face should be either stable or something should happen in the previous loop!\n");
         }
@@ -426,36 +374,29 @@ void Forward3DSolver::face_to_next(Face f){
 
 void Forward3DSolver::next_state(bool verbose){
     if (stable_state){
-        // printf(" &&&& already at a stable state! &&&&\n");
         return;
     }
-    int status_check = (curr_v.getIndex() != INVALID_IND) + (curr_e.getIndex() != INVALID_IND) + (curr_f.getIndex() != INVALID_IND);
-    // printf("test for bool addition %d\n", status_check);
-    assert(status_check <= 1); // either not initiated (0) or only one valid (1)
     if (curr_v.getIndex() != INVALID_IND){
         if (verbose){
-            printf(" STATUS: at vertex %d\n", curr_v.getIndex());
+            std::cout << " STATUS: at vertex " << curr_v.getIndex() << "\n";
             std::cout << "         curr gvec " << curr_g_vec << "\n";
         }
         Vertex old_v = curr_v;
         vertex_to_next(curr_v);
         if (curr_v == old_v){
-            printf("Vertex %d is stable?!!??!\n", curr_v.getIndex());
+            std::cerr << "Vertex " << curr_v.getIndex() << " is stable?!!??!\n";
             stable_state = true;
             return;
         }
     }
     else if (curr_e.getIndex() != INVALID_IND){
         if (verbose){
-            printf(" STATUS: at edge %d: %d, %d\n", curr_e.getIndex(), curr_e.firstVertex().getIndex(), curr_e.secondVertex().getIndex());
-            // std::cout << "         curr gvec " << curr_g_vec << "\n";
-            // std::cout << " edge vertex poses: " << hullGeometry->inputVertexPositions[curr_e.firstVertex()] << " -- " << hullGeometry->inputVertexPositions[curr_e.secondVertex()] << "\n ";
-            // std::cout << " center of mass pose: " << G << "\n";
+            std::cout << " STATUS: at edge " << curr_e.getIndex() << ": " << curr_e.firstVertex().getIndex() << ", " << curr_e.secondVertex().getIndex() << "\n";
         }
         Edge old_e = curr_e;
         edge_to_next(curr_e);
         if (curr_e == old_e){
-            printf("Edge %d is stable?!!??!\n", curr_e.getIndex());
+            std::cerr << "Edge " << curr_e.getIndex() << " is stable?\n";
             stable_state = true;
             return;
         }
@@ -474,12 +415,12 @@ void Forward3DSolver::next_state(bool verbose){
         }
     }
     else {
-        printf(" $$$ initialize the contact first! $$$\n");
+        std::cerr << " $$$ initialize the contact first! $$$" << std::endl;
     }
 }
 
 
-std::vector<Vector3> Forward3DSolver::snail_trail_log(Vector3 initial_orientation){
+std::vector<Vector3> Forward3DSolver::quasi_static_drop(Vector3 initial_orientation){
     std::vector<Vector3> trail;
     translation_log.empty();
     vertex_log.empty();
@@ -536,15 +477,6 @@ void Forward3DSolver::compute_edge_stable_normals(){
     }
 }
 
-// pre-compute vertex gaussian curvatures
-void Forward3DSolver::compute_vertex_gaussian_curvatures(){
-    vertex_gaussian_curvature = VertexData<double>(*hullMesh, 0.);
-    for (Vertex v: hullMesh->vertices()){
-        vertex_gaussian_curvature[v] = gaussian_curvature(v, *hullGeometry);
-        // printf(" Gaussian Curvature at %d, is %f\n", v.getIndex(), vertex_gaussian_curvature[v]);
-    }
-}
-
 // whether the stable point can be reached or not
 void Forward3DSolver::compute_vertex_stabilizablity(){
     vertex_is_stabilizable = VertexData<bool>(*hullMesh, false);
@@ -560,9 +492,7 @@ void Forward3DSolver::compute_vertex_stabilizablity(){
 // deterministically find the next rolling face 
 void Forward3DSolver::build_face_next_faces(){
     face_next_face = FaceData<Face>(*hullMesh);
-    bool verbose = false; //f.getIndex() == 812 || f.getIndex() == 105; //
-    // if (verbose)
-    // printf("building face next faces\n");
+    bool verbose = false;
     for (Face f: hullMesh->faces()){
         if (verbose) printf("at face %d\n", f.getIndex());
         initialize_state(Vertex(), Edge(), f, hullGeometry->faceNormal(f)); // assuming outward normals
@@ -575,7 +505,6 @@ void Forward3DSolver::build_face_next_faces(){
         if (verbose)
             printf(" last stable face was %d\n", curr_f.getIndex());
         face_next_face[f] = curr_f;
-        // printf(" fnf %d -> %d\n", f.getIndex(), curr_f.getIndex());
     }
 }
 
@@ -585,40 +514,27 @@ void Forward3DSolver::build_face_last_faces(){
     for (Face f: hullMesh->faces()){
         if (face_last_face[f].getIndex() != INVALID_IND)
          continue;
-        // printf(" at face %d\n", f.getIndex());
         Face temp_f = f;
         std::vector<Face> faces_history;
         faces_history.push_back(temp_f);
         while (face_next_face[temp_f] != temp_f){
             temp_f = face_next_face[temp_f];
-            // printf(" next face is %d\n", temp_f.getIndex());
             faces_history.push_back(temp_f);
-        } // terminates when it gets to the next face
+        }
         for (Face stored_f: faces_history) {
             face_last_face[stored_f] = temp_f;
         }
-        // printf(" ++ final face %d \n", temp_f.getIndex());
     }
 }
 
 // just call all the pre-compute initializations; not face-last-face
 void Forward3DSolver::initialize_pre_computes(){
-    // printf("precomputes:\n");
-    // printf("  vertex stability:\n");
     compute_vertex_stabilizablity();
-    // printf("  vertex gauss curvature:\n");
-    compute_vertex_gaussian_curvatures();
-    // printf("  edge stability:\n");
     compute_edge_stable_normals();
-    // printf("  building face next faces:\n");
-    build_face_next_faces(); // 
-    // printf("  building face last faces:\n");
+    build_face_next_faces();
     build_face_last_faces();
-    // printf("precomputes done!\n");
     inputGeometry->refreshQuantities();
-    // printf("heree\n");
     hullGeometry->refreshQuantities();
-    // printf("hereee\n");
 }
 
 

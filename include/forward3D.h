@@ -27,9 +27,6 @@ class Forward3DSolver {
 
     // hull <-> mesh mapping
     VertexData<size_t> org_hull_indices; //hull vertex indices in the original mesh
-    VertexData<size_t> on_hull_index; // index of an interior vertex on the hull; INVALID_IND if not on hull
-    Vector<size_t> hull_indices, interior_indices;
-    void trivial_initialize_index_trackers();
 
     // current state; for simulation 
     Vertex curr_v;
@@ -40,24 +37,14 @@ class Forward3DSolver {
     // for later vector field display
     Vector3 initial_roll_dir;
 
-    // for debugging purposes
-    Vector3 tmp_test_vec;
-
     // constructors
     Forward3DSolver() {}
-    // TODO; make constructor for non_convex input
     Forward3DSolver(ManifoldSurfaceMesh* inputMesh, VertexPositionGeometry* inputGeo, Vector3 G, bool concave_input = true);
     Forward3DSolver(Eigen::MatrixX3d point_cloud, Eigen::Vector3d G, bool is_convex);
     // setter/getter for G
     void set_G(Vector3 new_G);
     void set_uniform_G();
     Vector3 get_G();
-
-    // Hull related updates
-    // bool first_hull = true;
-    // void update_hull_index_arrays();
-    // void update_convex_hull(bool with_projection = false);
-    // void update_hull_points_correspondence(VertexData<Vector3> new_hull_points, VertexData<Vector3> old_points);
 
     // initialize state
     void initialize_state(Vertex curr_v, Edge curr_e, Face curr_f, Vector3 curr_g_vec);
@@ -84,8 +71,6 @@ class Forward3DSolver {
     VertexData<bool> vertex_is_stabilizable;
     // stable normal of a vertex; even if not reachable
     VertexData<Vector3> vertex_stable_normal;
-    VertexData<double> vertex_gaussian_curvature;
-    VertexData<double> vertex_probabilities;
     // edge rolls to a face if singular; else rolls to a vertex
     EdgeData<bool> edge_is_singular;
     EdgeData<Vertex> edge_next_vertex;
@@ -98,7 +83,6 @@ class Forward3DSolver {
     // pre-compute functions
     void compute_vertex_stabilizablity();
     void compute_edge_stable_normals();
-    void compute_vertex_gaussian_curvatures();
     void build_face_next_faces();
     // not basic; calls prev function
     void build_face_last_faces();
@@ -119,7 +103,7 @@ class Forward3DSolver {
     std::vector<Face> face_log;
     void next_state(bool verbose = false);
     
-    std::vector<Vector3> snail_trail_log(Vector3 initial_orientation);
+    std::vector<Vector3> quasi_static_drop(Vector3 initial_orientation);
     // // empirical sampling
     Face final_touching_face(Vector3 initial_ori);
     // void empirically_build_probabilities(int sample_count);

@@ -47,10 +47,8 @@ public:
   inline static Vector3 center = Vector3({0., gm_distance, 0.});
 
   // flags
-  inline static bool color_arcs = false;
   inline static bool gm_is_drawn = false;
   inline static bool draw_unstable_edge_arcs = true;
-  inline static bool draw_stable_g_vec_for_unstable_edge_arcs = false;
   inline static bool show_hidden_stable_vertex_normals = false;
 
   // arc parameters
