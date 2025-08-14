@@ -1,8 +1,0 @@
- -- f11	-> IPC_prob: 0.276399	-> my_prob : 0.279015
- -- f160	-> IPC_prob: 0	-> my_prob : 7.34892e-05
- -- f665	-> IPC_prob: 0.0683957	-> my_prob : 0.0998025
- -- f889	-> IPC_prob: 0.655205	-> my_prob : 0.621081
- -- f1426	-> IPC_prob: 0	-> my_prob : 2.84393e-05
-
- --- mesh size:	9723 --- hull size:	947
- --- time:	260652

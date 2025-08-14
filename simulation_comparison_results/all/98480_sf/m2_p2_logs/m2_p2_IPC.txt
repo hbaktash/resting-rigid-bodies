@@ -1,9 +1,0 @@
- -- f2	-> IPC_prob: 0.409041	-> my_prob : -0.576824
- -- f18	-> IPC_prob: 0.0139453	-> my_prob : 0.0617013
- -- f44	-> IPC_prob: 0.577014	-> my_prob : -0.484878
-
- --- KL div ipc|ours: nan	 ours|ipc: nan
-
- --- mesh size:	308 --- hull size:	86
- --- total IPC time:	2043.76
- --- invalid count:	0
