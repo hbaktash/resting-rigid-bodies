@@ -1,6 +1,3 @@
-
-
-
 #include "CP_tools.h"
 
 

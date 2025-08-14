@@ -1,40 +1,14 @@
-/************************************************************************
-*
-* ADOBE CONFIDENTIAL
-* ___________________
-*
-* Copyright [first year code created] Adobe
-* All Rights Reserved.
-*
-* NOTICE: All information contained herein is, and remains
-* the property of Adobe and its suppliers, if any. The intellectual
-* and technical concepts contained herein are proprietary to Adobe
-* and its suppliers and are protected by all applicable intellectual
-* property laws, including trade secret and copyright laws.
-* Dissemination of this information or reproduction of this material
-* is strictly forbidden unless prior written permission is obtained
-* from Adobe.
-*************************************************************************
-*/
-
 #pragma once
 
-// #include "geometrycentral/surface/manifold_surface_mesh.h"
-// #include "geometrycentral/surface/vertex_position_geometry.h"
-// #include "geometrycentral/surface/surface_point.h"
-#include <stan/math.hpp>
 #include "forward3D.h"
 #include "utils.h"
+
+// polyscope for DEBUG purposes
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
 #include "polyscope/point_cloud.h"
 #include "polyscope/curve_network.h"
 
-// #include "visual_utils.h"
-
-// Add missing include path for autodiff library
-// #include <autodiff/reverse/var/eigen.hpp>
-// #include <autodiff/reverse/var.hpp>
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -127,7 +101,8 @@ class BoundaryBuilder {
         
         std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
                 MS_complex_edges_of_face(Face f);
-        // TODO template
+        
+        // Template stuff for inverse design
         template <typename Scalar>
         static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
                                   Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg, double cluster_distance_reg, double unstable_attaction_thresh,

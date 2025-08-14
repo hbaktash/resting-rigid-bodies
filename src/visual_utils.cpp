@@ -1,11 +1,3 @@
-/************************************************************************
-*
-* ADOBE CONFIDENTIAL
-* ___________________
-*
-* (Original notice retained; replace for publication.)
-*************************************************************************
-*/
 #include "visual_utils.h"
 
 // arc helpers (already free)

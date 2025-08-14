@@ -11,7 +11,7 @@ generate_transformations_for_orientation_sequence(Vector3 initial_orientation,
     for (int i = 1; i < snail_trail.size()-1; i++){
         Vector3 local_axis = cross(snail_trail[i-1], snail_trail[i]).normalize();
         double local_total_angle = angle(snail_trail[i-1], snail_trail[i]);
-        int steps = (int)ceil(local_total_angle/goal_angle_step) + 1;
+        int steps = (int)ceil(local_total_angle/goal_angle_step); // + 1
         // in steps = 2;
         for (int t = 0; t < steps; t++){
             double angle_0 = local_total_angle * (double)t/double(steps);

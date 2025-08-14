@@ -1,11 +1,3 @@
-/************************************************************************
-*
-* ADOBE CONFIDENTIAL
-* ___________________
-*
-* (Original header retained; consider replacing for publication.)
-*************************************************************************
-*/
 #pragma once
 
 // GC
@@ -49,7 +41,7 @@ public:
   inline static glm::vec3 patch_arc_fancy_color = glm::vec3({0.9f, 0.1f, 0.1f});
 
   // Gauss map config
-  inline static double gm_distance = 2.0;
+  inline static double gm_distance = 3.0;
   inline static double gm_radi = 1.0;
   inline static Vector3 colored_shift = Vector3({gm_distance, gm_distance, 0.});
   inline static Vector3 center = Vector3({0., gm_distance, 0.});
