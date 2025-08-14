@@ -1,55 +1,164 @@
-# Rolling Dragons
-Determining objects orientation when falling on the ground. Assuming no momentum.
+# Putting Rigid Bodies to Rest
 
+Analyzing and visualizing the resting behavior of rigid bodies under gravity with negligible momentum.
 
+This repo focuses on:
+- Computing the probability that an object rests on each stable face (via Morse-Smale complex of the gravitational potential function of a shape).
+- Generating the quasi-static “drop” trajectory from a given initial orientation and exporting the rigid transforms.
 
+Project page: https://hbaktash.github.io/projects/putting-rigid-bodies-to-rest/index.html
 
-### Get the code
-Clone the project 
+## Build
+
+Requirements
+- C++20 compiler (Clang 12+/GCC 10+)
+- CMake ≥ 3.16
+- Eigen3, Qhull
+- (Optional) Polyscope
+
+Install system packages
+- macOS (Homebrew):
+  - brew install cmake eigen qhull
+- Ubuntu/Debian:
+  - sudo apt-get update
+  - sudo apt-get install -y build-essential cmake libeigen3-dev libqhull-dev
+
+Clone
 ```
-git clone --recursive git@git.corp.adobe.com:hbaktash/rolling-dragons-2D.git
-```
-
-#### Bullet library
-For the bullet simulation executable I followed the instructions from https://github.com/erwincoumans/hello_bullet_cmake
-Using a simpler build which does not handle MVS stuff.
-Manually building Bullet is the way to go at the moment.
-
-```
-cd deps/bullet3
-mkdir build_cmake
-cd build_cmake
-cmake -DCMAKE_INSTALL_PREFIX:PATH=local_install -DUSE_DOUBLE_PRECISION=ON -DCMAKE_DEBUG_POSTFIX="" -DINSTALL_LIBS=ON -DCMAKE_BUILD_TYPE=Release ..
-make -j
-make install
-```
-
-### Build the code
-
-**Unix-like machines**: configure (with cmake) and compile
-```
-cd rolling-dragons-2D
-mkdir build
-cd build
-cmake ..
-make -j6
+git clone https://github.com/hbaktash/Putting_Rigid_Bodies_to_Rest.git
+cd Resting_Rigid_Bodies
 ```
 
-## Running the code
+Configure and build
+- Headless (no visualization):
+```
+cmake -S . -B build -DRESTING_RIGID_BODIES_USE_POLYSCOPE=OFF
+cmake --build build -j
+```
+- With visualization (Polyscope):
+```
+cmake -S . -B build -DRESTING_RIGID_BODIES_USE_POLYSCOPE=ON
+cmake --build build -j
+```
 
-### polyhedra
-This executable shows our implementation for the momentum-less case of dropping an object. All the visuals are included and can be worked with in Polyscope.
+This produces the executable:
+- build/drop_probs
 
-#### Note
-* For building the raster image and building/splitin the Markov chain, center of mass needs to be inside the polyhedron; the check has been disabled for speed and can be enabled.
-* Real-time generation for raster image can slow down the code depending on sample count. 
-* Markov chain split can be done in real time without as much slow-down.
+CMake options
+- RESTING_RIGID_BODIES_USE_POLYSCOPE=ON|OFF (default ON): enable/disable visualization features. When OFF, commands that request visualization are ignored with a warning.
+- Inverse-design and other optional components are not required for the functionality documented here.
 
-### bullet simulation
-This is a simple simulation for dropping an objct on the ground. Momentum is not disabled yet and bounces, etc.. happen.
- 
+## Usage
 
-## More build notes
+The drop_probs tool supports:
+- Probability mode: compute resting probability for each stable convex-hull face and write JSON.
+- Drop mode: compute quasi-static transforms from an initial orientation and write JSON.
+- Optional visualization: show the input orientation and the quasi-static trajectory on the Gauss map (requires a build with Polyscope).
 
-- manually pulled Polyscope for a recent update (initally detached at ..?)
-- manually pulled imgui to be able to use https://github.com/epezent/implot/tree/master (initally detached at 512c54bb)
+Common flags
+- --mesh <path>: input triangle mesh file (OBJ, etc.). The code orients faces, compresses the mesh, and uses the convex hull for analysis.
+- --out <file>: output JSON file. Parent directories are created if needed.
+- --viz: enable visualization for supported modes (requires building with Polyscope).
+- Orientation (for drop mode):
+  - --ox <float> --oy <float> --oz <float>: initial orientation direction (will be normalized). “Down” is (0, -1, 0).
+- Mode selection:
+  - --probs: probability mode
+  - --drop: quasi-static drop mode
+
+### Probability mode
+
+Compute the probability mass associated with each stable convex-hull face. Probabilities are the face-region areas on the Gauss map divided by 4π.
+
+Example
+```
+./build/drop_probs \
+  --mesh data/dice.obj \
+  --probs \
+  --out results/dice_probabilities.json
+```
+
+Output (JSON)
+```json
+{
+  "type": "stable_face_probabilities",
+  "mesh_title": "dice",
+  "stable_face_count": 6,
+  "stable_faces": [
+    { "face_index": 12, "normal": [0.0, -1.0, 0.0], "probability": 0.167 }
+    // ...
+  ]
+}
+```
+
+### Drop mode
+
+Generate the quasi-static “drop” sequence (rigid transforms) from an input orientation.
+
+Example (headless)
+```
+./build/drop_probs \
+  --mesh data/dice.obj \
+  --ox 0 --oy -1 --oz 0 \
+  --drop \
+  --out results/dice_drop.json
+```
+
+Output (JSON)
+```json
+{
+  "type": "quasi_static_drop",
+  "mesh_title": "dice",
+  "step_count": 42,
+  "steps": [
+    {
+      "index": 0,
+      "matrix": [
+        [ 1.0, 0.0, 0.0, 0.0 ],
+        [ 0.0, 1.0, 0.0, 0.0 ],
+        [ 0.0, 0.0, 1.0, 0.0 ],
+        [ 0.0, 0.0, 0.0, 1.0 ]
+      ],
+      "orientation": [0.0, -1.0, 0.0]
+    }
+    // ...
+  ]
+}
+```
+
+### Visualization (optional)
+
+To visualize the input orientation and the quasi-static trajectory on the Gauss map:
+1) Build with Polyscope:
+```
+cmake -S . -B build -DRESTING_RIGID_BODIES_USE_POLYSCOPE=ON
+cmake --build build -j
+```
+2) Add --viz to your command:
+```
+./build/drop_probs \
+  --mesh data/dice.obj \
+  --ox 0 --oy -1 --oz 0 \
+  --drop \
+  --out results/dice_drop.json \
+  --viz
+```
+
+Notes
+- If built without Polyscope, --viz is ignored with a warning.
+- Output files are created if they don’t exist; parent directories are also created.
+
+## Data and formats
+
+- Input: triangle mesh (e.g., OBJ). The pipeline orients faces, compresses, and uses its convex hull.
+- Outputs:
+  - Probability mode: JSON with per-face normals and probabilities.
+  - Drop mode: JSON with ordered 4×4 transformation matrices and corresponding orientations.
+
+## Citation
+
+If you use this code in academic work, please cite the project as described on the project webpage:
+- Project webpage: https://example.com/resting_rigid_bodies
+
+## License
+
+This code is intended for research and educational use. See
