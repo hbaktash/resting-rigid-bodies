@@ -54,3 +54,4 @@ meshes/
 BB_result_scripts/
 simulation_comparison_results/
 physical_experiments/
+deps/PyMesh/
