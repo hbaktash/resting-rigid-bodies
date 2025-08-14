@@ -78,6 +78,25 @@ if(RESTING_RIGID_BODIES_USE_BULLET)
   target_compile_definitions(resting_rigid_bodies PUBLIC RESTING_RIGID_BODIES_USE_BULLET)
 endif()
 
+# Existing drop/prob tool (headless-friendly)
+add_executable(drop_probs src/main_drop_prob.cpp)
+target_link_libraries(drop_probs
+  PRIVATE
+    resting_rigid_bodies::resting_rigid_bodies
+    taywee::args
+)
+if(RESTING_RIGID_BODIES_USE_POLYSCOPE)
+  target_compile_definitions(drop_probs PRIVATE RESTING_RIGID_BODIES_USE_POLYSCOPE)
+endif()
+if(RESTING_RIGID_BODIES_USE_BULLET)
+  target_compile_definitions(drop_probs PRIVATE RESTING_RIGID_BODIES_USE_BULLET)
+endif()
+set_property(TARGET drop_probs PROPERTY CXX_STANDARD 20)
+
+
+
+
+
 # == Inverse design (optional) ==
 if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
   # inverse-only sources (now under src/inverse_design)
@@ -136,18 +155,3 @@ if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
     message(STATUS "Inverse design enabled but Polyscope is OFF; skipping convex_dice and hull_fill executables")
   endif()
 endif()
-
-# Existing drop/prob tool (headless-friendly)
-add_executable(drop_probs src/main_drop_prob.cpp)
-target_link_libraries(drop_probs
-  PRIVATE
-    resting_rigid_bodies::resting_rigid_bodies
-    taywee::args
-)
-if(RESTING_RIGID_BODIES_USE_POLYSCOPE)
-  target_compile_definitions(drop_probs PRIVATE RESTING_RIGID_BODIES_USE_POLYSCOPE)
-endif()
-if(RESTING_RIGID_BODIES_USE_BULLET)
-  target_compile_definitions(drop_probs PRIVATE RESTING_RIGID_BODIES_USE_BULLET)
-endif()
-set_property(TARGET drop_probs PROPERTY CXX_STANDARD 20)
