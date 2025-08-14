@@ -1,12 +1,13 @@
 # Putting Rigid Bodies to Rest
 
+Project page: https://hbaktash.github.io/projects/putting-rigid-bodies-to-rest/index.html
+
 Analyzing and visualizing the resting behavior of rigid bodies under gravity with negligible momentum.
 
 This repo focuses on:
-- Computing the probability that an object rests on each stable face (via Morse-Smale complex of the gravitational potential function of a shape).
-- Generating the quasi-static “drop” trajectory from a given initial orientation and exporting the rigid transforms.
+- Computing the probability that an object rests on each stable orientation.
+- Generating the quasi-static “drop” orientation trajectory from a given initial orientation.
 
-Project page: https://hbaktash.github.io/projects/putting-rigid-bodies-to-rest/index.html
 
 ## Build
 
@@ -25,8 +26,8 @@ Install system packages
 
 Clone
 ```
-git clone https://github.com/hbaktash/Putting_Rigid_Bodies_to_Rest.git
-cd Resting_Rigid_Bodies
+git clone https://github.com/hbaktash/resting-rigid-bodies.git
+cd resting-rigid-bodies
 ```
 
 Configure and build
@@ -80,19 +81,27 @@ Example
 Output (JSON)
 ```json
 {
-  "type": "stable_face_probabilities",
-  "mesh_title": "dice",
-  "stable_face_count": 6,
+  "stable_face_count": 12,
   "stable_faces": [
-    { "face_index": 12, "normal": [0.0, -1.0, 0.0], "probability": 0.167 }
-    // ...
+    {
+      "face_normal": [0.0,0.0,-1.0],
+      "hull_face_index": 0,
+      "probability": 0.0833333,
+      "transformation_matrix": [
+        [ 1.0, 0.0, 0.0, -0.0 ],
+        [ 0.0, 0.0, 1.0, 0.5773],
+        [ 0.0, -1.0, 0.0, -0.0],
+        [ 0.0, 0.0, 0.0, 1.0]
+        ]
+    },
+    //..
   ]
 }
 ```
 
 ### Drop mode
 
-Generate the quasi-static “drop” sequence (rigid transforms) from an input orientation.
+Generate the quasi-static “drop” sequence (rigid transforms) from an input orientation. The ground is assumed to be at height 0.
 
 Example (headless)
 ```
@@ -106,9 +115,9 @@ Example (headless)
 Output (JSON)
 ```json
 {
-  "type": "quasi_static_drop",
-  "mesh_title": "dice",
-  "step_count": 42,
+  "final_orientation": [0.0, -1.0, 0.0],
+  "initial_orientation": [0.0, -1.0, 0.0],
+  "step_count": 1,
   "steps": [
     {
       "index": 0,
@@ -124,6 +133,12 @@ Output (JSON)
   ]
 }
 ```
+### Refining the Drop Sequence
+By default the drop sequnce will include orientations where a 
+new contact is made with the ground (e.g. vertex contact changes to edge contact). You can change this using the ```--min_QS_angle`` argument, 
+which determines the maximum change in rotation angle at every step. 
+By default this is set to 1 (radians), which wouldn't refine the rotation sequence.
+Setting it to a lower value (0.001) will make the drop sequence look more smooth. 
 
 ### Visualization (optional)
 
@@ -147,18 +162,28 @@ Notes
 - If built without Polyscope, --viz is ignored with a warning.
 - Output files are created if they don’t exist; parent directories are also created.
 
-## Data and formats
-
-- Input: triangle mesh (e.g., OBJ). The pipeline orients faces, compresses, and uses its convex hull.
-- Outputs:
-  - Probability mode: JSON with per-face normals and probabilities.
-  - Drop mode: JSON with ordered 4×4 transformation matrices and corresponding orientations.
-
 ## Citation
 
-If you use this code in academic work, please cite the project as described on the project webpage:
-- Project webpage: https://example.com/resting_rigid_bodies
-
+If this code contributes to academic work, please cite as:
+```
+@article{Baktash:2025:PRB,
+  author      = {Baktash, Hossein and Sharp, Nicholas and
+                 Zhou, Qingnan and Crane, Keenan and Jacobson, Alec},
+  title       = {Putting Rigid Bodies to Rest},
+  journal     = {ACM Trans. Graph.},
+  issue_date  = {August&nbsp;2025},
+  volume      = {44},
+  number      = {4},
+  articleno   = {155}, 
+  numpages    = {16},
+  year        = {2025},
+  publisher   = {Association for Computing Machinery},
+  address     = {New&nbsp;York, NY, USA},
+  issn        = {0730-0301},
+  url         = {https://doi.org/10.1145/3731203},
+  doi         = {10.1145/3731203}
+}
+```
 ## License
 
-This code is intended for research and educational use. See
+This code is intended for research and educational use. See LICENSE for terms.

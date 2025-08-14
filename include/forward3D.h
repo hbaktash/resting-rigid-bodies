@@ -4,12 +4,9 @@
 #include "geometry_utils.h"
 #include "convex_hull.h"
 
-#include "polyscope/polyscope.h"
-#include "polyscope/surface_mesh.h"
 // #include "geometrycentral/surface/manifold_surface_mesh.h"
 // #include "geometrycentral/surface/vertex_position_geometry.h"
 // #include "geometrycentral/surface/surface_point.h"
-
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
