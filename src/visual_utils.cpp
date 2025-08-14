@@ -751,3 +751,22 @@ void visualize_quasi_static_drop_sequence(
 		polyscope::show();
 	}  
 }
+
+void draw_ground_plane_mesh(Vector3 down_vec, double height, double half_width){
+  std::vector<std::vector<size_t>> faces = {{0, 1, 2, 3}}; // single quad
+  Vector3 ux{1, 0, 0}, uy;
+  if (cross(down_vec, ux).norm() < 1e-6) {
+    ux = Vector3({0, 1, 0}); 
+  }
+  ux = ux - dot(ux, down_vec) * down_vec; // project ux onto the plane
+  ux = ux.normalize();
+  uy = cross(down_vec, ux).normalize(); // orthogonal to both down_vec and ux
+
+  std::vector<Vector3> positions = {
+      down_vec * height + half_width * ux + half_width * uy, // 1,1
+      down_vec * height + half_width * ux - half_width * uy, // 1,-1
+      down_vec * height - half_width * ux - half_width * uy, // -1,-1
+      down_vec * height - half_width * ux + half_width * uy  // -1,1
+  };
+  polyscope::registerSurfaceMesh("ground plane", positions, faces)->setSurfaceColor({0.5, 0.8, 0.5})->setTransparency(0.7);
+}

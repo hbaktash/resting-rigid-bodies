@@ -149,3 +149,5 @@ void visualize_quasi_static_drop_sequence(std::vector<Eigen::Matrix4d> transform
 										 std::vector<Vector3> saved_snail_trail_refined,
 										 Forward3DSolver* forwardSolver
 										 );
+
+void draw_ground_plane_mesh(Vector3 down_vec, double height, double half_width = 2);

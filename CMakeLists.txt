@@ -34,6 +34,8 @@ set(RD_CORE_SOURCES
     src/geometry_utils.cpp
     src/coloring.cpp
     src/visual_utils.cpp
+    src/file_IO.cpp
+    src/ambient_conversions.cpp
     src/implot.cpp
     src/implot_items.cpp
     src/boundary_tools.cpp
