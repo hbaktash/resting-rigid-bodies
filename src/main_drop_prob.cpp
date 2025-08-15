@@ -179,36 +179,44 @@ void myCallback() {
 }
 #endif // RESTING_RIGID_BODIES_USE_POLYSCOPE
 
-void load_mesh(std::string path, bool preprocess = true){
-	std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
-    std::unique_ptr<VertexPositionGeometry> geometry_ptr;
-	std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
-	std::tie(nm_mesh_ptr, nm_geometry_ptr) = readSurfaceMesh(path);
-	SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
-	VertexPositionGeometry *nm_geometry = nm_geometry_ptr.release();
-	
-	nm_mesh->greedilyOrientFaces();
-	nm_mesh->compress();
+void load_mesh(const std::string& path, 
+               ManifoldSurfaceMesh*& out_mesh, 
+               VertexPositionGeometry*& out_geometry, 
+               Vector3& out_G,
+               bool preprocess = true) {
+    std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
+    std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
+    std::tie(nm_mesh_ptr, nm_geometry_ptr) = readSurfaceMesh(path);
+    SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
+    VertexPositionGeometry *nm_geometry = nm_geometry_ptr.release();
+    
+    nm_mesh->greedilyOrientFaces();
+    nm_mesh->compress();
     std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
-	mesh_ptr = nm_mesh->toManifoldMesh();
-	mesh = mesh_ptr.release();
-	geometry = new VertexPositionGeometry(*mesh);
-	// transfer from nm geometry
-	for (Vertex v : mesh->vertices()) {
-		geometry->inputVertexPositions[v.getIndex()] = nm_geometry->inputVertexPositions[v.getIndex()];
-	}
+    mesh_ptr = nm_mesh->toManifoldMesh();
+    out_mesh = mesh_ptr.release();
+    out_geometry = new VertexPositionGeometry(*out_mesh);
+    
+    // transfer from nm geometry
+    for (Vertex v : out_mesh->vertices()) {
+        out_geometry->inputVertexPositions[v.getIndex()] = nm_geometry->inputVertexPositions[v.getIndex()];
+    }
 
-	// preproccess and shift COM
-	if (preprocess){
-		preprocess_mesh(mesh, geometry, true, false);
-		G = find_center_of_mass(*mesh, *geometry).first;
-		// std::cout << "center of mass before shift: " << G << "\n";
-		for (Vertex v: mesh->vertices()){
-		    geometry->inputVertexPositions[v] -= G;
-		}
-		G = find_center_of_mass(*mesh, *geometry).first;
-	}
-	G = find_center_of_mass(*mesh, *geometry).first;
+    // preprocess and shift COM
+    if (preprocess) {
+        preprocess_mesh(out_mesh, out_geometry, true, false);
+        out_G = find_center_of_mass(*out_mesh, *out_geometry).first;
+        // std::cout << "center of mass before shift: " << out_G << "\n";
+        for (Vertex v: out_mesh->vertices()) {
+            out_geometry->inputVertexPositions[v] -= out_G;
+        }
+        out_G = find_center_of_mass(*out_mesh, *out_geometry).first;
+    }
+    out_G = find_center_of_mass(*out_mesh, *out_geometry).first;
+    
+    // Clean up temporary objects
+    delete nm_mesh;
+    delete nm_geometry;
 }
 
 
@@ -276,7 +284,7 @@ int main(int argc, char* argv[])
     }
 
     // Load mesh and initialize solver (headless-friendly)
-    load_mesh(mesh_path);
+    load_mesh(mesh_path, mesh, geometry, G);
     update_solver();
 
     // Require output file for headless outputs

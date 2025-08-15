@@ -136,7 +136,7 @@ if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
 
   # Apps for inverse design (now under src/inverse_design)
   if(RESTING_RIGID_BODIES_USE_POLYSCOPE)
-    add_executable(convex_dice src/inverse_design/main_convex_dice.cpp)
+    add_executable(convex_dice src/main_convex_dice.cpp)
     target_link_libraries(convex_dice PRIVATE resting_rigid_bodies::inverse taywee::args)
     target_compile_definitions(convex_dice PRIVATE RESTING_RIGID_BODIES_USE_POLYSCOPE)
     # Not required, but harmless if you also add the macro here:

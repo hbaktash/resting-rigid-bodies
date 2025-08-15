@@ -73,18 +73,6 @@ std::string policy_general = "manualCluster"; // "fair", "manualCluster ", "manu
 std::string policy;
 
 
-void init_visuals(Forward3DSolver* forwardSolver){
-  // Register the mesh with polyscope
-  polyscope::registerSurfaceMesh(
-    "input concave mesh",
-    geometry->inputVertexPositions, mesh->getFaceVertexList());
-  polyscope::SurfaceMesh *psHullMesh = polyscope::registerSurfaceMesh(
-    "hull mesh",
-    forwardSolver->hullGeometry->inputVertexPositions, forwardSolver->hullMesh->getFaceVertexList());
-  draw_G(forwardSolver->get_G());
-}
-
-
 void generate_polyhedron_example(std::string poly_str){
   // readManifoldSurfaceMesh()
   // std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
@@ -166,8 +154,8 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
   if (save_sequence_scr){
     polyscope::getSurfaceMesh("current hull")->setEnabled(false);
     polyscope::getPointCloud("Center of Mass")->setEnabled(false);
-    polyscope::getSurfaceMesh("input concave mesh")->setEnabled(false);
-    polyscope::getSurfaceMesh("hull mesh")->setEnabled(false);
+    polyscope::getSurfaceMesh("input input mesh")->setEnabled(false);
+    polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
     polyscope::getPointCloud("Cluster assignees")->setEnabled(false);
     polyscope::getPointCloud("Edge equilibria")->setEnabled(false);
     polyscope::getPointCloud("stable Vertices Normals")->setEnabled(false);
@@ -198,12 +186,14 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
 
 
 void initialize_state(std::string input_name){
+	std::cout << "loaded input name: " << input_name << std::endl;
     generate_polyhedron_example(input_name);
     bool triangulate = false;
     preprocess_mesh(mesh, geometry, triangulate, false);
     center_and_normalize(mesh, geometry);
     // set global G to uniform here
-    Forward3DSolver* forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
+    std::cout << "preparing Forward3DSolver with G = " << G << std::endl;
+	  Forward3DSolver* forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
     forwardSolver->set_uniform_G();
     G = forwardSolver->get_G();
     forwardSolver->initialize_pre_computes();
@@ -211,8 +201,8 @@ void initialize_state(std::string input_name){
     boundary_builder->build_boundary_normals();
 
     // visuals
-    init_visuals(forwardSolver);
-    visualize_gauss_map(forwardSolver);//
+    init_visuals(mesh, geometry, forwardSolver, boundary_builder);
+
     boundary_builder->print_area_of_boundary_loops();
     update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
     // TODO : temporary; reinitialize solver for indexing
@@ -308,7 +298,7 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
 
 
 void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, bool frozen_G, size_t step_count){
-  polyscope::getSurfaceMesh("hull mesh")->setTransparency(0.5)->setEnabled(false);
+  polyscope::getSurfaceMesh("init hull mesh")->setTransparency(0.5)->setEnabled(false);
 
   Forward3DSolver tmp_solver(mesh, geometry, G, true);
   tmp_solver.set_uniform_G();
@@ -543,13 +533,14 @@ int main(int argc, char **argv) {
 
   
   // build mesh
+  std::cout << "hrer????" << std::endl;
   vis_utils = VisualUtils();
   // vis params; fine tune
   vis_utils.arcs_seg_count = 1000;
   vis_utils.arc_curve_radi = 0.001;
 
   polyscope::init();
-
+  std::cout << " initialized polyscope" << std::endl;
   initialize_state(input_name);
   input_name = input_name.substr(input_name.find_last_of("/") + 1);
   input_name = input_name.substr(0, input_name.find_last_of("."));
