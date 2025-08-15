@@ -14,6 +14,7 @@
 // #include "geometry_utils.h" //; in fwd solver 
 #include "visual_utils.h"
 #include "inv_design.h"
+#include "prob_assignment.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -42,8 +43,6 @@ VisualUtils vis_utils;
 ManifoldSurfaceMesh* sphere_mesh;
 VertexPositionGeometry* sphere_geometry;
 
-// raster image stuff
-FaceData<Vector3> face_colors;
 
 int fair_sides_count = 6, // for optimization
     DE_step_count = 40;
@@ -84,7 +83,7 @@ void visualize_gauss_map(Forward3DSolver* forwardSolver){
   sphere_geometry = sphere_geometry_ptr.release();
   
   // update vis utils
-  vis_utils.draw_gauss_map(forwardSolver, sphere_mesh, sphere_geometry);
+  draw_gauss_map(forwardSolver, sphere_mesh, sphere_geometry);
 }
 
 
@@ -99,7 +98,7 @@ void init_visuals(Forward3DSolver* forwardSolver){
   forwardSolver->hullGeometry->requireFaceNormals();
   psHullMesh->addFaceVectorQuantity("face normals", forwardSolver->hullGeometry->faceNormals);
   psHullMesh->setEnabled(true);
-  vis_utils.draw_G(forwardSolver->get_G());
+  draw_G(forwardSolver->get_G());
 }
 
 
@@ -110,82 +109,6 @@ void generate_polyhedron_example(std::string poly_str){
   mesh = mesh_ptr.release();
   geometry = geometry_ptr.release();
 }
-
-
-// void find_best_bunny_G(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry){
-//   Forward3DSolver* forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
-//   forwardSolver->set_uniform_G();
-//   forwardSolver->initialize_pre_computes();
-//   BoundaryBuilder* boundary_builder = new BoundaryBuilder(forwardSolver);
-//   boundary_builder->build_boundary_normals();
-
-//   size_t side_count = 6;
-//   double old_dice_E = boundary_builder->get_fair_dice_energy(side_count);
-//   int resolution_x = 10,
-//       resolution_z = 10,
-//       resolution_y = 10;
-//   // double x0 = 0.23,
-//   //        y0 = 0.23,
-//   //        z0 = 0.23;
-//   double Dx = 0.022,
-//          Dy = 0.14,
-//          Dz = 0.2;
-//   G = forwardSolver->get_G();
-//   double x0 = G.x,
-//          y0 = G.y,
-//          z0 = G.z;
-//   std::cout << "initial G: " << x0 << ", " << y0 << ", " << z0 << "\n";
-//   std::cout << "initial probs: \n";
-//   boundary_builder->print_area_of_boundary_loops();
-
-//   polyscope::registerPointCloud("starting COM", std::vector<Vector3>{forwardSolver->get_G()})->setPointColor({0.1,0.9,0.1});
-//   double lowest_dice_E = old_dice_E;
-//   Vector3 best_G = forwardSolver->get_G();
-//   std::cout <<" starting dice E: " << old_dice_E << "\n";
-//   for (int i = 0; i < resolution_x; i++){
-//     printf(" at i: %d\n", i);
-//     double h_x = - Dx + x0 + Dx*0.5*(double)i/(double)resolution_x;
-//     for (int k = 0; k < resolution_y; k++){
-//       double h_y = -Dy + y0 + Dy*0.5*(double)k/(double)resolution_y;
-//       for (int j = 0; j < resolution_z; j++){
-//         double h_z = -Dz + z0 + Dz*0.5*(double)j/(double)resolution_z;
-//         Vector3 tmp_G({h_x, h_y, h_z});
-//         // polyscope::registerPointCloud("tmp COM", std::vector<Vector3>{tmp_G})->setPointColor({0.9,0.1,0.1});
-//         // polyscope::show();
-
-//         if (G_is_inside(*forwardSolver->hullMesh, *forwardSolver->hullGeometry, tmp_G)){
-//           forwardSolver->set_G(tmp_G);
-//           forwardSolver->initialize_pre_computes();
-//           boundary_builder = new BoundaryBuilder(forwardSolver);
-//           boundary_builder->build_boundary_normals();
-//           double dice_E = boundary_builder->get_fair_dice_energy(side_count);
-//           if (dice_E < lowest_dice_E){
-//             std::cout << "LOWER dice E: " << dice_E << "\n";
-//             lowest_dice_E = dice_E;
-//             best_G = tmp_G;
-//             printf("current dice E  : %f\n", lowest_dice_E);
-//           }
-//         }
-//         else{
-//           printf("tmp G is outside\n");
-//         }
-//       }
-//     }
-//   }
-//   std::cout << "lowest dice E: " << lowest_dice_E << "\n";
-//   forwardSolver->set_G(best_G);
-//   forwardSolver->initialize_pre_computes();
-//   boundary_builder = new BoundaryBuilder(forwardSolver);
-//   boundary_builder->build_boundary_normals();
-//   boundary_builder->print_area_of_boundary_loops();
-//   printf("best G is: %f, %f, %f\n", best_G.x, best_G.y, best_G.z);
-//   printf("with best Dice E        : %f\n", lowest_dice_E);   
-//   printf("initial dice E: %f\n", old_dice_E);
-//   auto G_pc = polyscope::registerPointCloud("best COM", std::vector<Vector3>{best_G});
-//   G_pc->setPointColor({0.1,0.9,0.1});
-//   G_pc->setPointRadius(0.2, false);
-//   G_pc->setEnabled(true);
-// }
 
 
 void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, 
@@ -234,14 +157,14 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
   
   BoundaryBuilder tmp_bnd_builder(&tmp_solver);
   tmp_bnd_builder.build_boundary_normals();
-  vis_utils.update_visuals(&tmp_solver, &tmp_bnd_builder, sphere_mesh, sphere_geometry);
+  update_visuals(&tmp_solver, &tmp_bnd_builder, sphere_mesh, sphere_geometry);
   FaceData<double> current_accum_probs(*tmp_solver.hullMesh, 0.);
   for (Face f: tmp_solver.hullMesh->faces()){
     current_accum_probs[f] = tmp_bnd_builder.face_region_area[tmp_solver.face_last_face[f]]/(4.*PI);
   }
   polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(false);    
   polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current accum probs", current_accum_probs)->setColorMap("reds")->setEnabled(false);    
-  face_colors = FaceData<Vector3>(*tmp_solver.hullMesh, Vector3{0., 0., 0.});
+  FaceData<Vector3> face_colors = FaceData<Vector3>(*tmp_solver.hullMesh, Vector3{0., 0., 0.});
   Vector3 ambient_color{168./255., 230./255., 26./255.};
   for (Face f: tmp_solver.hullMesh->faces()){
     if (tmp_solver.face_last_face[f] == f){
@@ -308,7 +231,7 @@ void initialize_state(std::string input_name){
     init_visuals(forwardSolver);
     visualize_gauss_map(forwardSolver);//
     boundary_builder->print_area_of_boundary_loops();
-    vis_utils.update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
+    update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
     // TODO : temporary; reinitialize solver for indexing
     Forward3DSolver tmp_solver(vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions), 
                                vec32vec(forwardSolver->get_G()), true);

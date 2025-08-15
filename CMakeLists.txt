@@ -106,6 +106,7 @@ if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
     src/inverse_design/CP_tools.cpp
     src/inverse_design/remesh_tools.cpp
     src/inverse_design/optimization.cpp
+    src/inverse_design/prob_assignment.cpp
   )
   add_library(resting_rigid_bodies::inverse ALIAS resting_rigid_bodies_inverse)
 
