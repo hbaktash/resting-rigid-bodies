@@ -712,3 +712,109 @@ void draw_ground_plane_mesh(Vector3 down_vec, double height, double half_width){
   };
   polyscope::registerSurfaceMesh("ground plane", positions, faces)->setSurfaceColor({0.5, 0.8, 0.5})->setTransparency(0.7);
 }
+
+
+
+
+void visualize_current_probs_and_goals(
+  Forward3DSolver tmp_solver, 
+  ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry,
+  std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
+  Eigen::MatrixXd dfdV, Eigen::MatrixXd diffused_dfdV, 
+  bool save_sequence_scr, bool save_sequence_objs,
+  bool show, bool print_probs, size_t frame_cnt){
+  polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>{tmp_solver.get_G()});
+  auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
+  // curr_hull_psmesh->addVertexVectorQuantity("dfdV", dfdV)->setEnabled(false);
+  // if (diffused_dfdV.size() > 0)
+  //   curr_hull_psmesh->addVertexVectorQuantity("diffused dfdV", diffused_dfdV)->setEnabled(false);
+  
+  curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
+  if (policy_general == "manual"){ // first word
+    FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver, normal_prob_assignment);
+    curr_hull_psmesh->addFaceScalarQuantity("Goal probs", my_probs)->setColorMap("reds")->setEnabled(false);    
+  }
+  else if (policy_general == "manualCluster"){ // first word
+    std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_assignment);
+    FaceData<double> goal_cluster_probs(*tmp_solver.hullMesh, 0.),
+    current_cluster_probs(*tmp_solver.hullMesh, 0.);
+    std::vector<Vector3> assignees;
+    for (auto cluster: clustered_probs){
+      double current_cluster_prob = 0.;
+      std::vector<Face> faces = std::get<0>(cluster);
+      double cluster_prob = std::get<1>(cluster);
+      assignees.push_back(std::get<2>(cluster) + Vector3{0, 2, 0});
+      for (Face f: faces){
+        if (tmp_solver.face_last_face[f] == f){
+          current_cluster_prob += tmp_solver.hullGeometry->faceArea(f)/(4.*PI);
+          for (Face f2: tmp_solver.hullMesh->faces()){
+            if (tmp_solver.face_last_face[f2] == f){
+              goal_cluster_probs[f2] = cluster_prob;
+            }
+          }
+        }
+      }
+      for (Face f: faces){
+        current_cluster_probs[f] = current_cluster_prob;
+      }
+    }
+    curr_hull_psmesh->addFaceScalarQuantity("Goal cluster probs", goal_cluster_probs)->setColorMap("reds")->setEnabled(false);    
+    curr_hull_psmesh->addFaceScalarQuantity("current cluster accum probs", current_cluster_probs)->setColorMap("reds")->setEnabled(true); 
+    polyscope::registerPointCloud("Cluster assignees", assignees)->setPointColor({0.5,0.80,0.8});
+  }
+  
+  BoundaryBuilder tmp_bnd_builder(&tmp_solver);
+  tmp_bnd_builder.build_boundary_normals();
+  update_visuals(&tmp_solver, &tmp_bnd_builder, sphere_mesh, sphere_geometry);
+  FaceData<double> current_accum_probs(*tmp_solver.hullMesh, 0.);
+  for (Face f: tmp_solver.hullMesh->faces()){
+    current_accum_probs[f] = tmp_bnd_builder.face_region_area[tmp_solver.face_last_face[f]]/(4.*PI);
+  }
+  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(false);    
+  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current accum probs", current_accum_probs)->setColorMap("reds")->setEnabled(false);    
+  FaceData<Vector3> face_colors = FaceData<Vector3>(*tmp_solver.hullMesh, Vector3{0., 0., 0.});
+  Vector3 ambient_color{168./255., 230./255., 26./255.};
+  for (Face f: tmp_solver.hullMesh->faces()){
+    if (tmp_solver.face_last_face[f] == f){
+      double p = tmp_bnd_builder.face_region_area[f]/(4.*PI);
+      face_colors[f] = Vector3{p + (1-p)*168./255., (1-p)*230./255., (1-p)*26./255.};
+    }
+    else
+    face_colors[f] = ambient_color;
+  }
+  polyscope::getSurfaceMesh("current hull")->addFaceColorQuantity("current probs green-red", face_colors)->setEnabled(true);
+  
+  // Visuals/Logs
+  if (print_probs){
+    tmp_bnd_builder.print_area_of_boundary_loops();
+  }
+  if (save_sequence_scr){
+    polyscope::getSurfaceMesh("current hull")->setEnabled(false);
+    polyscope::getPointCloud("Center of Mass")->setEnabled(false);
+    polyscope::getSurfaceMesh("input input mesh")->setEnabled(false);
+    polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
+    polyscope::getPointCloud("Cluster assignees")->setEnabled(false);
+    polyscope::getPointCloud("Edge equilibria")->setEnabled(false);
+    polyscope::getPointCloud("stable Vertices Normals")->setEnabled(false);
+    polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
+
+    polyscope::screenshot(true);
+  }
+  if (save_sequence_objs){
+      // for shape itself
+      polyscope::getSurfaceMesh("current hull")->setEnabled(true);
+      polyscope::getSurfaceMesh("current hull")->getQuantity("current probs green-red")->setEnabled(false);
+      polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
+      polyscope::getCurveNetwork("Arc curves region boundaries")->setEnabled(false);
+      polyscope::getPointCloud("stable Face Normals")->setEnabled(false);
+      polyscope::getSurfaceMesh("gm_sphere_mesh")->setEnabled(false);
+      // save the current hull obj file
+      std::string output_name = "hull_" + std::to_string(frame_cnt) + ".obj";
+      writeSurfaceMesh(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, "../meshes/hulls/opt_sequence/" + output_name);
+    }
+  if (show){
+    // polyscope::frameTick();
+    // polyscope::screenshot(false);
+    polyscope::show();
+  }
+}

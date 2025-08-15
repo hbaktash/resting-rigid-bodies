@@ -366,3 +366,43 @@ VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, Manifol
     }
     return sobolev_grads_vd;
 }
+
+
+std::vector<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Eigen::MatrixX3d hull_positions){
+  ManifoldSurfaceMesh *tmp_hull_mesh;
+  VertexPositionGeometry *tmp_hull_geometry;
+  std::tie(tmp_hull_mesh, tmp_hull_geometry) = get_mesh_for_convex_set(hull_positions);
+  auto G_V_pair = find_center_of_mass(*tmp_hull_mesh, *tmp_hull_geometry);
+  Vector3 tmp_G = G_V_pair.first;
+  double volume = G_V_pair.second;
+
+  Eigen::Matrix3d zmat = Eigen::Matrix3d::Zero();
+  std::vector<Eigen::Matrix3d> dG_dv(hull_positions.rows());
+  for (size_t i = 0; i < hull_positions.rows(); i++)
+      dG_dv[i] = zmat;
+  for (Face f: tmp_hull_mesh->faces()){
+      // double face_area = tmp_solver->hullGeometry->faceArea(f);
+      double face_area = polygonal_face_area(f, *tmp_hull_geometry);
+
+      Vector3 face_normal = tmp_hull_geometry->faceNormal(f); // assuming outward normals
+      size_t face_degree = f.degree();
+      // assuming polygon faces here; 
+      // TODO; check correctness for polygons
+      Vector3 vert_sum = Vector3::zero();
+      for (Vertex tmp_v: f.adjacentVertices())
+          vert_sum += tmp_hull_geometry->inputVertexPositions[tmp_v];
+      for (Halfedge he: f.adjacentHalfedges()){
+          Vertex v = he.tailVertex();
+          Vector3 p = tmp_hull_geometry->inputVertexPositions[v];
+          Vector3 Gf_G = (vert_sum + p)/(double)(face_degree + 1) - tmp_G;
+          DenseMatrix<double> tmp_mat = vec32vec(Gf_G) * 
+                                        vec32vec(face_normal).transpose();
+          assert(tmp_mat.cols() == 3);
+          assert(tmp_mat.rows() == 3);
+          dG_dv[v.getIndex()] += face_area * tmp_mat;
+      }
+  }
+  for (size_t i = 0; i < hull_positions.rows(); i++)
+      dG_dv[i] /= 3.*volume;
+  return dG_dv;
+}

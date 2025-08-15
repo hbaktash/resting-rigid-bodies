@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils.h"
+#include "convex_hull.h"
 #include "geometrycentral/surface/manifold_surface_mesh.h"
 #include "geometrycentral/surface/vertex_position_geometry.h"
 #include "geometrycentral/numerical/linear_solvers.h"
@@ -64,3 +65,4 @@ VertexData<Vector3> sobolev_diffuse_gradients(VertexData<Vector3> grads, Manifol
 Eigen::MatrixXd sobolev_diffuse_gradients(Eigen::MatrixXd grads, ManifoldSurfaceMesh &mesh, VertexPositionGeometry &geometry,
                                               double sobolev_lambda, size_t sobolev_p = 2);
 
+std::vector<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Eigen::MatrixX3d hull_positions);

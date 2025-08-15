@@ -164,7 +164,7 @@ get_mesh_for_convex_set(Eigen::MatrixX3d convex_point_cloud){
     std::vector<Vector3> hull_poses; // redundant, but helps with keeping this function clean
     std::tie(hull_faces, hull_vertex_mapping, hull_poses) = get_convex_hull(convex_point_cloud);
     
-    // re-indexing
+    // re-indexing; when input is convex, keeps the original indices
     std::vector<std::vector<size_t>> org_index_hull_faces; 
     for (std::vector<size_t> face: hull_faces){
         std::vector<size_t> org_face;

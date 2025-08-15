@@ -13,6 +13,9 @@
 // #include "geometry_utils.h" //; in fwd solver 
 #include "visual_utils.h"
 #include <stan/math.hpp>
+#include <nlohmann/json.hpp>
+
+#include "file_IO.h"
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -31,15 +34,19 @@ std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
 std::unique_ptr<VertexPositionGeometry> geometry_ptr;
 ManifoldSurfaceMesh *mesh, *optimized_mesh;
 VertexPositionGeometry *geometry, *optimized_geometry;
-bool load_hull_from_file = true;
-Vector3 G; // center of Mass
-
-  
+std::string input_name;
+std::string policy_general;
+std::string policy;
+Vector3 G = Vector3::zero();  
 
 VisualUtils vis_utils;
 
 ManifoldSurfaceMesh* sphere_mesh;
 VertexPositionGeometry* sphere_geometry;
+
+
+// Replace all global parameter variables with a single struct
+ConvexDiceParams dice_params;
 
 
 int fair_sides_count = 6, // for optimization
@@ -65,124 +72,16 @@ bool update_with_max_prob_face = true;
 bool save_sequence_scr = false,
      save_sequence_files = false;
 
-// example choice
-std::vector<std::string> all_input_names = {std::string("6 prism"), std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
-std::string input_name = "6 prism";
-std::string policy_general = "manualCluster"; // "fair", "manualCluster ", "manual"
-// std::string policy_shape = "dodecahedron binomial"; // "dodecahedron binomial", "octahedron binomial", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron binomial", "cube binomial", dodecahedron binomial
-std::string policy;
+// // example choice
+// std::vector<std::string> all_input_names = {std::string("6 prism"), std::string("hendecahedron"), std::string("triangular"), std::string("circus"), std::string("icosahedron"), std::string("dodecahedron"), std::string("cuub"), std::string("octahedron")}; // {std::string("tet"), std::string("tet2"), std::string("cube"), std::string("tilted cube"), std::string("dodecahedron"), std::string("Conway spiral 4"), std::string("oloid")};
+
 
 
 void generate_polyhedron_example(std::string poly_str){
-  // readManifoldSurfaceMesh()
-  // std::tie(mesh_ptr, geometry_ptr) = generate_polyhedra(poly_str);
   std::tie(mesh_ptr, geometry_ptr) = generate_11_sided_polyhedron(poly_str);
   mesh = mesh_ptr.release();
   geometry = geometry_ptr.release();
 }
-
-
-void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, 
-                                       std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
-                                       Eigen::MatrixXd dfdV, Eigen::MatrixXd diffused_dfdV, 
-                                       bool show, bool print_probs = false, size_t frame_cnt = 0){
-  polyscope::registerPointCloud("Center of Mass", std::vector<Vector3>{tmp_solver.get_G()});
-  auto curr_hull_psmesh = polyscope::registerSurfaceMesh("current hull", tmp_solver.hullGeometry->inputVertexPositions, tmp_solver.hullMesh->getFaceVertexList());
-  // curr_hull_psmesh->addVertexVectorQuantity("dfdV", dfdV)->setEnabled(false);
-  // if (diffused_dfdV.size() > 0)
-  //   curr_hull_psmesh->addVertexVectorQuantity("diffused dfdV", diffused_dfdV)->setEnabled(false);
-  
-  curr_hull_psmesh->setSurfaceColor({0.1,0.9,0.1})->setEdgeWidth(2.)->setTransparency(0.7)->setEnabled(true);
-  if (policy_general == "manual"){ // first word
-    FaceData<double> my_probs = manual_stable_only_face_prob_assignment(&tmp_solver, normal_prob_assignment);
-    curr_hull_psmesh->addFaceScalarQuantity("Goal probs", my_probs)->setColorMap("reds")->setEnabled(false);    
-  }
-  else if (policy_general == "manualCluster"){ // first word
-    std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_assignment);
-    FaceData<double> goal_cluster_probs(*tmp_solver.hullMesh, 0.),
-    current_cluster_probs(*tmp_solver.hullMesh, 0.);
-    std::vector<Vector3> assignees;
-    for (auto cluster: clustered_probs){
-      double current_cluster_prob = 0.;
-      std::vector<Face> faces = std::get<0>(cluster);
-      double cluster_prob = std::get<1>(cluster);
-      assignees.push_back(std::get<2>(cluster) + Vector3{0, 2, 0});
-      for (Face f: faces){
-        if (tmp_solver.face_last_face[f] == f){
-          current_cluster_prob += tmp_solver.hullGeometry->faceArea(f)/(4.*PI);
-          for (Face f2: tmp_solver.hullMesh->faces()){
-            if (tmp_solver.face_last_face[f2] == f){
-              goal_cluster_probs[f2] = cluster_prob;
-            }
-          }
-        }
-      }
-      for (Face f: faces){
-        current_cluster_probs[f] = current_cluster_prob;
-      }
-    }
-    curr_hull_psmesh->addFaceScalarQuantity("Goal cluster probs", goal_cluster_probs)->setColorMap("reds")->setEnabled(false);    
-    curr_hull_psmesh->addFaceScalarQuantity("current cluster accum probs", current_cluster_probs)->setColorMap("reds")->setEnabled(true); 
-    polyscope::registerPointCloud("Cluster assignees", assignees)->setPointColor({0.5,0.80,0.8});
-  }
-  
-  BoundaryBuilder tmp_bnd_builder(&tmp_solver);
-  tmp_bnd_builder.build_boundary_normals();
-  update_visuals(&tmp_solver, &tmp_bnd_builder, sphere_mesh, sphere_geometry);
-  FaceData<double> current_accum_probs(*tmp_solver.hullMesh, 0.);
-  for (Face f: tmp_solver.hullMesh->faces()){
-    current_accum_probs[f] = tmp_bnd_builder.face_region_area[tmp_solver.face_last_face[f]]/(4.*PI);
-  }
-  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current probs", tmp_bnd_builder.face_region_area/(4.*PI))->setColorMap("reds")->setEnabled(false);    
-  polyscope::getSurfaceMesh("current hull")->addFaceScalarQuantity("current accum probs", current_accum_probs)->setColorMap("reds")->setEnabled(false);    
-  FaceData<Vector3> face_colors = FaceData<Vector3>(*tmp_solver.hullMesh, Vector3{0., 0., 0.});
-  Vector3 ambient_color{168./255., 230./255., 26./255.};
-  for (Face f: tmp_solver.hullMesh->faces()){
-    if (tmp_solver.face_last_face[f] == f){
-      double p = tmp_bnd_builder.face_region_area[f]/(4.*PI);
-      face_colors[f] = Vector3{p + (1-p)*168./255., (1-p)*230./255., (1-p)*26./255.};
-    }
-    else
-    face_colors[f] = ambient_color;
-  }
-  polyscope::getSurfaceMesh("current hull")->addFaceColorQuantity("current probs green-red", face_colors)->setEnabled(true);
-  
-  // Visuals/Logs
-  if (print_probs){
-    tmp_bnd_builder.print_area_of_boundary_loops();
-  }
-  if (save_sequence_scr){
-    polyscope::getSurfaceMesh("current hull")->setEnabled(false);
-    polyscope::getPointCloud("Center of Mass")->setEnabled(false);
-    polyscope::getSurfaceMesh("input input mesh")->setEnabled(false);
-    polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
-    polyscope::getPointCloud("Cluster assignees")->setEnabled(false);
-    polyscope::getPointCloud("Edge equilibria")->setEnabled(false);
-    polyscope::getPointCloud("stable Vertices Normals")->setEnabled(false);
-    polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
-
-    polyscope::screenshot(true);
-  }
-  if (save_sequence_files){
-      // for shape itself
-      polyscope::getSurfaceMesh("current hull")->setEnabled(true);
-      polyscope::getSurfaceMesh("current hull")->getQuantity("current probs green-red")->setEnabled(false);
-      polyscope::getCurveNetwork("Arc curves all edge arcs")->setEnabled(false);
-      polyscope::getCurveNetwork("Arc curves region boundaries")->setEnabled(false);
-      polyscope::getPointCloud("stable Face Normals")->setEnabled(false);
-      polyscope::getSurfaceMesh("gm_sphere_mesh")->setEnabled(false);
-      // save the current hull obj file
-      std::string output_name = "hull_" + std::to_string(frame_cnt) + ".obj";
-      writeSurfaceMesh(*tmp_solver.hullMesh, *tmp_solver.hullGeometry, "../meshes/hulls/opt_sequence/" + output_name);
-    }
-  if (show){
-    // polyscope::frameTick();
-    // polyscope::screenshot(false);
-    polyscope::show();
-  }
-}
-
-
 
 
 void initialize_state(std::string input_name){
@@ -192,67 +91,17 @@ void initialize_state(std::string input_name){
     preprocess_mesh(mesh, geometry, triangulate, false);
     center_and_normalize(mesh, geometry);
     // set global G to uniform here
-    std::cout << "preparing Forward3DSolver with G = " << G << std::endl;
-	  Forward3DSolver* forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
+	Forward3DSolver* forwardSolver = new Forward3DSolver(mesh, geometry, G, true);
     forwardSolver->set_uniform_G();
     G = forwardSolver->get_G();
+    std::cout << ANSI_FG_GREEN << "G is set to uniform:" << G << ANSI_RESET << std::endl;
     forwardSolver->initialize_pre_computes();
     BoundaryBuilder *boundary_builder = new BoundaryBuilder(forwardSolver);
     boundary_builder->build_boundary_normals();
 
     // visuals
     init_visuals(mesh, geometry, forwardSolver, boundary_builder);
-
-    boundary_builder->print_area_of_boundary_loops();
     update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
-    // TODO : temporary; reinitialize solver for indexing
-    Forward3DSolver tmp_solver(vertex_data_to_matrix(forwardSolver->hullGeometry->inputVertexPositions), 
-                               vec32vec(forwardSolver->get_G()), true);
-    tmp_solver.initialize_pre_computes();
-    for (Face f: tmp_solver.hullMesh->faces()){
-      std::cout << "face " << f.getIndex() << " N:" << tmp_solver.hullGeometry->faceNormal(f) << std::endl;
-    }
-    std::cout << ANSI_FG_GREEN << "G is set to uniform:" << G << ANSI_RESET << std::endl;
-}
-
-
-std::vector<Eigen::Matrix3d> get_COM_grads_for_convex_uniform_shape(Eigen::MatrixX3d hull_positions){
-  ManifoldSurfaceMesh *tmp_hull_mesh;
-  VertexPositionGeometry *tmp_hull_geometry;
-  std::tie(tmp_hull_mesh, tmp_hull_geometry) = get_mesh_for_convex_set(hull_positions);
-  auto G_V_pair = find_center_of_mass(*tmp_hull_mesh, *tmp_hull_geometry);
-  Vector3 tmp_G = G_V_pair.first;
-  double volume = G_V_pair.second;
-
-  Eigen::Matrix3d zmat = Eigen::Matrix3d::Zero();
-  std::vector<Eigen::Matrix3d> dG_dv(hull_positions.rows());
-  for (size_t i = 0; i < hull_positions.rows(); i++)
-      dG_dv[i] = zmat;
-  for (Face f: tmp_hull_mesh->faces()){
-      // double face_area = tmp_solver->hullGeometry->faceArea(f);
-      double face_area = polygonal_face_area(f, *tmp_hull_geometry);
-
-      Vector3 face_normal = tmp_hull_geometry->faceNormal(f); // assuming outward normals
-      size_t face_degree = f.degree();
-      // assuming polygon faces here; 
-      // TODO; check correctness for polygons
-      Vector3 vert_sum = Vector3::zero();
-      for (Vertex tmp_v: f.adjacentVertices())
-          vert_sum += tmp_hull_geometry->inputVertexPositions[tmp_v];
-      for (Halfedge he: f.adjacentHalfedges()){
-          Vertex v = he.tailVertex();
-          Vector3 p = tmp_hull_geometry->inputVertexPositions[v];
-          Vector3 Gf_G = (vert_sum + p)/(double)(face_degree + 1) - tmp_G;
-          DenseMatrix<double> tmp_mat = vec32vec(Gf_G) * 
-                                        vec32vec(face_normal).transpose();
-          assert(tmp_mat.cols() == 3);
-          assert(tmp_mat.rows() == 3);
-          dG_dv[v.getIndex()] += face_area * tmp_mat;
-      }
-  }
-  for (size_t i = 0; i < hull_positions.rows(); i++)
-      dG_dv[i] /= 3.*volume;
-  return dG_dv;
 }
 
 
@@ -353,8 +202,12 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
       dfdV = diffused_dfdV;
     }
     // DEBUG/visuals
-    visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, 
-                                      dfdV, diffused_dfdV, visualize_steps, false, iter);
+    visualize_current_probs_and_goals(tmp_solver, 
+      sphere_mesh, sphere_geometry,
+      policy_general, normal_prob_pairs, 
+      dfdV, diffused_dfdV, 
+      save_sequence_scr, save_sequence_files,
+      visualize_steps, false, iter);
     // printf("line search\n");
     double opt_step_size = 1.;
     if (dice_search_decay != 1.){
@@ -402,105 +255,66 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
   }
 
   // DEBUG/visuals
-  visualize_current_probs_and_goals(tmp_solver, policy_general, normal_prob_pairs, dfdV, diffused_dfdV, false, true, step_count);
+  visualize_current_probs_and_goals(
+    tmp_solver, 
+    sphere_mesh, sphere_geometry,
+    policy_general, normal_prob_pairs, dfdV, diffused_dfdV, 
+    save_sequence_scr, save_sequence_files,
+    false, true, step_count);
 
   optimized_mesh = tmp_solver.hullMesh;
   optimized_geometry = tmp_solver.hullGeometry; 
-
-  // // DEBUG grad vecs
-  // double dice_e;
-  //        Eigen::Vector3d dfdG;
-  //        Eigen::MatrixX3d dfdV(hull_positions.rows(), 3);
-  // get_dice_energy_grads(hull_positions, G_vec, bary_reg, coplanar_reg,
-  //                       dfdV, dfdG, dice_e, 
-  //                       use_autodiff_for_dice_grad, frozen_G,
-  //                       policy_general, normal_prob_pairs, fair_sides_count));
-  // polyscope::getSurfaceMesh("current hull")->addVertexVectorQuantity("ad total grads", -1.*dfdV)->setEnabled(true);
 }
 
 
-void save_params(std::string output_name){
-  std::ofstream param_file;
-  param_file.open("../meshes/hulls/params_" + std::string(output_name) + ".txt");
-  param_file << "bary reg: " << bary_reg << "\n";
-  param_file << "coplanar reg: " << coplanar_reg << "\n";
-  param_file << "cluster distance reg: " << cluster_distance_reg << "\n";
-  param_file << "unstable attraction thresh: " << unstable_attraction_thresh << "\n";
-  param_file << "fair sides count: " << fair_sides_count << "\n";
-  param_file << "dice energy step: " << dice_energy_step << "\n";
-  param_file << "dice search decay: " << dice_search_decay << "\n";
-  param_file << "sobolev lambda: " << sobolev_lambda << "\n";
-  param_file << "sobolev lambda decay: " << sobolev_lambda_decay << "\n";
-  param_file << "do sobolev grads: " << do_sobolev_dice_grads << "\n";
-  param_file << "adaptive reg: " << adaptive_reg << "\n";
-  param_file << "frozen G: " << frozen_G << "\n";
-  // step size, count 
-  param_file << " -----  Other Params ----- " << "\n";
-  param_file << "DE step count: " << DE_step_count << "\n";
-  param_file << "update with max prob face: " << update_with_max_prob_face << "\n";
-  param_file << "visualize steps: " << visualize_steps << "\n";
-  param_file << "policy general: " << policy_general << "\n";
-  param_file << "policy shape: " << policy.substr(policy.find(" ") + 1) << "\n";
-  param_file << "input name: " << input_name << "\n";
-  param_file << "input shape: " << input_name << "\n";
-  param_file << "input shape dir: " << "../meshes/convex/" + input_name + ".obj" << "\n";
-  param_file << "input shape dir: " << "../meshes/convex/" + input_name + ".obj" << "\n";
-  param_file.close();
-}
-
-// A user-defined callback, for creating control panels (etc)
-// Use ImGUI commands to build whatever you want here, see
-// https://github.com/ocornut/imgui/blob/master/imgui.h
+// Update myCallback() to use the struct
 void myCallback() {
-  ImGui::SliderInt("ITERS",           &DE_step_count, 1, 200);
-  ImGui::SliderInt("fair sides",      &fair_sides_count, 2, 20);
-  ImGui::SliderFloat("DE step size",  &dice_energy_step, 0, 0.05);
-  ImGui::SliderFloat("DE step decay", &dice_search_decay, 0.1, 1.);
+  ImGui::SliderInt("ITERS",           &dice_params.DE_step_count, 1, 200);
+  ImGui::SliderInt("fair sides",      &dice_params.fair_sides_count, 2, 20);
+  ImGui::SliderFloat("DE step size",  &dice_params.dice_energy_step, 0, 0.05);
+  ImGui::SliderFloat("DE step decay", &dice_params.dice_search_decay, 0.1, 1.);
 
-  ImGui::SliderFloat("barycenter distance regularizer", &bary_reg, 0., 100.);
-  ImGui::SliderFloat("coplanar regularizer", &coplanar_reg, 0., 100.);
-  ImGui::SliderFloat("cluster distance regularizer", &cluster_distance_reg, 0., 100.);
-  ImGui::SliderFloat("cluster unstable-stable attraction threshold", &unstable_attraction_thresh, 0., 100.);
+  ImGui::SliderFloat("barycenter distance regularizer", &dice_params.bary_reg, 0., 100.);
+  ImGui::SliderFloat("coplanar regularizer", &dice_params.coplanar_reg, 0., 100.);
+  ImGui::SliderFloat("cluster distance regularizer", &dice_params.cluster_distance_reg, 0., 100.);
+  ImGui::SliderFloat("cluster unstable-stable attraction threshold", &dice_params.unstable_attraction_thresh, 0., 100.);
 
-  ImGui::Checkbox("sobolev grads", &do_sobolev_dice_grads);
-  ImGui::SliderFloat("sobolev lambda", &sobolev_lambda, 0., 50.);
-  ImGui::SliderFloat("decay sobolev lambda", &sobolev_lambda_decay, 0., 1.);
-  ImGui::Checkbox("frozen G", &frozen_G);
-  ImGui::Checkbox("update clusterN with max prob face", &update_with_max_prob_face);
-  ImGui::Checkbox("adaptive reg", &adaptive_reg);
+  ImGui::Checkbox("sobolev grads", &dice_params.do_sobolev_dice_grads);
+  ImGui::SliderFloat("sobolev lambda", &dice_params.sobolev_lambda, 0., 50.);
+  ImGui::SliderFloat("decay sobolev lambda", &dice_params.sobolev_lambda_decay, 0., 1.);
+  ImGui::Checkbox("frozen G", &dice_params.frozen_G);
+  ImGui::Checkbox("update clusterN with max prob face", &dice_params.update_with_max_prob_face);
+  ImGui::Checkbox("adaptive reg", &dice_params.adaptive_reg);
   ImGui::Checkbox("visualize steps", &visualize_steps);
   ImGui::Checkbox("save scrs", &save_sequence_scr);
   ImGui::Checkbox("save files", &save_sequence_files);
+
   if (ImGui::Button("dice energy opt")){
-    dice_energy_opt(policy, bary_reg, coplanar_reg, frozen_G, DE_step_count);
+    dice_energy_opt(policy, dice_params.bary_reg, dice_params.coplanar_reg, 
+                    dice_params.frozen_G, dice_params.DE_step_count);
   }
   if (ImGui::Button("save optimized hull")){
-    std::string output_name = input_name + "_d" + std::to_string(fair_sides_count)+"_"+policy_general;
-    writeSurfaceMesh(*optimized_mesh, *optimized_geometry, "../meshes/hulls/" + std::string(output_name) +".obj");
-    // save parameters
-    save_params(output_name);
+    std::string output_name = input_name + "_d" + std::to_string(dice_params.fair_sides_count) + "_" + policy_general;
+    writeSurfaceMesh(*optimized_mesh, *optimized_geometry, "../meshes/hulls/" + output_name + ".obj");
+    
+    // Update struct with current G and save parameters
+    save_convex_dice_params(dice_params, "../meshes/hulls/params_" + output_name + ".json");
 
-    // save G
+    // save G to separate text file (for backward compatibility)
     std::ofstream G_file;
-    G_file.open("../meshes/hulls/G_" + std::string(output_name) + ".txt");
+    G_file.open("../meshes/hulls/G_" + output_name + ".txt");
     G_file << G.x << " " << G.y << " " << G.z << "\n";
     G_file.close();
   }
-  // if (ImGui::Button("find best G")){
-  //   find_best_bunny_G(mesh, geometry);
-  // }
 }
-
 
 int main(int argc, char **argv) {
   // Parse args
   args::ArgumentParser parser("Dice energy optimization for convex shapes");
-  // make parser for input name and other params
-  args::HelpFlag help(parser,    "help", "Display this help menu", {'h', "help"});
-  // args::Flag do_just_ours(parser, "do_just_ours", "do just ours", {"just_ours"});
-  // args::ValueFlag<int> total_samples(parser, "ICOS_samples", "Total number of samples", {"samples"});
+  args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
   args::ValueFlag<std::string> input_shape_arg(parser, "input_shape_str", "path to input shape", {'m', "mesh_dir"});
-  args::ValueFlag<std::string> policy_arg(parser, "policy_general", " general policy string: fair | manual | manualCluster | fairCluster ", {'p', "policy"}, "manualCluster");
+  args::ValueFlag<std::string> policy_arg(parser, "policy_general", "general policy string: fair | manual | manualCluster | fairCluster", {'p', "policy"}, "manualCluster");
+  args::ValueFlag<std::string> param_file_arg(parser, "param_file", "path to parameter JSON file to load", {"params"});
 
   try {
     parser.ParseCLI(argc, argv);
@@ -520,30 +334,33 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  if(input_shape_arg){
+  // Load parameters from file if provided
+  if (param_file_arg) {
+    if (!load_convex_dice_params(dice_params, args::get(param_file_arg))) {
+      std::cerr << "Failed to load parameters, using defaults" << std::endl;
+    }
+  }
+
+  if (input_shape_arg) {
     input_name = args::get(input_shape_arg);
   }
-  if(policy_arg){
+  if (policy_arg) {
     policy_general = args::get(policy_arg);
-    // std::string policy_shape = "dodecahedron"; // "dodecahedron", "octahedron", "circus", "hendecahedron", "wide tent", "atipodal tent", "icosahedron", "cube"
     policy = policy_general + " " + input_name;
   }
+
   std::cout << ANSI_FG_YELLOW << "policy: " << policy << ANSI_RESET << "\n";
   std::cout << ANSI_FG_YELLOW << "input shape: " << input_name << ANSI_RESET << "\n";
 
-  
+
   // build mesh
-  std::cout << "hrer????" << std::endl;
   vis_utils = VisualUtils();
-  // vis params; fine tune
-  vis_utils.arcs_seg_count = 1000;
-  vis_utils.arc_curve_radi = 0.001;
 
   polyscope::init();
-  std::cout << " initialized polyscope" << std::endl;
   initialize_state(input_name);
   input_name = input_name.substr(input_name.find_last_of("/") + 1);
   input_name = input_name.substr(0, input_name.find_last_of("."));
+  
   // Initialize polyscope
   // Set the callback function
   polyscope::options::groundPlaneMode = polyscope::GroundPlaneMode::None;
