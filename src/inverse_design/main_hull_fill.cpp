@@ -81,18 +81,6 @@ std::vector<std::pair<ManifoldSurfaceMesh*, VertexPositionGeometry*>> deformed_s
 // example choice
 std::string hull_input_name, concave_input_name,
             hull_shape_name, concave_shape_name;
-    
-
-void visualize_gauss_map(Forward3DSolver* forwardSolver){
-  std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
-  std::unique_ptr<VertexPositionGeometry> sphere_geometry_ptr;
-  std::tie(sphere_mesh_ptr, sphere_geometry_ptr) = generate_polyhedra("sphere");
-  sphere_mesh = sphere_mesh_ptr.release();
-  sphere_geometry = sphere_geometry_ptr.release();
-  
-  // update vis utils
-  vis_utils.draw_gauss_map(forwardSolver, sphere_mesh, sphere_geometry);
-}
 
 
 void ideal_hull_G_stats(bool visualize = true){

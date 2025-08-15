@@ -1,4 +1,5 @@
-// Forward declarations
+
+#ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
 
 template <typename Scalar>
 Scalar BoundaryBuilder::dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
@@ -445,3 +446,5 @@ BoundaryBuilder::single_DAG_cluster_bary_e(Face stable_face, Eigen::Vector3<Scal
     barycenter = barycenter.normalized();
     return (barycenter - stable_face_normal).squaredNorm(); // diff^2
 }
+
+#endif

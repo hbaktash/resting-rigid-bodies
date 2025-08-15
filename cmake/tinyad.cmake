@@ -1,5 +1,6 @@
-if (TARGET tinyad::TinyAD)
-    return()
+# If the target already exists, do nothing
+if(TARGET tinyad::tinyad OR TARGET tinyad_)
+  return()
 endif()
 
 include(CPM)

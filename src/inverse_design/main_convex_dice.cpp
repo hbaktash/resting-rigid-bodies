@@ -8,13 +8,11 @@
 #include "args.hxx"
 #include "imgui.h"
 
-#include "coloring.h"
-#include "forward3D.h"
+#include "boundary_tools.h"
 #include "mesh_factory.h"
 // #include "geometry_utils.h" //; in fwd solver 
 #include "visual_utils.h"
-#include "inv_design.h"
-#include "prob_assignment.h"
+#include <stan/math.hpp>
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -75,18 +73,6 @@ std::string policy_general = "manualCluster"; // "fair", "manualCluster ", "manu
 std::string policy;
 
 
-void visualize_gauss_map(Forward3DSolver* forwardSolver){
-  std::unique_ptr<ManifoldSurfaceMesh> sphere_mesh_ptr;
-  std::unique_ptr<VertexPositionGeometry> sphere_geometry_ptr;
-  std::tie(sphere_mesh_ptr, sphere_geometry_ptr) = generate_polyhedra("sphere");
-  sphere_mesh = sphere_mesh_ptr.release();
-  sphere_geometry = sphere_geometry_ptr.release();
-  
-  // update vis utils
-  draw_gauss_map(forwardSolver, sphere_mesh, sphere_geometry);
-}
-
-
 void init_visuals(Forward3DSolver* forwardSolver){
   // Register the mesh with polyscope
   polyscope::registerSurfaceMesh(
@@ -95,9 +81,6 @@ void init_visuals(Forward3DSolver* forwardSolver){
   polyscope::SurfaceMesh *psHullMesh = polyscope::registerSurfaceMesh(
     "hull mesh",
     forwardSolver->hullGeometry->inputVertexPositions, forwardSolver->hullMesh->getFaceVertexList());
-  forwardSolver->hullGeometry->requireFaceNormals();
-  psHullMesh->addFaceVectorQuantity("face normals", forwardSolver->hullGeometry->faceNormals);
-  psHullMesh->setEnabled(true);
   draw_G(forwardSolver->get_G());
 }
 
@@ -288,78 +271,39 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
                            bool use_autodiff, bool frozen_G, 
                            std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_pairs, 
                            int fair_sides){
-    
-  if (!use_autodiff){
-    Forward3DSolver fwd_solver(hull_positions, G_vec, true); // when getting grads, the input must be convex
-    
-    assert(hull_positions.rows() == fwd_solver.hullMesh->nVertices()); // check if input was convex
+  // Eigen::MatrixX3d hull_positions = vertex_data_to_matrix(fwd_solver.hullGeometry->inputVertexPositions); 
+  Forward3DSolver tmp_solver(hull_positions, G_vec, true); // indices shouldnt be shuffled here
+  auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
+    // decompose flat vector to positions and center of mass; G is the last 3 elements
+    Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
+    size_t flat_n = hull_poses_G_append_vec.rows();
+    Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
+    return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, 
+                                                bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
+                                                policy_general, normal_prob_pairs, fair_sides, true);
+  };
+  Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
+  Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
+  hull_poses_and_G_vec << hull_poses_vec, G_vec;
+  
+  Eigen::VectorXd dfdU_vec;
+  double dice_e;
+  stan::math::gradient(dice_energy_lambda, hull_poses_and_G_vec, dice_e, dfdU_vec);
+  dice_energy = dice_e;
+  size_t flat_n = dfdU_vec.rows();
+  df_dG = dfdU_vec.tail(3);
+  Eigen::Map<Eigen::MatrixXd> dfdV(dfdU_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
 
-    if (!frozen_G){
-      std::pair<Vector3, double> G_V_pair = find_center_of_mass(*fwd_solver.hullMesh, *fwd_solver.hullGeometry);
-      fwd_solver.volume = G_V_pair.second;
-      fwd_solver.set_G(G_V_pair.first); // since it deosn't make sense to gave non-uniform G with dependent G
-    }
-    
-    fwd_solver.initialize_pre_computes();
-    printf("   initialized for diffs\n");
-    BoundaryBuilder *bnd_builder = new BoundaryBuilder(&fwd_solver);
-    bnd_builder->build_boundary_normals();
-    InverseSolver *inv_solver = new InverseSolver(bnd_builder);
-    inv_solver->find_uni_mass_d_pf_dv(frozen_G);
-    // distribution is set internally here
-
-    // d_pf/dv
-    inv_solver->set_fair_distribution_for_sink_faces(fair_sides); // top k faces are set
-    VertexData<Vector3> approx_dice_energy_grads = inv_solver->find_uni_mass_total_vertex_grads(0.01);
-    
-    // d_pf/dG
-    inv_solver->find_d_pf_d_Gs();
-    Vector3 G_grad = inv_solver->find_total_g_grad();
-    
-    // convert to eigen
-    dice_energy = bnd_builder->get_fair_dice_energy(fair_sides);
-
-    // NOTE; forward solver reshuffles the vertices when taking hull, so need to map back
-    for (Vertex v: fwd_solver.hullMesh->vertices()){
-      df_dv.row(fwd_solver.org_hull_indices[v]) = vec32vec(approx_dice_energy_grads[v]);
-    }
-    df_dG = vec32vec(G_grad);
+  // populate df_dv by mapping to original input indices
+  if (frozen_G){
+    df_dv = dfdV;
   }
-  else { // autodiff
-    // Eigen::MatrixX3d hull_positions = vertex_data_to_matrix(fwd_solver.hullGeometry->inputVertexPositions); 
-    Forward3DSolver tmp_solver(hull_positions, G_vec, true); // indices shouldnt be shuffled here
-    auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
-      // decompose flat vector to positions and center of mass; G is the last 3 elements
-      Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
-      size_t flat_n = hull_poses_G_append_vec.rows();
-      Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-      return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, 
-                                                  bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
-                                                  policy_general, normal_prob_pairs, fair_sides, true);
-    };
-    Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
-    Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
-    hull_poses_and_G_vec << hull_poses_vec, G_vec;
-    
-    Eigen::VectorXd dfdU_vec;
-    double dice_e;
-    stan::math::gradient(dice_energy_lambda, hull_poses_and_G_vec, dice_e, dfdU_vec);
-    dice_energy = dice_e;
-    size_t flat_n = dfdU_vec.rows();
-    df_dG = dfdU_vec.tail(3);
-    Eigen::Map<Eigen::MatrixXd> dfdV(dfdU_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-
-    // populate df_dv by mapping to original input indices
-    if (frozen_G){
-      df_dv = dfdV;
+  else {
+    std::vector<Eigen::Matrix3d> dG_dv = get_COM_grads_for_convex_uniform_shape(hull_positions);
+    for (size_t i = 0; i < hull_positions.rows(); i++){
+      df_dv.row(i) = dfdV.row(i) + (dG_dv[i].transpose() * df_dG).transpose();
     }
-    else {
-      std::vector<Eigen::Matrix3d> dG_dv = get_COM_grads_for_convex_uniform_shape(hull_positions);
-      for (size_t i = 0; i < hull_positions.rows(); i++){
-        df_dv.row(i) = dfdV.row(i) + (dG_dv[i].transpose() * df_dG).transpose();
-      }
-    }
-  }    
+  }  
 }
 
 
@@ -518,19 +462,6 @@ void save_params(std::string output_name){
 // Use ImGUI commands to build whatever you want here, see
 // https://github.com/ocornut/imgui/blob/master/imgui.h
 void myCallback() {
-  if (ImGui::BeginCombo("##combo1", input_name.c_str())){ // The second parameter is the label previewed before opening the combo.
-      for (std::string tmp_str: all_input_names){ // This enables not having to have a const char* arr[]. Or maybe I'm just a noob.
-          bool is_selected = (input_name == tmp_str.c_str()); // You can store your selection however you want, outside or inside your objects
-          if (ImGui::Selectable(tmp_str.c_str(), is_selected)){ // selected smth
-              input_name = tmp_str;
-              initialize_state(input_name);
-
-          }
-          if (is_selected)
-              ImGui::SetItemDefaultFocus();   // You may set the initial focus when opening the combo (scrolling + for keyboard navigation support)
-      }
-      ImGui::EndCombo();
-  }
   ImGui::SliderInt("ITERS",           &DE_step_count, 1, 200);
   ImGui::SliderInt("fair sides",      &fair_sides_count, 2, 20);
   ImGui::SliderFloat("DE step size",  &dice_energy_step, 0, 0.05);

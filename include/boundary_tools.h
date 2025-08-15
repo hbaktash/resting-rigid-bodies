@@ -3,6 +3,11 @@
 #include "forward3D.h"
 #include "utils.h"
 #include "set"
+// if in inverse design mode
+
+#ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
+#include "inverse_design/prob_assignment.h"
+#endif
 
 // // polyscope for DEBUG
 // #include "polyscope/polyscope.h"
@@ -85,6 +90,7 @@ class BoundaryBuilder {
         std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
                 MS_complex_edges_of_face(Face f);
         
+        #ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
         // Template stuff for inverse design
         template <typename Scalar>
         static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
@@ -126,12 +132,32 @@ class BoundaryBuilder {
         single_DAG_cluster_bary_e(Face stable_face, Eigen::Vector3<Scalar> stable_face_normal,
                                 Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
                                 FaceData<std::set<Vertex>> face_region_boundary_vertices);
+        #endif
 };
-
+#ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
 double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
                                double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
                                std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
                                size_t dice_side_count, double step_size, double decay, bool frozen_G, 
                                size_t max_iter, double step_tol);
 
+
+std::vector<std::pair<Vector3, double>> 
+normal_prob_assignment(std::string shape_name);
+
+std::vector<std::pair<Vector3, double>> 
+normal_prob_assignment_fair(Forward3DSolver *tmp_solver, size_t dice_side_count);
+
+FaceData<double> 
+manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<std::pair<Vector3, double>> normal_prob_pairs);
+
+std::vector<std::tuple<std::vector<Face>, double, Vector3>> 
+manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<std::pair<Vector3, double>> normal_prob_pairs);
+
+std::vector<std::pair<Vector3, double>> 
+update_normal_prob_assignment(Forward3DSolver *tmp_solver,
+                              std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals,
+                              bool take_max_prob_face);
+
 #include "boundary_tools.impl.h"
+#endif

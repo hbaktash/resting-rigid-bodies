@@ -10,20 +10,12 @@ option(RESTING_RIGID_BODIES_USE_POLYSCOPE "Enable Polyscope visualization" ON)
 option(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN "Build inverse design libs/apps" ON)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
-
 # Dependencies
 include(Eigen3)
 include(geometry-central)
 include(qhull)
 include(args)
 include(json)
-
-# for inverse-design
-if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
-  include(tinyAD)
-  include(osqp-cpp)
-  include(stan)
-endif()
 
 if(RESTING_RIGID_BODIES_USE_POLYSCOPE)
   include(polyscope)
@@ -68,7 +60,9 @@ target_link_libraries(resting_rigid_bodies
     nlohmann::json
 )
 
+
 # Link optional deps
+target_compile_definitions(resting_rigid_bodies PUBLIC RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
 if(RESTING_RIGID_BODIES_USE_POLYSCOPE)
   target_link_libraries(resting_rigid_bodies PUBLIC polyscope::polyscope)
   target_compile_definitions(resting_rigid_bodies PUBLIC RESTING_RIGID_BODIES_USE_POLYSCOPE)
@@ -94,14 +88,9 @@ endif()
 set_property(TARGET drop_probs PROPERTY CXX_STANDARD 20)
 
 
-
-
-
 # == Inverse design (optional) ==
 if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
-  # inverse-only sources (now under src/inverse_design)
   add_library(resting_rigid_bodies_inverse
-    src/inverse_design/inv_design.cpp
     src/inverse_design/deformation.cpp
     src/inverse_design/CP_tools.cpp
     src/inverse_design/remesh_tools.cpp
@@ -110,33 +99,37 @@ if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
   )
   add_library(resting_rigid_bodies::inverse ALIAS resting_rigid_bodies_inverse)
 
-  # expose both common includes and inverse-only includes
   target_include_directories(resting_rigid_bodies_inverse
     PUBLIC
       ${CMAKE_CURRENT_LIST_DIR}/include
       ${CMAKE_CURRENT_LIST_DIR}/include/inverse_design
   )
 
+  # Make the macro visible when compiling inverse code
+  target_compile_definitions(resting_rigid_bodies_inverse PUBLIC RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
+
   # Optional solvers (only needed for inverse)
   include(tinyAD)
   include(osqp-cpp)
   include(stan)
 
-  # (optional) GUROBI — keep conditional
-  find_package(GUROBI)
-  if (GUROBI_FOUND)
-    message(STATUS "Gurobi found at ${GUROBI_INCLUDE_DIRS}")
-    target_include_directories(resting_rigid_bodies_inverse PUBLIC "${GUROBI_INCLUDE_DIRS}")
+  # GUROBI
+  find_package(GUROBI REQUIRED)
+  if(GUROBI_FOUND)
+    message(STATUS "Using Gurobi at: ${GUROBI_INCLUDE_DIRS}")
+    target_link_libraries(resting_rigid_bodies_inverse PRIVATE Gurobi::gurobi_cxx)
+    target_compile_definitions(resting_rigid_bodies_inverse PUBLIC RESTING_RIGID_BODIES_HAVE_GUROBI)
   else()
-    message(STATUS "Gurobi not found!")
+    message(STATUS "Gurobi not found; building inverse design without it")
   endif()
 
   target_link_libraries(resting_rigid_bodies_inverse
-    PUBLIC resting_rigid_bodies::resting_rigid_bodies
+    PUBLIC
+      resting_rigid_bodies::resting_rigid_bodies
+      stan::stan           # was PRIVATE
+      tinyad::tinyad       # was PRIVATE
+      osqp-cpp::osqp-cpp   # was PRIVATE
     PRIVATE
-      stan::stan
-      tinyad::tinyad
-      osqp-cpp::osqp-cpp
       ${GUROBI_LIBRARY}
       ${GUROBI_CXX_LIBRARY}
   )
@@ -146,13 +139,7 @@ if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
     add_executable(convex_dice src/inverse_design/main_convex_dice.cpp)
     target_link_libraries(convex_dice PRIVATE resting_rigid_bodies::inverse taywee::args)
     target_compile_definitions(convex_dice PRIVATE RESTING_RIGID_BODIES_USE_POLYSCOPE)
-    set_property(TARGET convex_dice PROPERTY CXX_STANDARD 20)
-
-    add_executable(hull_fill src/inverse_design/main_hull_fill.cpp)
-    target_link_libraries(hull_fill PRIVATE resting_rigid_bodies::inverse taywee::args)
-    target_compile_definitions(hull_fill PRIVATE RESTING_RIGID_BODIES_USE_POLYSCOPE)
-    set_property(TARGET hull_fill PROPERTY CXX_STANDARD 20)
-  else()
-    message(STATUS "Inverse design enabled but Polyscope is OFF; skipping convex_dice and hull_fill executables")
+    # Not required, but harmless if you also add the macro here:
+    # target_compile_definitions(convex_dice PRIVATE RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
   endif()
 endif()
