@@ -100,8 +100,9 @@ void initialize_state(std::string input_name){
     boundary_builder->build_boundary_normals();
 
     // visuals
+	std::cout << "initializing visuals" << std::endl;
     init_visuals(mesh, geometry, forwardSolver, boundary_builder);
-    update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
+    // update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
 }
 
 
@@ -191,7 +192,6 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
                           dfdV, dfdG, dice_e, 
                           use_autodiff_for_dice_grad, frozen_G,
                           policy_general, normal_prob_pairs, fair_sides_count);
-    // update_visuals_with_G(&tmp_solver, &tmp_bnd_builder);
     std::cout << ANSI_FG_YELLOW << "i: "<< iter << "\tDE: " << dice_e << ANSI_RESET << "\n";
 
     // diffused grads
@@ -202,13 +202,14 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
       dfdV = diffused_dfdV;
     }
     // DEBUG/visuals
+	std::cout << ANSI_FG_MAGENTA << "visualizing current probs and goals" << ANSI_RESET << "\n";
     visualize_current_probs_and_goals(tmp_solver, 
       sphere_mesh, sphere_geometry,
       policy_general, normal_prob_pairs, 
       dfdV, diffused_dfdV, 
       save_sequence_scr, save_sequence_files,
       visualize_steps, false, iter);
-    // printf("line search\n");
+    printf("line search\n");
     double opt_step_size = 1.;
     if (dice_search_decay != 1.){
       opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
@@ -297,6 +298,8 @@ void myCallback() {
     std::string output_name = input_name + "_d" + std::to_string(dice_params.fair_sides_count) + "_" + policy_general;
     writeSurfaceMesh(*optimized_mesh, *optimized_geometry, "../meshes/hulls/" + output_name + ".obj");
     
+	// save initial mesh as well
+	writeSurfaceMesh(*mesh, *geometry, "../meshes/hulls/" + input_name + ".obj");
     // Update struct with current G and save parameters
     save_convex_dice_params(dice_params, "../meshes/hulls/params_" + output_name + ".json");
 

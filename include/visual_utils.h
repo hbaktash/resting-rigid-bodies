@@ -129,7 +129,8 @@ void visualize_face_solid_angle_vs_ms_complex(size_t f_ind, BoundaryBuilder* bou
 
 
 void init_visuals(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
-				  Forward3DSolver* forwardSolver, BoundaryBuilder* boundary_builder);
+				  Forward3DSolver* forwardSolver, BoundaryBuilder* boundary_builder,
+        bool register_meshes = true);
 
 
 void draw_stable_patches_on_gauss_map(BoundaryBuilder* boundary_builder,

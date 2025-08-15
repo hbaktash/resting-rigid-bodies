@@ -467,7 +467,6 @@ void update_visuals(Forward3DSolver* tmp_solver, BoundaryBuilder* bnd_builder,
                     ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry) {
   draw_gauss_map(tmp_solver, sphere_mesh, sphere_geometry);
   draw_G(tmp_solver->get_G());
-  plot_height_function(tmp_solver, sphere_mesh, sphere_geometry, false);
   draw_stable_patches_on_gauss_map(false, bnd_builder, false);
 }
 
@@ -622,18 +621,21 @@ void visualize_face_solid_angle_vs_ms_complex(size_t f_ind, BoundaryBuilder* bou
 }
 
 
-void init_visuals(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
-				  Forward3DSolver* forwardSolver, BoundaryBuilder* boundary_builder){
-	auto psInputMesh = polyscope::registerSurfaceMesh(
-		"init input mesh",
-		geometry->inputVertexPositions, mesh->getFaceVertexList())->setTransparency(1.0);
-	auto psHullMesh = polyscope::registerSurfaceMesh(
-		"init hull mesh", forwardSolver->hullGeometry->inputVertexPositions, 
-		forwardSolver->hullMesh->getFaceVertexList())->setEdgeWidth(0.7)->setTransparency(0.9);
+void init_visuals(
+	ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry,
+	Forward3DSolver* forwardSolver, BoundaryBuilder* boundary_builder,
+    bool register_meshes){
+	if (register_meshes) {
+		auto psInputMesh = polyscope::registerSurfaceMesh(
+			"init input mesh",
+			geometry->inputVertexPositions, mesh->getFaceVertexList())->setTransparency(1.0);
+		auto psHullMesh = polyscope::registerSurfaceMesh(
+			"init hull mesh", forwardSolver->hullGeometry->inputVertexPositions, 
+			forwardSolver->hullMesh->getFaceVertexList())->setEdgeWidth(0.7)->setTransparency(0.9);
+  	}
 	draw_G(forwardSolver->get_G());
 	visualize_gauss_map(forwardSolver);
-  draw_stable_patches_on_gauss_map(boundary_builder, false);
-
+  	draw_stable_patches_on_gauss_map(boundary_builder, false);
 }
 
 
@@ -765,7 +767,7 @@ void visualize_current_probs_and_goals(
   
   BoundaryBuilder tmp_bnd_builder(&tmp_solver);
   tmp_bnd_builder.build_boundary_normals();
-  update_visuals(&tmp_solver, &tmp_bnd_builder, sphere_mesh, sphere_geometry);
+  init_visuals(tmp_solver.hullMesh, tmp_solver.hullGeometry, &tmp_solver, &tmp_bnd_builder, false);
   FaceData<double> current_accum_probs(*tmp_solver.hullMesh, 0.);
   for (Face f: tmp_solver.hullMesh->faces()){
     current_accum_probs[f] = tmp_bnd_builder.face_region_area[tmp_solver.face_last_face[f]]/(4.*PI);
