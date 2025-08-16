@@ -11,6 +11,16 @@ void validate_path(fs::path &p){
     }
 }
 
+void ensure_directory_exists(const std::string& filepath) {
+    std::filesystem::path path(filepath);
+    std::filesystem::path dir = path.parent_path();
+    
+    if (!dir.empty() && !std::filesystem::exists(dir)) {
+        std::filesystem::create_directories(dir);
+        std::cout << "Created directory: " << dir << std::endl;
+    }
+}
+
 nlohmann::json trans_mat_to_json(const Eigen::Matrix4d& M) {
     nlohmann::json mat = nlohmann::json::array();
     for (int r = 0; r < 4; ++r) {
@@ -182,4 +192,88 @@ bool load_convex_dice_params(ConvexDiceParams& params, const std::string& filena
         std::cerr << "Error loading parameters: " << e.what() << std::endl;
         return false;
     }
+}
+
+bool save_vector3_double_pairs(const std::vector<std::pair<Vector3, double>>& pairs, const std::string& filename, const std::string& policy) {
+    fs::path out_path(filename);
+    validate_path(out_path);
+    
+    nlohmann::json j;
+    j["type"] = "normal_probability_assignment";
+    j["count"] = pairs.size();
+    j["policy"] = policy.empty() ? "unknown" : policy;
+    j["pairs"] = nlohmann::json::array();
+    
+    for (const auto& pair : pairs) {
+        nlohmann::json pair_json;
+        pair_json["normal"] = {pair.first.x, pair.first.y, pair.first.z};
+        pair_json["probability"] = pair.second;
+        j["pairs"].push_back(pair_json);
+    }
+    
+    std::ofstream ofs(filename);
+    if (!ofs) {
+        std::cerr << "Error: Could not open file for writing: " << filename << "\n";
+        return false;
+    }
+    
+    ofs << j.dump(2) << "\n";
+    std::cout << "Vector3-double pairs saved to: " << filename << "\n";
+    return true;
+}
+
+std::vector<std::pair<Vector3, double>> load_vector3_double_pairs(const std::string& filename, std::string* policy_out) {
+    std::vector<std::pair<Vector3, double>> pairs;
+    
+    try {
+        std::ifstream ifs(filename);
+        if (!ifs.is_open()) {
+            std::cerr << "Error: Cannot open file: " << filename << std::endl;
+            return pairs; // return empty vector
+        }
+        
+        nlohmann::json j;
+        ifs >> j;
+        ifs.close();
+        
+        // Read policy if requested and available
+        if (policy_out && j.contains("policy")) {
+            *policy_out = j["policy"];
+        }
+        
+        if (!j.contains("pairs") || !j["pairs"].is_array()) {
+            std::cerr << "Error: Invalid JSON format - missing 'pairs' array in: " << filename << std::endl;
+            return pairs;
+        }
+        
+        for (const auto& pair_json : j["pairs"]) {
+            if (!pair_json.contains("normal") || !pair_json.contains("probability")) {
+                std::cerr << "Warning: Skipping invalid pair entry in: " << filename << std::endl;
+                continue;
+            }
+            
+            auto normal_array = pair_json["normal"];
+            if (!normal_array.is_array() || normal_array.size() != 3) {
+                std::cerr << "Warning: Invalid normal vector format, skipping entry in: " << filename << std::endl;
+                continue;
+            }
+            
+            Vector3 normal{normal_array[0], normal_array[1], normal_array[2]};
+            double probability = pair_json["probability"];
+            
+            pairs.emplace_back(normal, probability);
+        }
+        
+        std::cout << "Loaded " << pairs.size() << " Vector3-double pairs from: " << filename;
+        if (policy_out && j.contains("policy")) {
+            std::cout << " (policy: " << *policy_out << ")";
+        }
+        std::cout << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error loading Vector3-double pairs: " << e.what() << std::endl;
+        pairs.clear(); // return empty vector on error
+    }
+    
+    return pairs;
 }

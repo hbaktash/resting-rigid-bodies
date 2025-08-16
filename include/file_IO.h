@@ -16,6 +16,8 @@ using Vector3 = geometrycentral::Vector3;
 
 void validate_path(fs::path &p);
 
+void ensure_directory_exists(const std::string& filepath);
+
 nlohmann::json trans_mat_to_json(const Eigen::Matrix4d& M);
 
 bool save_trans_mats_and_orientations_to_file(
@@ -57,3 +59,7 @@ struct ConvexDiceParams {
 
 bool save_convex_dice_params(const ConvexDiceParams& params, const std::string& filename);
 bool load_convex_dice_params(ConvexDiceParams& params, const std::string& filename);
+
+// Vector3-double pairs I/O (for normal-probability assignments)
+bool save_vector3_double_pairs(const std::vector<std::pair<Vector3, double>>& pairs, const std::string& filename, const std::string& policy = "");
+std::vector<std::pair<Vector3, double>> load_vector3_double_pairs(const std::string& filename, std::string* policy_out = nullptr);
