@@ -745,7 +745,7 @@ void visualize_current_probs_and_goals(
       double current_cluster_prob = 0.;
       std::vector<Face> faces = std::get<0>(cluster);
       double cluster_prob = std::get<1>(cluster);
-      assignees.push_back(std::get<2>(cluster) + Vector3{0, 2, 0});
+      assignees.push_back(std::get<2>(cluster).normalize() * VisualUtils::gm_radi + VisualUtils::center); // shift to GM
       for (Face f: faces){
         if (tmp_solver.face_last_face[f] == f){
           current_cluster_prob += tmp_solver.hullGeometry->faceArea(f)/(4.*PI);

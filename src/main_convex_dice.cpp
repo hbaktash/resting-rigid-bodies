@@ -47,24 +47,24 @@ VertexPositionGeometry* sphere_geometry;
 // Replace all global parameter variables with a single struct
 ConvexDiceParams dice_params;
 
-int fair_sides_count = 6, // for optimization
-    DE_step_count = 40;
-bool do_sobolev_dice_grads = false,
-     frozen_G = false,
-     use_autodiff_for_dice_grad = true,
-     visualize_steps = true,
-     adaptive_reg = false;
-float sobolev_lambda = 2.,
-      sobolev_lambda_decay = 0.8,
-      dice_energy_step = 0.01,
-      dice_search_decay = 0.98,
-      bary_reg = 0.1,
-      coplanar_reg = 0.0,
-      cluster_distance_reg = 0.0,
-      unstable_attraction_thresh = 0.1;
-int sobolev_p = 2;
-// optimization stuff
-bool update_with_max_prob_face = true;
+// int fair_sides_count = 6, // for optimization
+//     DE_step_count = 40;
+// bool do_sobolev_dice_grads = false,
+//      frozen_G = false,
+//      use_autodiff_for_dice_grad = true,
+//      adaptive_reg = false;
+bool	visualize_steps = true;
+// float sobolev_lambda = 2.,
+//       sobolev_lambda_decay = 0.8,
+//       dice_energy_step = 0.01,
+//       dice_search_decay = 0.98,
+//       bary_reg = 0.1,
+//       coplanar_reg = 0.0,
+//       cluster_distance_reg = 0.0,
+//       unstable_attraction_thresh = 0.1;
+// int sobolev_p = 2;
+// // optimization stuff
+// bool update_with_max_prob_face = true;
 
 
 // probability assignment & policy
@@ -72,7 +72,7 @@ bool use_loaded_normal_probs = false;
 std::string loaded_normal_prob_policy;
 std::vector<std::pair<Vector3, double>> loaded_normal_prob_pairs;
 std::vector<std::pair<Vector3, double>> normal_prob_pairs;
-
+std::vector<std::pair<Vector3, double>> initial_normal_prob_pairs;
 
 // log stuff
 bool save_sequence_scr = false,
@@ -114,7 +114,7 @@ void initialize_state(std::string input_name){
 
 void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attraction_thresh,
                            Eigen::MatrixX3d &df_dv, Eigen::Vector3d &df_dG, double &dice_energy,
-                           bool use_autodiff, bool frozen_G, 
+                           bool frozen_G, 
                            std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_pairs, 
                            int fair_sides){
   // Eigen::MatrixX3d hull_positions = vertex_data_to_matrix(fwd_solver.hullGeometry->inputVertexPositions); 
@@ -153,7 +153,11 @@ void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_ve
 }
 
 
-void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, bool frozen_G, size_t step_count){
+void dice_energy_opt(
+	std::string policy, double bary_reg, double coplanar_reg, 
+	double cluster_distance_reg, double unstable_attraction_thresh,
+	bool frozen_G, size_t step_count
+){
 	polyscope::getSurfaceMesh("init hull mesh")->setTransparency(0.5)->setEnabled(false);
 
 	Forward3DSolver tmp_solver(mesh, geometry, G, true);
@@ -184,14 +188,15 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
 		// default behavior: generate assignment from built-in helpers
 		normal_prob_pairs = normal_prob_assignment(policy_shape);
 		if (policy_general == "fairCluster"){
-			normal_prob_pairs = normal_prob_assignment_fair(&tmp_solver, fair_sides_count);
+			normal_prob_pairs = normal_prob_assignment_fair(&tmp_solver, dice_params.fair_sides_count);
 			policy_general = "manualCluster"; // switch after initial assignment
 		}
 	}
+	initial_normal_prob_pairs = normal_prob_pairs; // for saving to file later
 	// BoundaryBuilder tmp_bnd_builder(&tmp_solver);
 	
-	double current_sobolev_lambda = sobolev_lambda;
-	double init_LS_step = dice_energy_step;
+	double current_sobolev_lambda = dice_params.sobolev_lambda;
+	double init_LS_step = dice_params.dice_energy_step;
 	double LS_step_tol = 1e-9;
 	Eigen::MatrixX3d dfdV, diffused_dfdV;
 	for (size_t iter = 0; iter < step_count; iter++){
@@ -203,15 +208,15 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
 		FaceData<double> goal_probs;
 		get_dice_energy_grads(hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
 							dfdV, dfdG, dice_e, 
-							use_autodiff_for_dice_grad, frozen_G,
-							policy_general, normal_prob_pairs, fair_sides_count);
+							frozen_G,
+							policy_general, normal_prob_pairs, dice_params.fair_sides_count);
 		std::cout << ANSI_FG_YELLOW << "i: "<< iter << "\tDE: " << dice_e << ANSI_RESET << "\n";
 
 		// diffused grads
-		if (do_sobolev_dice_grads){
-			current_sobolev_lambda *= sobolev_lambda_decay;
+		if (dice_params.do_sobolev_dice_grads){
+			current_sobolev_lambda *= dice_params.sobolev_lambda_decay;
 			diffused_dfdV = sobolev_diffuse_gradients(dfdV, *tmp_solver.hullMesh, *tmp_solver.hullGeometry , 
-														current_sobolev_lambda, sobolev_p);      
+														current_sobolev_lambda, dice_params.sobolev_p);      
 			dfdV = diffused_dfdV;
 		}
 		// DEBUG/visuals
@@ -224,28 +229,28 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
 		visualize_steps, false, iter);
 		printf("line search\n");
 		double opt_step_size = 1.;
-		if (dice_search_decay != 1.){
-		opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
-														policy_general, normal_prob_pairs, fair_sides_count, 
-														init_LS_step, dice_search_decay, frozen_G, 1000, LS_step_tol);
-		init_LS_step = opt_step_size < dice_energy_step/100. ? opt_step_size * 20 : opt_step_size; // TODO : adaptive step size
+		if (dice_params.dice_search_decay != 1.){
+			opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
+															policy_general, normal_prob_pairs, dice_params.fair_sides_count, 
+															init_LS_step, dice_params.dice_search_decay, frozen_G, 1000, LS_step_tol);
+			init_LS_step = opt_step_size < dice_params.dice_energy_step/100. ? opt_step_size * 20 : opt_step_size; // TODO : adaptive step size
 		}
 
 		std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
 		std::cout << ANSI_FG_MAGENTA << "  sobolev lambda: " << current_sobolev_lambda << ANSI_RESET << "\n";
 		if (opt_step_size < LS_step_tol){
-		if (!adaptive_reg){
+		if (!dice_params.adaptive_reg){
 			std::cout << ANSI_FG_RED << "  line search step size too small; breaking" << ANSI_RESET << "\n";
 			break;
 		}
 		else{
 			std::cout << ANSI_FG_RED << "  line search step size too small; modifying reg coeffs" << ANSI_RESET << "\n";
 			std::cout << ANSI_FG_RED << "  bary reg: " << bary_reg << " coplanar reg: " << coplanar_reg << " sobolev lambda: " << current_sobolev_lambda << ANSI_RESET << "\n";
-			init_LS_step = dice_energy_step; // reset if coeffs are changing
+			init_LS_step = dice_params.dice_energy_step; // reset if coeffs are changing
 			// bary_reg /= dice_search_decay;
 			// coplanar_reg /= dice_search_decay;
 
-			current_sobolev_lambda *= sobolev_lambda_decay;
+			current_sobolev_lambda *= dice_params.sobolev_lambda_decay;
 			if (bary_reg < 1e-3 || coplanar_reg < 1e-3 || bary_reg > 1e2 || coplanar_reg > 1e2 || current_sobolev_lambda < 0.1){
 			std::cout << ANSI_FG_RED << "  regularizers too small/big; breaking" << ANSI_RESET << "\n";
 			break;
@@ -264,7 +269,7 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
 		tmp_solver.initialize_pre_computes();
 		if (policy_general != "fair"){ // dynamic assignment; changes at each iteration
 			std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals = manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_pairs);
-			normal_prob_pairs = update_normal_prob_assignment(&tmp_solver, clustered_face_normals, update_with_max_prob_face);
+			normal_prob_pairs = update_normal_prob_assignment(&tmp_solver, clustered_face_normals, dice_params.update_with_max_prob_face);
 		}
 	}
 
@@ -284,10 +289,12 @@ void dice_energy_opt(std::string policy, double bary_reg, double coplanar_reg, b
 // Update myCallback() to use the struct
 void myCallback() {
 	ImGui::SliderInt("ITERS",           &dice_params.DE_step_count, 1, 200);
-	ImGui::SliderInt("fair sides",      &dice_params.fair_sides_count, 2, 20);
-	ImGui::SliderFloat("DE step size",  &dice_params.dice_energy_step, 0, 0.05);
-	ImGui::SliderFloat("DE step decay", &dice_params.dice_search_decay, 0.1, 1.);
-
+	if (ImGui::SliderInt("fair sides",      &dice_params.fair_sides_count, 2, 20));
+		// fair_sides_count = dice_params.fair_sides_count;
+	if (ImGui::SliderFloat("DE step size",  &dice_params.dice_energy_step, 0, 0.05));
+		// dice_energy_step = dice_params.dice_energy_step;
+	if(ImGui::SliderFloat("DE line seach decay", &dice_params.dice_search_decay, 0.1, 1.));
+		// dice_search_decay = dice_params.dice_search_decay;
 	ImGui::SliderFloat("barycenter distance regularizer", &dice_params.bary_reg, 0., 100.);
 	ImGui::SliderFloat("coplanar regularizer", &dice_params.coplanar_reg, 0., 100.);
 	ImGui::SliderFloat("cluster distance regularizer", &dice_params.cluster_distance_reg, 0., 100.);
@@ -305,6 +312,7 @@ void myCallback() {
 
 	if (ImGui::Button("dice energy opt")){
 		dice_energy_opt(policy, dice_params.bary_reg, dice_params.coplanar_reg, 
+			dice_params.cluster_distance_reg, dice_params.unstable_attraction_thresh,
 						dice_params.frozen_G, dice_params.DE_step_count);
 	}
 	if (ImGui::Button("save optimized hull")){
@@ -320,27 +328,33 @@ void myCallback() {
 		std::string base_name = out_path.stem().string(); // filename without extension
 		std::string dir_path = out_path.parent_path().string();
 		
-		std::string params_file = dir_path + "/params_" + base_name + ".json";
+		std::string params_file = dir_path + "/params.json";
 		std::string G_file_path = dir_path + "/G_" + base_name + ".txt";
-		std::string initial_mesh_file = dir_path + "/initial_" + base_name + ".obj";
 		
-		// Save initial mesh
-		writeSurfaceMesh(*mesh, *geometry, initial_mesh_file);
-		std::cout << "Initial mesh saved to: " << initial_mesh_file << std::endl;
+		// // Save initial mesh
+		// std::string initial_mesh_file = dir_path + "/initial_mesh.obj";
+		// writeSurfaceMesh(*mesh, *geometry, initial_mesh_file);
+		// std::cout << "Initial mesh saved to: " << initial_mesh_file << std::endl;
 		
 		// Save parameters
 		save_convex_dice_params(dice_params, params_file);
 		
-		// Save G to separate text file (for backward compatibility)
-		std::ofstream G_file(G_file_path);
-		G_file << G.x << " " << G.y << " " << G.z << "\n";
-		G_file.close();
-		std::cout << "Center of mass saved to: " << G_file_path << std::endl;
+		if (dice_params.frozen_G) { // otherwise uniform mass is assumed
+			// Save G to separate text file (for backward compatibility)
+			std::ofstream G_file(G_file_path);
+			G_file << G.x << " " << G.y << " " << G.z << "\n";
+			G_file.close();
+			std::cout << "Center of mass saved to: " << G_file_path << std::endl;
+		}
 
 		// save normal-probability pairs
-		std::string np_file_path = dir_path + "/normal_probs_" + base_name + ".json";
+		std::string np_file_path = dir_path + "/final_normal_probs.json";
 		save_vector3_double_pairs(normal_prob_pairs, np_file_path, policy_general);
 		std::cout << "Normal-probability pairs saved to: " << np_file_path << "\n";
+		// save initial normal-probability pairs
+		std::string initial_np_file_path = dir_path + "/initial_normal_probs.json";
+		save_vector3_double_pairs(initial_normal_prob_pairs, initial_np_file_path, policy_general);
+		std::cout << "Initial normal-probability pairs saved to: " << initial_np_file_path << "\n";
 	}
 }
 
