@@ -9,10 +9,10 @@
 #include "imgui.h"
 
 #include "boundary_tools.h"
+#include "inverse_design/dice_energy.h"
 #include "mesh_factory.h"
 // #include "geometry_utils.h" //; in fwd solver 
 #include "visual_utils.h"
-#include <stan/math.hpp>
 #include <nlohmann/json.hpp>
 
 #include "file_IO.h"
@@ -47,7 +47,8 @@ VertexPositionGeometry* sphere_geometry;
 // Replace all global parameter variables with a single struct
 ConvexDiceParams dice_params;
 
-bool visualize_steps = true;
+// DEBUG; will show every step in polyscope, go to next step by exiting polyscope window
+bool visualize_steps = false; 
 
 
 // probability assignment & policy
@@ -57,7 +58,7 @@ std::vector<std::pair<Vector3, double>> loaded_normal_prob_pairs;
 std::vector<std::pair<Vector3, double>> normal_prob_pairs;
 std::vector<std::pair<Vector3, double>> initial_normal_prob_pairs;
 
-// log stuff
+// log dice energy optimization steps
 bool save_sequence_scr = false,
      save_sequence_files = false;
 	 
@@ -92,7 +93,6 @@ void load_mesh(const std::string& path,
 }
 
 
-
 void initialize_state(std::string input_path){
 	load_mesh(input_path, mesh, geometry);
     bool triangulate = false;
@@ -110,47 +110,6 @@ void initialize_state(std::string input_path){
     // visuals
     init_visuals(mesh, geometry, forwardSolver, boundary_builder);
     // update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
-}
-
-
-void get_dice_energy_grads(Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attraction_thresh,
-                           Eigen::MatrixX3d &df_dv, Eigen::Vector3d &df_dG, double &dice_energy,
-                           bool frozen_G, 
-                           std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_pairs, 
-                           int fair_sides){
-  // Eigen::MatrixX3d hull_positions = vertex_data_to_matrix(fwd_solver.hullGeometry->inputVertexPositions); 
-  Forward3DSolver tmp_solver(hull_positions, G_vec, true); // indices shouldnt be shuffled here
-  auto dice_energy_lambda = [&] <typename Scalar> (const Eigen::Matrix<Scalar, Eigen::Dynamic, 1> &hull_poses_G_append_vec) -> Scalar {
-    // decompose flat vector to positions and center of mass; G is the last 3 elements
-    Eigen::Vector3<Scalar> G_eigen = hull_poses_G_append_vec.tail(3);
-    size_t flat_n = hull_poses_G_append_vec.rows();
-    Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, 3> > hull_poses(hull_poses_G_append_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-    return BoundaryBuilder::dice_energy<Scalar>(hull_poses, G_eigen, tmp_solver, 
-                                                bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
-                                                policy_general, normal_prob_pairs, fair_sides, true);
-  };
-  Eigen::VectorXd hull_poses_vec = hull_positions.reshaped();
-  Eigen::VectorXd hull_poses_and_G_vec(hull_poses_vec.size() + 3);
-  hull_poses_and_G_vec << hull_poses_vec, G_vec;
-  
-  Eigen::VectorXd dfdU_vec;
-  double dice_e;
-  stan::math::gradient(dice_energy_lambda, hull_poses_and_G_vec, dice_e, dfdU_vec);
-  dice_energy = dice_e;
-  size_t flat_n = dfdU_vec.rows();
-  df_dG = dfdU_vec.tail(3);
-  Eigen::Map<Eigen::MatrixXd> dfdV(dfdU_vec.head(flat_n-3).data(), flat_n/3 - 1, 3);
-
-  // populate df_dv by mapping to original input indices
-  if (frozen_G){
-    df_dv = dfdV;
-  }
-  else {
-    std::vector<Eigen::Matrix3d> dG_dv = get_COM_grads_for_convex_uniform_shape(hull_positions);
-    for (size_t i = 0; i < hull_positions.rows(); i++){
-      df_dv.row(i) = dfdV.row(i) + (dG_dv[i].transpose() * df_dG).transpose();
-    }
-  }  
 }
 
 
@@ -194,8 +153,8 @@ void dice_energy_opt(
 	// BoundaryBuilder tmp_bnd_builder(&tmp_solver);
 	
 	double current_sobolev_lambda = dice_params.sobolev_lambda;
-	double init_LS_step = dice_params.dice_energy_step;
-	double LS_step_tol = 1e-9;
+	double default_LS_step = dice_params.dice_energy_step;
+	double step_tol = 1e-9;
 	Eigen::MatrixX3d dfdV, diffused_dfdV;
 	for (size_t iter = 0; iter < step_count; iter++){
 		double dice_e;
@@ -220,47 +179,32 @@ void dice_energy_opt(
 		// DEBUG/visuals
 		std::cout << ANSI_FG_MAGENTA << "visualizing current probs and goals" << ANSI_RESET << "\n";
 		visualize_current_probs_and_goals(tmp_solver, 
-		sphere_mesh, sphere_geometry,
-		policy_general, normal_prob_pairs, 
-		dfdV, diffused_dfdV, 
-		save_sequence_scr, save_sequence_files,
-		visualize_steps, false, iter);
+			sphere_mesh, sphere_geometry,
+			policy_general, normal_prob_pairs, 
+			dfdV, diffused_dfdV, 
+			save_sequence_scr, save_sequence_files,
+			visualize_steps, false, iter
+		);
 		printf("line search\n");
 		double opt_step_size = 1.;
-		if (dice_params.dice_search_decay != 1.){
+		if (dice_params.dice_search_decay < 1.){
 			opt_step_size = hull_update_line_search(dfdV, hull_positions, G_vec, bary_reg, coplanar_reg, cluster_distance_reg, unstable_attraction_thresh,
 															policy_general, normal_prob_pairs, dice_params.fair_sides_count, 
-															init_LS_step, dice_params.dice_search_decay, frozen_G, 1000, LS_step_tol);
-			init_LS_step = opt_step_size < dice_params.dice_energy_step/100. ? opt_step_size * 20 : opt_step_size; // TODO : adaptive step size
+															default_LS_step, dice_params.dice_search_decay, frozen_G, 1000, step_tol);
 		}
 
 		std::cout << ANSI_FG_RED << "  line search step size: " << opt_step_size << ANSI_RESET << "\n";
 		std::cout << ANSI_FG_MAGENTA << "  sobolev lambda: " << current_sobolev_lambda << ANSI_RESET << "\n";
-		if (opt_step_size < LS_step_tol){
-		if (!dice_params.adaptive_reg){
+		if (opt_step_size < step_tol){
 			std::cout << ANSI_FG_RED << "  line search step size too small; breaking" << ANSI_RESET << "\n";
 			break;
-		}
-		else{
-			std::cout << ANSI_FG_RED << "  line search step size too small; modifying reg coeffs" << ANSI_RESET << "\n";
-			std::cout << ANSI_FG_RED << "  bary reg: " << bary_reg << " coplanar reg: " << coplanar_reg << " sobolev lambda: " << current_sobolev_lambda << ANSI_RESET << "\n";
-			init_LS_step = dice_params.dice_energy_step; // reset if coeffs are changing
-			// bary_reg /= dice_search_decay;
-			// coplanar_reg /= dice_search_decay;
-
-			current_sobolev_lambda *= dice_params.sobolev_lambda_decay;
-			if (bary_reg < 1e-3 || coplanar_reg < 1e-3 || bary_reg > 1e2 || coplanar_reg > 1e2 || current_sobolev_lambda < 0.1){
-			std::cout << ANSI_FG_RED << "  regularizers too small/big; breaking" << ANSI_RESET << "\n";
-			break;
-			}
-		}
 		}
 		hull_positions = hull_positions - opt_step_size * dfdV;
 
 		tmp_solver = Forward3DSolver(hull_positions, G_vec, false); // could have been convaved
 		if (!frozen_G){
-		tmp_solver.set_uniform_G();
-		G_vec = vec32vec(tmp_solver.get_G());
+			tmp_solver.set_uniform_G();
+			G_vec = vec32vec(tmp_solver.get_G());
 		}
 		// IMPORTANT step; tmo solver's conv hull will shuffle the order of vertices
 		hull_positions = vertex_data_to_matrix(tmp_solver.hullGeometry->inputVertexPositions);

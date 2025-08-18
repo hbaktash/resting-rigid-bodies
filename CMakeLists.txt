@@ -63,15 +63,15 @@ target_link_libraries(resting_rigid_bodies
 
 
 # Link optional deps
-target_compile_definitions(resting_rigid_bodies PUBLIC RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
 if(RESTING_RIGID_BODIES_USE_POLYSCOPE)
-  target_link_libraries(resting_rigid_bodies PUBLIC polyscope::polyscope)
-  target_compile_definitions(resting_rigid_bodies PUBLIC RESTING_RIGID_BODIES_USE_POLYSCOPE)
+target_link_libraries(resting_rigid_bodies PUBLIC polyscope::polyscope)
+target_compile_definitions(resting_rigid_bodies PUBLIC RESTING_RIGID_BODIES_USE_POLYSCOPE)
 endif()
 if(RESTING_RIGID_BODIES_USE_BULLET)
-  target_link_libraries(resting_rigid_bodies PUBLIC bullet3::bullet3)
-  target_compile_definitions(resting_rigid_bodies PUBLIC RESTING_RIGID_BODIES_USE_BULLET)
+target_link_libraries(resting_rigid_bodies PUBLIC bullet3::bullet3)
+target_compile_definitions(resting_rigid_bodies PUBLIC RESTING_RIGID_BODIES_USE_BULLET)
 endif()
+target_compile_definitions(resting_rigid_bodies PUBLIC RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
 
 # Existing drop/prob tool (headless-friendly)
 add_executable(drop_probs src/main_drop_prob.cpp)
@@ -93,6 +93,7 @@ set_property(TARGET drop_probs PROPERTY CXX_STANDARD 20)
 if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
   add_library(resting_rigid_bodies_inverse
     src/inverse_design/prob_assignment.cpp
+    src/inverse_design/dice_energy.cpp
   )
   add_library(resting_rigid_bodies::inverse ALIAS resting_rigid_bodies_inverse)
 

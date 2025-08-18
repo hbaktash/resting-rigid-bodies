@@ -15,6 +15,10 @@
 #include "mesh_factory.h"
 #include "geometrycentral/surface/meshio.h"
 
+#ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
+  #include "inverse_design/prob_assignment.h"
+#endif
+
 
 using namespace geometrycentral;
 using namespace geometrycentral::surface;
@@ -145,6 +149,8 @@ void visualize_quasi_static_drop_sequence(std::vector<Eigen::Matrix4d> transform
 
 void draw_ground_plane_mesh(Vector3 down_vec, double height, double half_width = 2);
 
+#ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
+
 void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, 
   ManifoldSurfaceMesh* sphere_mesh, VertexPositionGeometry* sphere_geometry,
   std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
@@ -152,3 +158,5 @@ void visualize_current_probs_and_goals(Forward3DSolver tmp_solver,
   bool save_sequence_scr, bool save_sequence_objs,
   bool show, bool print_probs = false, size_t frame_cnt = 0
 );
+
+#endif

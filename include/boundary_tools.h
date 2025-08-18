@@ -5,9 +5,9 @@
 #include "set"
 // if in inverse design mode
 
-#ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
-#include "inverse_design/prob_assignment.h"
-#endif
+// #ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
+// #include "inverse_design/prob_assignment.h"
+// #endif
 
 // // polyscope for DEBUG
 // #include "polyscope/polyscope.h"
@@ -90,74 +90,74 @@ class BoundaryBuilder {
         std::pair<std::vector<std::pair<size_t, size_t>>,std::vector<Vector3>> 
                 MS_complex_edges_of_face(Face f);
         
-        #ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
-        // Template stuff for inverse design
-        template <typename Scalar>
-        static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                  Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
-                                  std::string policy, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
-                                  size_t side_count, bool verbose);
-        template <typename Scalar>
-        static Eigen::Vector3<Scalar> point_to_segment_normal(Eigen::Vector3<Scalar> P, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B);
-        template <typename Scalar>
-        static Eigen::Vector3<Scalar> intersect_arcs(Eigen::Vector3<Scalar> v_normal, Eigen::Vector3<Scalar> R2, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B);
-        template <typename Scalar>
-        static Scalar triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B, Eigen::Vector3<Scalar> C);
+        // #ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
+        // // Template stuff for inverse design
+        // template <typename Scalar>
+        // static Scalar dice_energy(Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
+        //                           Forward3DSolver &tmp_solver, double bary_reg, double co_planar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
+        //                           std::string policy, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
+        //                           size_t side_count, bool verbose);
+        // template <typename Scalar>
+        // static Eigen::Vector3<Scalar> point_to_segment_normal(Eigen::Vector3<Scalar> P, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B);
+        // template <typename Scalar>
+        // static Eigen::Vector3<Scalar> intersect_arcs(Eigen::Vector3<Scalar> v_normal, Eigen::Vector3<Scalar> R2, Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B);
+        // template <typename Scalar>
+        // static Scalar triangle_patch_signed_area_on_sphere(Eigen::Vector3<Scalar> A, Eigen::Vector3<Scalar> B, Eigen::Vector3<Scalar> C);
 
-        // Regularizers
-        //  --- for ManualCluster policy --- 
-        template <typename Scalar>
-        static Scalar 
-        single_cluster_coplanar_e(std::vector<Face> faces, 
-                                    FaceData<Eigen::Vector3<Scalar>> face_normals,
-                                    FaceData<Face> face_last_face, double unstable_attaction_thresh, 
-                                    bool verbose);
+        // // Regularizers
+        // //  --- for ManualCluster policy --- 
+        // template <typename Scalar>
+        // static Scalar 
+        // single_cluster_coplanar_e(std::vector<Face> faces, 
+        //                             FaceData<Eigen::Vector3<Scalar>> face_normals,
+        //                             FaceData<Face> face_last_face, double unstable_attaction_thresh, 
+        //                             bool verbose);
         
-        template <typename Scalar>
-        static Scalar 
-        single_cluster_bary_e(std::vector<Face> faces, FaceData<Face> face_last_face,
-                              Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                              FaceData<Eigen::Vector3<Scalar>> face_normals,
-                              FaceData<std::set<Vertex>> face_region_boundary_vertices);
-        template <typename Scalar>
-        static std::pair<Eigen::Vector3<Scalar>, Eigen::Vector3<Scalar>> 
-        region_and_stables_barycenters(std::vector<Face> faces, FaceData<Face> face_last_face, 
-                                       Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                       FaceData<Eigen::Vector3<Scalar>> face_normals,
-                                       FaceData<std::set<Vertex>> face_region_boundary_vertices);
+        // template <typename Scalar>
+        // static Scalar 
+        // single_cluster_bary_e(std::vector<Face> faces, FaceData<Face> face_last_face,
+        //                       Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
+        //                       FaceData<Eigen::Vector3<Scalar>> face_normals,
+        //                       FaceData<std::set<Vertex>> face_region_boundary_vertices);
+        // template <typename Scalar>
+        // static std::pair<Eigen::Vector3<Scalar>, Eigen::Vector3<Scalar>> 
+        // region_and_stables_barycenters(std::vector<Face> faces, FaceData<Face> face_last_face, 
+        //                                Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
+        //                                FaceData<Eigen::Vector3<Scalar>> face_normals,
+        //                                FaceData<std::set<Vertex>> face_region_boundary_vertices);
 
-        // --- for Fair and Manual policies ---
-        template <typename Scalar>
-        static Scalar 
-        single_DAG_cluster_bary_e(Face stable_face, Eigen::Vector3<Scalar> stable_face_normal,
-                                Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
-                                FaceData<std::set<Vertex>> face_region_boundary_vertices);
-        #endif
+        // // --- for Fair and Manual policies ---
+        // template <typename Scalar>
+        // static Scalar 
+        // single_DAG_cluster_bary_e(Face stable_face, Eigen::Vector3<Scalar> stable_face_normal,
+        //                         Eigen::MatrixX3<Scalar> hull_positions, Eigen::Vector3<Scalar> G,
+        //                         FaceData<std::set<Vertex>> face_region_boundary_vertices);
+        // #endif
 };
-#ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
-double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
-                               double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
-                               std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
-                               size_t dice_side_count, double step_size, double decay, bool frozen_G, 
-                               size_t max_iter, double step_tol);
+// #ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
+// double hull_update_line_search(Eigen::MatrixX3d dfdv, Eigen::MatrixX3d hull_positions, Eigen::Vector3d G_vec, 
+//                                double bary_reg, double coplanar_reg, double cluster_distance_reg, double unstable_attaction_thresh,
+//                                std::string policy_general, std::vector<std::pair<Vector3, double>> normal_prob_assignment, 
+//                                size_t dice_side_count, double step_size, double decay, bool frozen_G, 
+//                                size_t max_iter, double step_tol);
 
 
-std::vector<std::pair<Vector3, double>> 
-normal_prob_assignment(std::string shape_name);
+// std::vector<std::pair<Vector3, double>> 
+// normal_prob_assignment(std::string shape_name);
 
-std::vector<std::pair<Vector3, double>> 
-normal_prob_assignment_fair(Forward3DSolver *tmp_solver, size_t dice_side_count);
+// std::vector<std::pair<Vector3, double>> 
+// normal_prob_assignment_fair(Forward3DSolver *tmp_solver, size_t dice_side_count);
 
-FaceData<double> 
-manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<std::pair<Vector3, double>> normal_prob_pairs);
+// FaceData<double> 
+// manual_stable_only_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<std::pair<Vector3, double>> normal_prob_pairs);
 
-std::vector<std::tuple<std::vector<Face>, double, Vector3>> 
-manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<std::pair<Vector3, double>> normal_prob_pairs);
+// std::vector<std::tuple<std::vector<Face>, double, Vector3>> 
+// manual_clustered_face_prob_assignment(Forward3DSolver *tmp_solver, std::vector<std::pair<Vector3, double>> normal_prob_pairs);
 
-std::vector<std::pair<Vector3, double>> 
-update_normal_prob_assignment(Forward3DSolver *tmp_solver,
-                              std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals,
-                              bool take_max_prob_face);
+// std::vector<std::pair<Vector3, double>> 
+// update_normal_prob_assignment(Forward3DSolver *tmp_solver,
+//                               std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_face_normals,
+//                               bool take_max_prob_face);
 
-#include "boundary_tools.impl.h"
-#endif
+// #include "boundary_tools.impl.h"
+// #endif

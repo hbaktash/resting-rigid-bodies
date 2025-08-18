@@ -717,6 +717,7 @@ void draw_ground_plane_mesh(Vector3 down_vec, double height, double half_width){
 
 
 
+#ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
 
 void visualize_current_probs_and_goals(
   Forward3DSolver tmp_solver, 
@@ -737,6 +738,8 @@ void visualize_current_probs_and_goals(
     curr_hull_psmesh->addFaceScalarQuantity("Goal probs", my_probs)->setColorMap("reds")->setEnabled(false);    
   }
   else if (policy_general == "manualCluster"){ // first word
+    BoundaryBuilder tmp_bnd_builder(&tmp_solver);
+    tmp_bnd_builder.build_boundary_normals();
     std::vector<std::tuple<std::vector<Face>, double, Vector3>> clustered_probs = manual_clustered_face_prob_assignment(&tmp_solver, normal_prob_assignment);
     FaceData<double> goal_cluster_probs(*tmp_solver.hullMesh, 0.),
     current_cluster_probs(*tmp_solver.hullMesh, 0.);
@@ -748,7 +751,7 @@ void visualize_current_probs_and_goals(
       assignees.push_back(std::get<2>(cluster).normalize() * VisualUtils::gm_radi + VisualUtils::center); // shift to GM
       for (Face f: faces){
         if (tmp_solver.face_last_face[f] == f){
-          current_cluster_prob += tmp_solver.hullGeometry->faceArea(f)/(4.*PI);
+          current_cluster_prob += tmp_bnd_builder.face_region_area[f]/(4.*PI);
           for (Face f2: tmp_solver.hullMesh->faces()){
             if (tmp_solver.face_last_face[f2] == f){
               goal_cluster_probs[f2] = cluster_prob;
@@ -820,3 +823,5 @@ void visualize_current_probs_and_goals(
     polyscope::show();
   }
 }
+
+#endif // RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
