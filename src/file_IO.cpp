@@ -277,3 +277,20 @@ std::vector<std::pair<Vector3, double>> load_vector3_double_pairs(const std::str
     
     return pairs;
 }
+
+void load_com_from_text_file(const std::string& filename, Vector3& com_out){
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open file: " + filename);
+    }
+
+    double x, y, z;
+    file >> x >> y >> z;
+    if (file.fail()) {
+        throw std::runtime_error("Error reading COM from file: " + filename);
+    }
+
+    com_out = Vector3{x, y, z};
+    file.close();
+    std::cout << "Loaded COM: (" << com_out.x << ", " << com_out.y << ", " << com_out.z << ") from " << filename << "\n";
+}

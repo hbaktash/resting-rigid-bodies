@@ -47,24 +47,7 @@ VertexPositionGeometry* sphere_geometry;
 // Replace all global parameter variables with a single struct
 ConvexDiceParams dice_params;
 
-// int fair_sides_count = 6, // for optimization
-//     DE_step_count = 40;
-// bool do_sobolev_dice_grads = false,
-//      frozen_G = false,
-//      use_autodiff_for_dice_grad = true,
-//      adaptive_reg = false;
-bool	visualize_steps = true;
-// float sobolev_lambda = 2.,
-//       sobolev_lambda_decay = 0.8,
-//       dice_energy_step = 0.01,
-//       dice_search_decay = 0.98,
-//       bary_reg = 0.1,
-//       coplanar_reg = 0.0,
-//       cluster_distance_reg = 0.0,
-//       unstable_attraction_thresh = 0.1;
-// int sobolev_p = 2;
-// // optimization stuff
-// bool update_with_max_prob_face = true;
+bool visualize_steps = true;
 
 
 // probability assignment & policy
@@ -82,17 +65,36 @@ std::string global_output_file = "../meshes/hulls/optimized.obj";
 
 
 
-
-void generate_polyhedron_example(std::string poly_str){
-  std::tie(mesh_ptr, geometry_ptr) = generate_11_sided_polyhedron(poly_str);
-  mesh = mesh_ptr.release();
-  geometry = geometry_ptr.release();
+void load_mesh(const std::string& path, 
+               ManifoldSurfaceMesh*& out_mesh, 
+               VertexPositionGeometry*& out_geometry
+			) {
+    std::unique_ptr<SurfaceMesh> nm_mesh_ptr;
+    std::unique_ptr<VertexPositionGeometry> nm_geometry_ptr;
+    std::tie(nm_mesh_ptr, nm_geometry_ptr) = readSurfaceMesh(path);
+    SurfaceMesh *nm_mesh = nm_mesh_ptr.release();
+    VertexPositionGeometry *nm_geometry = nm_geometry_ptr.release();
+    
+    nm_mesh->greedilyOrientFaces();
+    nm_mesh->compress();
+    std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
+    mesh_ptr = nm_mesh->toManifoldMesh();
+    out_mesh = mesh_ptr.release();
+    out_geometry = new VertexPositionGeometry(*out_mesh);
+    
+    // transfer from nm geometry
+    for (Vertex v : out_mesh->vertices()) {
+        out_geometry->inputVertexPositions[v.getIndex()] = nm_geometry->inputVertexPositions[v.getIndex()];
+    }
+    // Clean up temporary objects
+    delete nm_mesh;
+    delete nm_geometry;
 }
 
 
-void initialize_state(std::string input_name){
-	std::cout << "loaded input name: " << input_name << std::endl;
-    generate_polyhedron_example(input_name);
+
+void initialize_state(std::string input_path){
+	load_mesh(input_path, mesh, geometry);
     bool triangulate = false;
     preprocess_mesh(mesh, geometry, triangulate, false);
     center_and_normalize(mesh, geometry);
@@ -106,7 +108,6 @@ void initialize_state(std::string input_name){
     boundary_builder->build_boundary_normals();
 
     // visuals
-	std::cout << "initializing visuals" << std::endl;
     init_visuals(mesh, geometry, forwardSolver, boundary_builder);
     // update_visuals(forwardSolver, boundary_builder, sphere_mesh, sphere_geometry);
 }
@@ -164,9 +165,6 @@ void dice_energy_opt(
 	tmp_solver.set_uniform_G();
 
 	std::cout << ANSI_FG_YELLOW << "initializing for optimization" << ANSI_RESET<< "\n";
-	// std::cout << " G was: "<< G << "\n";
-	// std::cout << " G is: "<< tmp_solver.get_G() << "\n";
-	// polyscope::show();
 	tmp_solver.initialize_pre_computes();
 	
 	G = tmp_solver.get_G();

@@ -284,7 +284,11 @@ int main(int argc, char* argv[])
     }
 
     // Load mesh and initialize solver (headless-friendly)
-    load_mesh(mesh_path, mesh, geometry, G);
+    load_mesh(mesh_path, mesh, geometry, G, com_path.empty());
+    if (!com_path.empty()) {
+        load_com_from_text_file(com_path, G);
+        std::cout << "Loaded center of mass from file: " << G << "\n";
+    }
     update_solver();
 
     // Require output file for headless outputs

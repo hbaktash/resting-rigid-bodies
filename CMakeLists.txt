@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD 20)
 option(RESTING_RIGID_BODIES_USE_BULLET "Enable Bullet physics features" OFF)
 option(RESTING_RIGID_BODIES_USE_POLYSCOPE "Enable Polyscope visualization" ON)
 option(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN "Build inverse design libs/apps" ON)
+option(RESTING_RIGID_BODIES_ENABLE_CONCAVE_DICE "Build concave dice libs/apps" OFF)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 # Dependencies
@@ -91,10 +92,6 @@ set_property(TARGET drop_probs PROPERTY CXX_STANDARD 20)
 # == Inverse design (optional) ==
 if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
   add_library(resting_rigid_bodies_inverse
-    src/inverse_design/deformation.cpp
-    src/inverse_design/CP_tools.cpp
-    src/inverse_design/remesh_tools.cpp
-    src/inverse_design/optimization.cpp
     src/inverse_design/prob_assignment.cpp
   )
   add_library(resting_rigid_bodies::inverse ALIAS resting_rigid_bodies_inverse)
@@ -108,38 +105,73 @@ if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
   # Make the macro visible when compiling inverse code
   target_compile_definitions(resting_rigid_bodies_inverse PUBLIC RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
 
-  # Optional solvers (only needed for inverse)
-  include(tinyAD)
-  include(osqp-cpp)
+  # only needed for inverse design
   include(stan)
-
-  # GUROBI
-  find_package(GUROBI REQUIRED)
-  if(GUROBI_FOUND)
-    message(STATUS "Using Gurobi at: ${GUROBI_INCLUDE_DIRS}")
-    target_link_libraries(resting_rigid_bodies_inverse PRIVATE Gurobi::gurobi_cxx)
-    target_compile_definitions(resting_rigid_bodies_inverse PUBLIC RESTING_RIGID_BODIES_HAVE_GUROBI)
-  else()
-    message(STATUS "Gurobi not found; building inverse design without it")
-  endif()
 
   target_link_libraries(resting_rigid_bodies_inverse
     PUBLIC
       resting_rigid_bodies::resting_rigid_bodies
-      stan::stan           # was PRIVATE
-      tinyad::tinyad       # was PRIVATE
-      osqp-cpp::osqp-cpp   # was PRIVATE
-    PRIVATE
-      ${GUROBI_LIBRARY}
-      ${GUROBI_CXX_LIBRARY}
+      stan::stan
   )
 
   # Apps for inverse design (now under src/inverse_design)
-  if(RESTING_RIGID_BODIES_USE_POLYSCOPE)
-    add_executable(convex_dice src/main_convex_dice.cpp)
-    target_link_libraries(convex_dice PRIVATE resting_rigid_bodies::inverse taywee::args)
-    target_compile_definitions(convex_dice PRIVATE RESTING_RIGID_BODIES_USE_POLYSCOPE)
-    # Not required, but harmless if you also add the macro here:
-    # target_compile_definitions(convex_dice PRIVATE RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
+  add_executable(convex_dice src/main_convex_dice.cpp)
+  target_link_libraries(convex_dice PRIVATE resting_rigid_bodies::inverse taywee::args)
+  target_compile_definitions(convex_dice PRIVATE RESTING_RIGID_BODIES_USE_POLYSCOPE)
+  target_compile_definitions(convex_dice PRIVATE RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
+  
+  # ===== CONCAVE DICE =====
+  if (RESTING_RIGID_BODIES_ENABLE_CONCAVE_DICE)
+    add_library(resting_rigid_bodies_concave
+      src/inverse_design/deformation.cpp
+      src/inverse_design/CP_tools.cpp
+      src/inverse_design/remesh_tools.cpp
+      src/inverse_design/optimization.cpp
+    )
+    add_library(resting_rigid_bodies::concave ALIAS resting_rigid_bodies_concave)
+
+    target_include_directories(resting_rigid_bodies_concave
+      PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR}/include
+        ${CMAKE_CURRENT_LIST_DIR}/include/inverse_design
+        ${CMAKE_CURRENT_LIST_DIR}/include/inverse_design/concave_dice
+    )
+
+    # Make the macro visible when compiling inverse code
+    target_compile_definitions(resting_rigid_bodies_concave PUBLIC RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
+    target_compile_definitions(resting_rigid_bodies_concave PUBLIC RESTING_RIGID_BODIES_ENABLE_CONCAVE_DICE)
+
+    
+    # only needed for concave dice
+    include(tinyAD)
+    include(osqp-cpp)
+
+    # GUROBI
+    find_package(GUROBI REQUIRED)
+    if(GUROBI_FOUND)
+      message(STATUS "Using Gurobi at: ${GUROBI_INCLUDE_DIRS}")
+      target_link_libraries(resting_rigid_bodies_concave PRIVATE Gurobi::gurobi_cxx)
+      target_compile_definitions(resting_rigid_bodies_concave PUBLIC RESTING_RIGID_BODIES_HAVE_GUROBI)
+    else()
+      message(STATUS "Gurobi not found; building inverse design without it")
+    endif()
+
+    target_link_libraries(resting_rigid_bodies_concave
+      PUBLIC
+        resting_rigid_bodies::resting_rigid_bodies
+        resting_rigid_bodies::inverse
+        tinyad::tinyad       # was PRIVATE
+        osqp-cpp::osqp-cpp   # was PRIVATE
+      PRIVATE
+        ${GUROBI_LIBRARY}
+        ${GUROBI_CXX_LIBRARY}
+    )
+
+    # Apps for inverse design (now under src/inverse_design)
+    add_executable(concave_dice src/main_hull_fill.cpp)
+    target_link_libraries(concave_dice PRIVATE resting_rigid_bodies::concave taywee::args)
+    target_compile_definitions(concave_dice PRIVATE RESTING_RIGID_BODIES_USE_POLYSCOPE)
+    target_compile_definitions(concave_dice PRIVATE RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
+
   endif()
 endif()

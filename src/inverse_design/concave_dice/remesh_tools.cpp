@@ -2,7 +2,7 @@
 #include "polyscope/point_cloud.h"
 #include "polyscope/surface_mesh.h"
 
-#include <remesh_tools.h>
+#include "inverse_design/concave_dice/remesh_tools.h"
 
 
 

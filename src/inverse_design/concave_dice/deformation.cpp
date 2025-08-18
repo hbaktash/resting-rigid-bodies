@@ -3,7 +3,7 @@
 #include "polyscope/surface_mesh.h"
 #include "polyscope/curve_network.h"
 
-#include "deformation.h"
+#include "inverse_design/concave_dice/deformation.h"
 
 #include "geometrycentral/numerical/linear_solvers.h"
 #include "geometrycentral/surface/meshio.h"

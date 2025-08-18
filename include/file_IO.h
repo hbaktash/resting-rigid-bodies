@@ -63,3 +63,5 @@ bool load_convex_dice_params(ConvexDiceParams& params, const std::string& filena
 // Vector3-double pairs I/O (for normal-probability assignments)
 bool save_vector3_double_pairs(const std::vector<std::pair<Vector3, double>>& pairs, const std::string& filename, const std::string& policy = "");
 std::vector<std::pair<Vector3, double>> load_vector3_double_pairs(const std::string& filename, std::string* policy_out = nullptr);
+
+void load_com_from_text_file(const std::string& filename, Vector3& com_out);
