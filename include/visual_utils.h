@@ -15,9 +15,9 @@
 #include "mesh_factory.h"
 #include "geometrycentral/surface/meshio.h"
 
-#ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
-  #include "inverse_design/prob_assignment.h"
-#endif
+// #ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
+//   #include "inverse_design/prob_assignment.h"
+// #endif
 
 
 using namespace geometrycentral;
@@ -149,6 +149,8 @@ void visualize_quasi_static_drop_sequence(std::vector<Eigen::Matrix4d> transform
 
 void draw_ground_plane_mesh(Vector3 down_vec, double height, double half_width = 2);
 
+
+// TODO - move to a separate file
 #ifdef RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN
 
 void visualize_current_probs_and_goals(Forward3DSolver tmp_solver, 

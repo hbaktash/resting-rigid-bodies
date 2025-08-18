@@ -51,6 +51,7 @@ if(RESTING_RIGID_BODIES_USE_BULLET)
   list(APPEND RD_CORE_SOURCES src/bullet_sim.cpp)
 endif()
 
+
 add_library(resting_rigid_bodies ${RD_CORE_SOURCES})
 add_library(resting_rigid_bodies::resting_rigid_bodies ALIAS resting_rigid_bodies)
 target_include_directories(resting_rigid_bodies PUBLIC include)
