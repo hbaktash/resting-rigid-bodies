@@ -8,7 +8,7 @@ This repo focuses on:
 - Computing the probability that an object rests on each stable orientation.
 - Generating the quasi-static “drop” orientation trajectory from a given initial orientation.
 
-
+For inverse design functionalities have a look at the [inverse design README](https://github.com/hbaktash/resting-rigid-bodies/blob/main/README_inverse_design).
 ## Build
 
 Requirements
