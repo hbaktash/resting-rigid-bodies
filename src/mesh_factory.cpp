@@ -387,15 +387,46 @@ void preprocess_mesh(ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry
   // }
 }
 
+std::tuple<ManifoldSurfaceMesh*, VertexPositionGeometry*>
+icosahedron() {
+    // Golden ratio
+    const double phi = (1.0 + std::sqrt(5.0)) / 2.0;
+    const double a = 1.0;
+    const double b = 1.0 / phi;
+
+    std::vector<Vector3> vertices = {
+        {-1,  phi,  0}, { 1,  phi,  0}, {-1, -phi,  0}, { 1, -phi,  0}, 
+        { 0, -1,  phi}, { 0,  1,  phi}, { 0, -1, -phi}, { 0,  1, -phi}, 
+        { phi,  0, -1}, { phi,  0,  1}, {-phi,  0, -1}, {-phi,  0,  1}
+    };
+
+    std::vector<std::vector<size_t>> faces = {
+        {0, 11, 5}, {0, 5, 1}, {0, 1, 7}, {0, 7, 10}, {0, 10, 11}, 
+        {1, 5, 9}, {5, 11, 4}, {11, 10, 2}, {10, 7, 6}, {7, 1, 8}, 
+        {3, 9, 4}, {3, 4, 2}, {3, 2, 6}, {3, 6, 8}, {3, 8, 9}, 
+        {4, 9, 5}, {2, 4, 11}, {6, 2, 10}, {8, 6, 7}, {9, 8, 1}
+    };
+
+    // Normalize vertices to unit sphere
+    for (auto& v : vertices) {
+        v = v / v.norm();
+    }
+
+    // Build mesh and geometry
+    ManifoldSurfaceMesh* mesh = new ManifoldSurfaceMesh(faces);
+    VertexPositionGeometry* geometry = new VertexPositionGeometry(*mesh);
+    for (Vertex v : mesh->vertices()) {
+        geometry->inputVertexPositions[v] = vertices[v.getIndex()];
+    }
+    return std::make_tuple(mesh, geometry);
+}
 
 std::vector<Vector3> generate_normals_icosahedral(int resolution){
     ManifoldSurfaceMesh* icos_mesh;
     VertexPositionGeometry* icos_geometry;
-    std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
-    std::unique_ptr<VertexPositionGeometry> geometry_ptr;
-    std::tie(mesh_ptr, geometry_ptr) = readManifoldSurfaceMesh("../meshes/icosahedron.obj");
-    icos_mesh = mesh_ptr.release();
-    icos_geometry = geometry_ptr.release();
+    // std::unique_ptr<ManifoldSurfaceMesh> mesh_ptr;
+    // std::unique_ptr<VertexPositionGeometry> geometry_ptr;
+    std::tie(icos_mesh, icos_geometry) = icosahedron();
 
     // Normals
     std::vector<Vector3> normals;

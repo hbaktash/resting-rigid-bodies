@@ -9,6 +9,11 @@ This repo focuses on:
 - Generating the quasi-static “drop” orientation trajectory from a given initial orientation.
 
 For inverse design functionalities have a look at the [inverse design README](https://github.com/hbaktash/resting-rigid-bodies/blob/main/README_inverse_design).
+
+### Quick Example
+
+
+
 ## Build
 
 Requirements
