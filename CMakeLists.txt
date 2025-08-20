@@ -75,7 +75,7 @@ endif()
 target_compile_definitions(resting_rigid_bodies PUBLIC RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
 
 # Existing drop/prob tool (headless-friendly)
-add_executable(drop_probs src/main_drop_prob.cpp)
+add_executable(drop_probs apps/main_drop_prob.cpp)
 target_link_libraries(drop_probs
   PRIVATE
     resting_rigid_bodies::resting_rigid_bodies
@@ -117,7 +117,7 @@ if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
   )
 
   # Apps for inverse design (now under src/inverse_design)
-  add_executable(convex_dice src/main_convex_dice.cpp)
+  add_executable(convex_dice apps/main_convex_dice.cpp)
   target_link_libraries(convex_dice PRIVATE resting_rigid_bodies::inverse taywee::args)
   target_compile_definitions(convex_dice PRIVATE RESTING_RIGID_BODIES_USE_POLYSCOPE)
   target_compile_definitions(convex_dice PRIVATE RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
@@ -170,7 +170,7 @@ if(RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
     )
 
     # Apps for inverse design (now under src/inverse_design)
-    add_executable(concave_dice src/main_hull_fill.cpp)
+    add_executable(concave_dice apps/main_hull_fill.cpp)
     target_link_libraries(concave_dice PRIVATE resting_rigid_bodies::concave taywee::args)
     target_compile_definitions(concave_dice PRIVATE RESTING_RIGID_BODIES_USE_POLYSCOPE)
     target_compile_definitions(concave_dice PRIVATE RESTING_RIGID_BODIES_ENABLE_INVERSE_DESIGN)
