@@ -9,7 +9,11 @@ generate_transformations_for_orientation_sequence(Vector3 initial_orientation,
     // split the snail trail
     std::vector<Vector3> snail_trail_refined;
     for (int i = 1; i < snail_trail.size()-1; i++){
-        Vector3 local_axis = cross(snail_trail[i-1], snail_trail[i]).normalize();
+        Vector3 local_axis = cross(snail_trail[i-1], snail_trail[i]);
+        if (local_axis.norm() < 1e-6) {
+            local_axis = Vector3{0., 0., 1.}; // arbitrary axis
+        }
+        local_axis = local_axis.normalize();
         double local_total_angle = angle(snail_trail[i-1], snail_trail[i]);
         int steps = (int)ceil(local_total_angle/goal_angle_step); // + 1
         // in steps = 2;
@@ -33,9 +37,13 @@ generate_transformations_for_orientation_sequence(Vector3 initial_orientation,
         // get n_i locally
         // SO3 conversion
         Vector3 normal_0 = snail_trail_refined[i];
-        Vector3 rot_axis = cross(normal_0, floor_vec).normalize();
+        Vector3 rot_axis = cross(normal_0, floor_vec);
+        if (rot_axis.norm() < 1e-6) {
+            rot_axis = Vector3{1., 0., 0.}; // arbitrary axis
+        }
+        rot_axis = rot_axis.normalize();
         double rot_angle = angle(normal_0, floor_vec);
-
+        
         for (int j = 0; j < snail_trail_refined.size(); j++){
             snail_trail_refined[j] = snail_trail_refined[j].rotateAround(rot_axis, rot_angle);
         }
@@ -118,7 +126,7 @@ VertexData<Vector3> orient_mesh_to_unit_vec(Vector3 orientation, Vector3 down_ve
                                ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry){
     Vector3 axis = cross(orientation, down_vec);
     if (axis.norm() < 1e-6) // parallel
-        axis = Vector3({1,0,0});
+        axis = Vector3({1,0,0}); // arbitrary axis
     axis = axis.normalize();
     double angle = acos(dot(orientation, down_vec));
     VertexData<Vector3> new_positions(*mesh);
@@ -135,7 +143,7 @@ Eigen::Matrix4d trans_mat_for_orientation(Vector3 orientation, Vector3 down_vec,
                                           ManifoldSurfaceMesh* mesh, VertexPositionGeometry* geometry){
     Vector3 axis = cross(orientation, down_vec);
     if (axis.norm() < 1e-6) // parallel
-        axis = Vector3({1,0,0});
+        axis = Vector3({1,0,0}); // arbitrary axis
     axis = axis.normalize();
     double angle = acos(dot(orientation, down_vec));
     Eigen::AngleAxisd aa(angle, Eigen::Vector3d(axis.x, axis.y, axis.z));

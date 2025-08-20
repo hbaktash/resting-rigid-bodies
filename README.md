@@ -10,8 +10,52 @@ This repo focuses on:
 
 For inverse design functionalities have a look at the [inverse design README](https://github.com/hbaktash/resting-rigid-bodies/blob/main/README_inverse_design).
 
-### Quick Example
+### Quick Examples
 
+GUI example:
+```bash
+./build/drop_probs \
+  --mesh data/tet.obj \
+  --viz \
+  --out ./tet_results.json
+```
+
+This will load the Polyscope GUI and provide the interface to initialize with an orientation and drop the mesh on the ground. The drop sequence can be visualized using the provided slider.
+
+<p align="center">
+  <img src="./data/drop_prob_UI.gif" width="500" alt="convex dice demo" />
+</p>
+
+The probabilities of each stable face, that correspond to red points on the Gauss Sphere (local minima of the potential function), can be seen by clicking on each read point.
+
+You can skip the GUI and directly output the results to file using `--drop` and `--probs` flags. 
+
+Saving probabilities to file:
+```bash
+./build/drop_probs \
+  --mesh data/tet.obj \
+  --probs \
+  --out tet_results.json
+```
+
+Saving a drop sequence to file (need to provide initial orientation in command line):
+```bash
+./build/drop_probs \
+  --mesh data/tet.obj \
+  --drop \
+  --ox 0 \
+  --oy -1 \
+  --oz 0 \
+  --out tet_results.json
+```
+
+Saving probabilities of each stable orientation to file:
+```bash
+./build/drop_probs \
+  --mesh data/tet.obj \
+  --probs \
+  --out ./tet_result.json
+```
 
 
 ## Build
