@@ -95,7 +95,7 @@ This produces the executable:
 - build/drop_probs
 
 Other CMake options:
-- Inverse-design functionality is documented in (README_inverse_design)[https://github.com/hbaktash/resting-rigid-bodies/blob/main/README_inverse_design.md] .
+- Inverse-design functionality is documented in [README_inverse_design](https://github.com/hbaktash/resting-rigid-bodies/blob/main/README_inverse_design.md) .
 
 ## Usage
 
