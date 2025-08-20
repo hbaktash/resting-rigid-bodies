@@ -80,28 +80,27 @@ cd resting-rigid-bodies
 ```
 
 Configure and build
-- Headless (no visualization):
-```
-cmake -S . -B build -DRESTING_RIGID_BODIES_USE_POLYSCOPE=OFF
-cmake --build build -j
-```
 - With visualization (Polyscope):
 ```
 cmake -S . -B build -DRESTING_RIGID_BODIES_USE_POLYSCOPE=ON
+cmake --build build -j
+```
+- No visualization:
+```
+cmake -S . -B build -DRESTING_RIGID_BODIES_USE_POLYSCOPE=OFF
 cmake --build build -j
 ```
 
 This produces the executable:
 - build/drop_probs
 
-CMake options
-- RESTING_RIGID_BODIES_USE_POLYSCOPE=ON|OFF (default ON): enable/disable visualization features. When OFF, commands that request visualization are ignored with a warning.
-- Inverse-design and other optional components are not required for the functionality documented here.
+Other CMake options:
+- Inverse-design functionality is documented in (README_inverse_design)[https://github.com/hbaktash/resting-rigid-bodies/blob/main/README_inverse_design.md] .
 
 ## Usage
 
 The drop_probs tool supports:
-- Probability mode: compute resting probability for each stable convex-hull face and write JSON.
+- Probability mode: compute resting probability for each stable convex-hull face.
 - Drop mode: compute quasi-static transforms from an initial orientation and write JSON.
 - Optional visualization: show the input orientation and the quasi-static trajectory on the Gauss map (requires a build with Polyscope).
 
@@ -114,19 +113,19 @@ Common flags
 - Mode selection:
   - --probs: probability mode
   - --drop: quasi-static drop mode
+- --min_QS_angle <float>: minimum angle change (radians) for each quasi-static step (default 1.0). Lower values yield smoother trajectories. The default is 1.0 and it only updates the orientation when a new contact is made with the ground.
 
 ### Probability mode
 
-Compute the probability mass associated with each stable convex-hull face. Probabilities are the face-region areas on the Gauss map divided by 4π.
+Compute the probability mass associated with each stable convex-hull face. Probabilities are the Morse-Smale complex cell areas on the Gauss map divided by 4π.
 
 Example
 ```
 ./build/drop_probs \
   --mesh data/dice.obj \
   --probs \
-  --out results/dice_probabilities.json
+  --out ./dice_result.json
 ```
-
 Output (JSON)
 ```json
 {
@@ -148,6 +147,14 @@ Output (JSON)
 }
 ```
 
+The output includes:
+- stable_face_count: number of stable faces (local minima on Gauss map)
+- stable_faces: array of stable face data
+  - face_normal: normal vector of the stable face
+  - hull_face_index: index of the face in the convex hull mesh
+  - probability: resting probability on this face
+  - transformation_matrix: 4x4 matrix to align the face normal with the downward direction.
+
 ### Drop mode
 
 Generate the quasi-static “drop” sequence (rigid transforms) from an input orientation. The ground is assumed to be at height 0.
@@ -158,7 +165,7 @@ Example (headless)
   --mesh data/dice.obj \
   --ox 0 --oy -1 --oz 0 \
   --drop \
-  --out results/dice_drop.json
+  --out ./dice_result.json
 ```
 
 Output (JSON)
@@ -182,10 +189,19 @@ Output (JSON)
   ]
 }
 ```
+The output includes:
+- final_orientation: final resting orientation (down vector)
+- initial_orientation: input orientation (down vector)
+- step_count: number of steps in the drop sequence
+- steps: array of step data
+  - index: step index
+  - matrix: 4x4 transformation matrix for this step
+  - orientation: orientation at this step (with respect to the initial reference pose)
+
 ### Refining the Drop Sequence
-By default the drop sequnce will include orientations where a 
-new contact is made with the ground (e.g. vertex contact changes to edge contact). You can change this using the ```--min_QS_angle`` argument, 
-which determines the maximum change in rotation angle at every step. 
+By default the drop sequence will include orientations where a
+new contact is made with the ground (e.g. vertex contact changes to edge contact). You can change this using the ```--min_QS_angle``` argument,
+which determines the maximum change in rotation angle at every step.
 By default this is set to 1 (radians), which wouldn't refine the rotation sequence.
 Setting it to a lower value (0.001) will make the drop sequence look more smooth. 
 
@@ -201,15 +217,16 @@ cmake --build build -j
 ```
 ./build/drop_probs \
   --mesh data/dice.obj \
-  --ox 0 --oy -1 --oz 0 \
-  --drop \
-  --out results/dice_drop.json \
+  --out ./dice_result.json \
   --viz
 ```
 
+An example usage of the GUI is shown above (quick example).
+
 Notes
 - If built without Polyscope, --viz is ignored with a warning.
-- Output files are created if they don’t exist; parent directories are also created.
+- Output parent directories are created if they don’t exist.
+
 
 ## Citation
 
@@ -233,6 +250,6 @@ If this code contributes to academic work, please cite as:
   doi         = {10.1145/3731203}
 }
 ```
-## License
 
-This code is intended for research and educational use. See LICENSE for terms.
+## License
+This code is licensed under the MIT License (see LICENSE for details).
