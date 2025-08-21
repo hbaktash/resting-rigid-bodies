@@ -30,12 +30,13 @@ The probabilities of each stable face, that correspond to red points on the Gaus
 
 You can skip the GUI and directly output the results to file using `--drop` and `--probs` flags. 
 
-Saving probabilities to file:
+
+Saving probabilities of each stable orientation to file:
 ```bash
 ./build/drop_probs \
   --mesh data/tet.obj \
   --probs \
-  --out tet_results.json
+  --out ./tet_result.json
 ```
 
 Saving a drop sequence to file (need to provide initial orientation in command line):
@@ -49,13 +50,6 @@ Saving a drop sequence to file (need to provide initial orientation in command l
   --out tet_results.json
 ```
 
-Saving probabilities of each stable orientation to file:
-```bash
-./build/drop_probs \
-  --mesh data/tet.obj \
-  --probs \
-  --out ./tet_result.json
-```
 
 
 ## Build
