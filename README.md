@@ -31,7 +31,7 @@ The probabilities of each stable face, that correspond to red points on the Gaus
 You can skip the GUI and directly output the results to file using `--drop` and `--probs` flags. 
 
 
-Saving probabilities of each stable orientation to file:
+Saving probabilities of all stable orientations to file:
 ```bash
 ./build/drop_probs \
   --mesh data/tet.obj \
