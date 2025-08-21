@@ -47,10 +47,10 @@ Vector3 G;
 Forward3DSolver* forwardSolver;
 BoundaryBuilder *boundary_builder;
 float orientation_gui[3] = {0., 0., 1.};
-double min_QS_rotation_angle = 1.; // 0.005 for slide videos. 1 means no refinement (contact events only)
+float min_QS_rotation_angle = 1.; // 0.005 for slide videos. 1 means no refinement (contact events only)
 Vector3 down_vec = Vector3({0, -1, 0});
 
-std::string out_file;
+std::string out_file, out_file_probs, out_file_drop;
 
 // DEBUG visuals and Polyscope globals (guarded)
 #ifdef RESTING_RIGID_BODIES_USE_POLYSCOPE
@@ -91,6 +91,23 @@ static void initialize_bullet_env(Vector3 orientation){
 }
 #endif
 
+void save_probabilities(std::string out_file){
+	// already computed probabilities in update_solver()
+	Eigen::VectorXd face_region_areas = boundary_builder->face_region_area.toVector();
+	forwardSolver->hullGeometry->requireFaceNormals();
+	Eigen::VectorX<Vector3> face_normals = forwardSolver->hullGeometry->faceNormals.toVector();
+	forwardSolver->hullGeometry->unrequireFaceNormals();
+	std::vector<Eigen::Matrix4d> stable_trans_mats;
+	for (Face f: forwardSolver->hullMesh->faces()){
+		if (face_region_areas[f.getIndex()] > 0) {
+			Eigen::Matrix4d trans_mat = trans_mat_for_orientation(
+				face_normals[f.getIndex()], down_vec, forwardSolver->hullMesh, forwardSolver->hullGeometry);
+			stable_trans_mats.push_back(trans_mat);
+		}
+	}
+	save_probabilities_to_file(face_region_areas, face_normals, stable_trans_mats, out_file_probs);
+}
+
 // Polyscope callback (guarded)
 #ifdef RESTING_RIGID_BODIES_USE_POLYSCOPE
 void myCallback() {
@@ -112,28 +129,20 @@ void myCallback() {
     std::vector<Vector3> snail_trail = forwardSolver->quasi_static_drop(orientation);
     draw_trail_on_gm(snail_trail, {39./255., 189./255., 0}, "quasi-static trail", 3.);
   }
-  if (ImGui::Button("save orientation trajectory to file")) {
-    if (out_file.empty()) {
-      std::cerr << "Error: --out <output_file> required for saving.\n";
-    } else {
-      Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
-      orientation = orientation.normalize();
-      auto [transformation_matrices, saved_snail_trail_refined] =
-          QS_trail_to_global_transformations(forwardSolver, orientation, down_vec, min_QS_rotation_angle);
-      save_trans_mats_and_orientations_to_file(transformation_matrices, saved_snail_trail_refined, out_file);
-    }
-  }
+  ImGui::SliderFloat("min QS rotation angle", &min_QS_rotation_angle, 0.0f, 1.0f);
   if (ImGui::Button("show drop sequence")) {
     //hide initial input mesh and hull, and the oriented mesh
-    polyscope::getSurfaceMesh("oriented mesh")->setEnabled(false);
-    polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
-    polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
+    if (polyscope::hasSurfaceMesh("oriented mesh"))
+      polyscope::getSurfaceMesh("oriented mesh")->setEnabled(false);
+    if (polyscope::hasSurfaceMesh("init hull mesh"))
+      polyscope::getSurfaceMesh("init hull mesh")->setEnabled(false);
+    if (polyscope::hasSurfaceMesh("init input mesh"))
+      polyscope::getSurfaceMesh("init input mesh")->setEnabled(false);
     // save drop positions and show the first one
     Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
     orientation = orientation.normalize();
     auto [transformation_matrices, saved_snail_trail_refined] =
         QS_trail_to_global_transformations(forwardSolver, orientation, down_vec, min_QS_rotation_angle);
-    save_trans_mats_and_orientations_to_file(transformation_matrices, saved_snail_trail_refined, out_file);
     draw_ground_plane_mesh(down_vec, 0);
     drop_step_positions.clear();
     drop_step_orientations.clear();
@@ -154,6 +163,28 @@ void myCallback() {
     std::vector<Vector3> orientation_vec = {orientation * vis_utils.gm_radi + vis_utils.center};
     polyscope::registerPointCloud("orientation on gm", orientation_vec)->setPointRadius(0.03, false)->setPointColor({0,0,0});
   }
+  if (ImGui::Button("save orientation trajectory to file")) {
+    if (out_file.empty()) {
+      std::cerr << "Error: --out <output_file> required for saving.\n";
+	  polyscope::warning("--out <output_file> required for saving");
+    } else {
+      Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
+      orientation = orientation.normalize();
+      auto [transformation_matrices, saved_snail_trail_refined] =
+          QS_trail_to_global_transformations(forwardSolver, orientation, down_vec, min_QS_rotation_angle);
+      save_trans_mats_and_orientations_to_file(transformation_matrices, saved_snail_trail_refined, out_file_drop);
+	  polyscope::warning("Saved orientation trajectory to " + out_file_drop);
+    }
+  }
+  	if (ImGui::Button("save stable face probabilities to file")) {
+		if (out_file.empty()) {
+			std::cerr << "Error: --out <output_file> required for saving.\n";
+			polyscope::warning("--out <output_file> required for saving");
+		} else {
+			save_probabilities(out_file_probs);
+			polyscope::warning("Saved stable face probabilities to " + out_file_probs);
+		}
+	}
 
   #ifdef RESTING_RIGID_BODIES_USE_BULLET
   ImGui::Checkbox("save bullet orientation trail", &save_Bullet_trail);
@@ -230,12 +261,6 @@ void update_solver(){
 
 int main(int argc, char* argv[])
 {
-    #ifdef BT_USE_DOUBLE_PRECISION
-        printf("BT_USE_DOUBLE_PRECISION\n");
-    #else
-        printf("Single precision\n");
-    #endif
-
     args::ArgumentParser parser(    "This is a test program.", "This goes after the options.");
     args::HelpFlag help(parser,     "help", "Display this help menu", {'h', "help"});
     args::ValueFlag<std::string> mesh_path_arg(parser, "mesh_path", "path to esh", {'m', "mesh"});
@@ -273,8 +298,20 @@ int main(int argc, char* argv[])
         mesh_path = args::get(mesh_path_arg);
     if (center_of_mass_path_arg)
         com_path = args::get(center_of_mass_path_arg);
-    if (out_file_arg)
+    if (out_file_arg){
         out_file = args::get(out_file_arg);
+		// add _drop and _probs to the out_file before the extension
+		size_t dot_pos = out_file.find_last_of('.');
+		if (dot_pos != std::string::npos) {
+			out_file_drop = out_file;
+			out_file_probs = out_file;
+			out_file_drop.insert(dot_pos, "_drop");
+			out_file_probs.insert(dot_pos, "_probs");
+		} else {
+			out_file_drop = out_file + "_drop";
+			out_file_probs = out_file + "_probs";
+		}
+	}
     if (min_QS_rotation_angle_arg)
         min_QS_rotation_angle = args::get(min_QS_rotation_angle_arg);
     if (o_x_arg && o_y_arg && o_z_arg){
@@ -299,58 +336,51 @@ int main(int argc, char* argv[])
 
     // --- Drop mode ---
     if (drop_flag) {
-        if (!(o_x_arg && o_y_arg && o_z_arg)) {
-            std::cerr << "Error: --ox --oy --oz required for drop mode.\n";
+        if (!(o_x_arg && o_y_arg && o_z_arg) && !viz_flag) {
+            std::cerr << "Error: --ox --oy --oz required for drop mode (or --viz).\n";
             return 1;
         }
-        Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
-        orientation = orientation.normalize();
+		else if ((o_x_arg && o_y_arg && o_z_arg)) {
+			Vector3 orientation({orientation_gui[0], orientation_gui[1], orientation_gui[2]});
+			orientation = orientation.normalize();
 
-        auto [transformation_matrices, refined_trail] =
-            QS_trail_to_global_transformations(forwardSolver, orientation, down_vec, min_QS_rotation_angle);
+			auto [transformation_matrices, refined_trail] =
+				QS_trail_to_global_transformations(forwardSolver, orientation, down_vec, min_QS_rotation_angle);
 
-        // Ensure parent dir exists and write JSON/txt
-        save_trans_mats_and_orientations_to_file(transformation_matrices, refined_trail, out_file);
+			// Ensure parent dir exists and write JSON/txt
+			save_trans_mats_and_orientations_to_file(transformation_matrices, refined_trail, out_file_drop);
 
-        // Optional visualization in drop mode
-        if (viz_flag) {
-        #ifdef RESTING_RIGID_BODIES_USE_POLYSCOPE
-            polyscope::init();
-            init_visuals(mesh, geometry, forwardSolver, boundary_builder);
-            polyscope_defaults();
+			// Optional visualization in drop mode
+			if (viz_flag) {
+			#ifdef RESTING_RIGID_BODIES_USE_POLYSCOPE
+				polyscope::init();
+				init_visuals(mesh, geometry, forwardSolver, boundary_builder);
+				polyscope_defaults();
 
-            // Input orientation on GM
-            std::vector<Vector3> orientation_vec = {orientation * vis_utils.gm_radi + vis_utils.center};
-            polyscope::registerPointCloud("input orientation on gm", orientation_vec)
-              ->setPointRadius(0.03, false)->setPointColor({0,0,0});
+				// Input orientation on GM
+				std::vector<Vector3> orientation_vec = {orientation * vis_utils.gm_radi + vis_utils.center};
+				polyscope::registerPointCloud("input orientation on gm", orientation_vec)
+				->setPointRadius(0.03, false)->setPointColor({0,0,0});
 
-            // Quasi-static trail on GM
-            std::vector<Vector3> snail_trail = forwardSolver->quasi_static_drop(orientation);
-            draw_trail_on_gm(snail_trail, {39./255., 189./255., 0}, "quasi-static trail", 3.);
-            polyscope::show();
-        #else
-            std::cerr << "Warning: --viz requested but Polyscope was disabled at build time.\n";
-        #endif
-        }
+				// Quasi-static trail on GM
+				std::vector<Vector3> snail_trail = forwardSolver->quasi_static_drop(orientation);
+				draw_trail_on_gm(snail_trail, {39./255., 189./255., 0}, "quasi-static trail", 3.);
+				polyscope::show();
+			#else
+				std::cerr << "Warning: --viz requested but Polyscope was disabled at build time.\n";
+			#endif
+			}
+		}
         return EXIT_SUCCESS;
     }
 
     // --- Probability mode ---
     if (probs_flag) {
-        // already computed in update_solver()
-        Eigen::VectorXd face_region_areas = boundary_builder->face_region_area.toVector();
-        forwardSolver->hullGeometry->requireFaceNormals();
-        Eigen::VectorX<Vector3> face_normals = forwardSolver->hullGeometry->faceNormals.toVector();
-        forwardSolver->hullGeometry->unrequireFaceNormals();
-        std::vector<Eigen::Matrix4d> stable_trans_mats;
-        for (Face f: forwardSolver->hullMesh->faces()){
-            if (face_region_areas[f.getIndex()] > 0) {
-                Eigen::Matrix4d trans_mat = trans_mat_for_orientation(
-                    face_normals[f.getIndex()], down_vec, forwardSolver->hullMesh, forwardSolver->hullGeometry);
-                stable_trans_mats.push_back(trans_mat);
-            }
-        }
-        save_probabilities_to_file(face_region_areas, face_normals, stable_trans_mats, out_file);
+		if (out_file.empty()) {
+			std::cerr << "Error: --out <output_file> required for saving.\n";
+		} else {
+			save_probabilities(out_file_probs);
+		}
     }
 
     // --- Visualization mode (interactive) ---
