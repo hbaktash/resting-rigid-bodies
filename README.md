@@ -146,7 +146,7 @@ The output includes:
   - face_normal: normal vector of the stable face
   - hull_face_index: index of the face in the convex hull mesh
   - probability: resting probability on this face
-  - transformation_matrix: 4x4 matrix to align the face normal with the downward direction.
+  - transformation_matrix: 4x4 matrix to align the face normal with the downward direction and place the shape on a ground plane at height 0.
 
 ### Drop mode
 
