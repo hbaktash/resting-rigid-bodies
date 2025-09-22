@@ -10,7 +10,7 @@ set(BUILD_APPLICATIONS OFF CACHE BOOL "" FORCE)
 CPMAddPackage(
     NAME qhull
     GITHUB_REPOSITORY qhull/qhull
-    GIT_TAG v8.1-alpha1
+    GIT_TAG v8.1-alpha6
 )
 
 MESSAGE(STATUS "QHULL SOURCE DIR: ${qhull_SOURCE_DIR}")
