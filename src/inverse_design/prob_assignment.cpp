@@ -276,13 +276,14 @@ update_normal_prob_assignment(Forward3DSolver *tmp_solver,
     else{
       // take max prob face
       Face max_prob_face;
-      double max_prob = 0.;
+      double max_prob = 0.0;
       for (Face f: faces){
-        if (tmp_bnd_builder.face_region_area[f] > max_prob){
+        if (tmp_bnd_builder.face_region_area[f] > max_prob || max_prob == 0){
           max_prob_face = f;
           max_prob = tmp_bnd_builder.face_region_area[f];
         }
       }
+      
       updated_assignment.push_back({tmp_solver->hullGeometry->faceNormal(max_prob_face), cluster_goal_prob});
     }
 
