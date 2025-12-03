@@ -1,3 +1,6 @@
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "4.0.0") # for issues with Qhull and CMake 4
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+endif()
 cmake_minimum_required(VERSION 3.16.0)
 
 project(Resting_Rigid_Bodies)
@@ -50,7 +53,6 @@ endif()
 if(RESTING_RIGID_BODIES_USE_BULLET)
   list(APPEND RD_CORE_SOURCES src/bullet_sim.cpp)
 endif()
-
 
 add_library(resting_rigid_bodies ${RD_CORE_SOURCES})
 add_library(resting_rigid_bodies::resting_rigid_bodies ALIAS resting_rigid_bodies)
